@@ -1,13 +1,28 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
-import { appRouter, createContext } from '@/server/trpc/router';
+import { appRouter } from '@/server/trpc/router';
+import { createContext } from '@/server/trpc/context';
 
-// Next.js App Router handler
-export async function GET(request: Request) {
-    return fetchRequestHandler({
+export async function GET(req: Request) {
+    const response = await fetchRequestHandler({
         endpoint: '/api/trpc',
-        req: request,
+        req,
         router: appRouter,
         createContext,
+        onError({ error }) {
+            if (error.code === 'UNAUTHORIZED') {
+                console.error('UNAUTHORIZED', error);
+            }
+        },
     });
+
+    // Add CORS headers
+    response.headers.set('Access-Control-Allow-Credentials', 'true');
+    response.headers.set(
+        'Access-Control-Allow-Origin',
+        'http://localhost:3000',
+    );
+
+    return response;
 }
-export const POST = GET;
+
+export { GET as POST };

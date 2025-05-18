@@ -19,6 +19,16 @@ export function TRPCProvider({ children }: React.PropsWithChildren<{}>) {
                 httpBatchLink({
                     url: '/api/trpc',
                     transformer: superjson,
+                    headers: () => ({
+                        'x-trpc-source': 'client',
+                        'Content-Type': 'application/json',
+                    }),
+                    fetch: (url, options) => {
+                        return fetch(url, {
+                            ...options,
+                            credentials: 'include',
+                        } as RequestInit);
+                    },
                 }),
             ],
         }),

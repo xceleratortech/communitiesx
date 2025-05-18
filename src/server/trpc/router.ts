@@ -1,11 +1,8 @@
 import { initTRPC } from '@trpc/server';
 import superjson from 'superjson';
-
-// Create tRPC context (add shared context values here)
-export function createContext() {
-    return {};
-}
-export type Context = ReturnType<typeof createContext>;
+import { communityRouter } from './routers/community';
+import { createContext } from './context';
+import type { Context } from './context';
 
 // Initialize tRPC
 const t = initTRPC.context<Context>().create({
@@ -18,7 +15,11 @@ export const publicProcedure = t.procedure;
 // App router with example hello procedure
 export const appRouter = router({
     hello: publicProcedure.query(() => 'Hello world'),
+    community: communityRouter,
 });
 
-// Export API type
+// Export type router type
 export type AppRouter = typeof appRouter;
+
+// Export context
+export { createContext };

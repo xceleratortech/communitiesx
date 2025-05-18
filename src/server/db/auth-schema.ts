@@ -3,7 +3,7 @@ import {
     text,
     timestamp,
     boolean,
-    integer,
+    // integer,
 } from 'drizzle-orm/pg-core';
 
 export const users = pgTable('users', {

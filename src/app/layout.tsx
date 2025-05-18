@@ -1,9 +1,10 @@
-import type { Metadata } from 'next';
+import React from 'react';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
+import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
-import { cn } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -15,17 +16,16 @@ const geistMono = Geist_Mono({
     subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
-    title: 'rstart',
-    description:
-        'Modern full-stack boilerplate with Next.js, tRPC, Drizzle, and better-auth',
+export const metadata = {
+    title: 'Community App',
+    description: 'A place to share and discuss with the community',
 };
 
 export default function RootLayout({
     children,
-}: Readonly<{
+}: {
     children: React.ReactNode;
-}>) {
+}) {
     return (
         <html lang="en" suppressHydrationWarning>
             <body
@@ -41,7 +41,10 @@ export default function RootLayout({
                     enableSystem
                     disableTransitionOnChange
                 >
-                    <TRPCProvider>{children}</TRPCProvider>
+                    <TRPCProvider>
+                        <Navbar />
+                        <main>{children}</main>
+                    </TRPCProvider>
                 </ThemeProvider>
             </body>
         </html>

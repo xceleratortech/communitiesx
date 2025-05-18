@@ -20,6 +20,7 @@ const eslintConfig = [
     "plugin:@typescript-eslint/recommended"
   ),
   {
+    ignorePatterns: [".next/**/*", "node_modules/**/*"],
     rules: {
       "no-console": "warn",
       "no-unused-vars": "warn",
