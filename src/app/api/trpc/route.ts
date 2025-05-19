@@ -1,6 +1,6 @@
 import { initTRPC } from '@trpc/server';
 import superjson from 'superjson';
-import { createNextApiHandler } from '@trpc/server/adapters/next';
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 
 // Initialize tRPC with a JSON transformer
 const t = initTRPC.context<{}>().create({
@@ -18,8 +18,12 @@ const appRouter = router({
 export type AppRouter = typeof appRouter;
 
 // Next.js App Router handlers
-export const GET = createNextApiHandler({
-    router: appRouter,
-    createContext: () => ({}),
-});
+export async function GET(req: Request) {
+    return fetchRequestHandler({
+        endpoint: '/api/trpc',
+        req,
+        router: appRouter,
+        createContext: () => ({}),
+    });
+}
 export const POST = GET;
