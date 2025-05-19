@@ -1,6 +1,5 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { db } from '@/server/db';
 import { nextCookies } from 'better-auth/next-js';
 import { admin } from 'better-auth/plugins';
 import { sendEmail } from '@/lib/email';
@@ -8,6 +7,7 @@ import {
     createVerificationEmail,
     createResetPasswordEmail,
 } from '@/lib/email-templates';
+import { db } from '@/server/db';
 
 if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
@@ -25,6 +25,15 @@ export const auth = betterAuth({
             impersonationSessionDuration: 60 * 60 * 24,
         }),
     ],
+    cors: {
+        origin: [
+            'http://localhost:3000',
+            'https://communities-three.vercel.app',
+        ],
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    },
     emailVerification: {
         sendVerificationEmail: async ({ user, url }) => {
             const { subject, html } = createVerificationEmail(url);
