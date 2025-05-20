@@ -4,6 +4,7 @@ import Link from 'next/link';
 import React from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
+import { Button } from '@/components/ui/button';
 
 type Post = {
     id: number;
@@ -35,12 +36,9 @@ export default function PostsPage() {
                 <p className="mb-4 text-gray-600">
                     Please sign in to view community posts.
                 </p>
-                <Link
-                    href="/auth/login"
-                    className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-                >
-                    Sign In
-                </Link>
+                <Button asChild>
+                    <Link href="/auth/login">Sign In</Link>
+                </Button>
             </div>
         );
     }
@@ -55,12 +53,9 @@ export default function PostsPage() {
                 <div className="mb-6 flex items-center justify-between">
                     <h1 className="text-3xl font-bold">Community Posts</h1>
                     {session && (
-                        <Link
-                            href="/posts/new"
-                            className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-                        >
-                            Create Post
-                        </Link>
+                        <Button asChild>
+                            <Link href="/posts/new">Create Post</Link>
+                        </Button>
                     )}
                 </div>
                 <p className="text-gray-600">
@@ -75,12 +70,9 @@ export default function PostsPage() {
             <div className="mb-6 flex items-center justify-between">
                 <h1 className="text-3xl font-bold">Community Posts</h1>
                 {session && (
-                    <Link
-                        href="/posts/new"
-                        className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-                    >
-                        Create Post
-                    </Link>
+                    <Button asChild>
+                        <Link href="/posts/new">Create Post</Link>
+                    </Button>
                 )}
             </div>
 

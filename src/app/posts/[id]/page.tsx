@@ -5,6 +5,8 @@ import React, { useState } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
 
 type User = {
     id: string;
@@ -107,22 +109,21 @@ export default function PostPage() {
                 <h2 className="mb-4 text-2xl font-bold">Comments</h2>
                 {session && (
                     <form onSubmit={handleSubmitComment} className="mb-6">
-                        <textarea
+                        <Textarea
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
-                            className="mb-2 w-full rounded border p-2"
                             rows={3}
                             placeholder="Write a comment..."
                         />
-                        <button
+                        <Button
                             type="submit"
                             disabled={createComment.isPending}
-                            className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
+                            className="mt-2"
                         >
                             {createComment.isPending
                                 ? 'Posting...'
                                 : 'Post Comment'}
-                        </button>
+                        </Button>
                     </form>
                 )}
 

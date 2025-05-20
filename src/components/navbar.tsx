@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import React from 'react';
 import { useSession, signOut } from '@/server/auth/client';
+import { Button } from '@/components/ui/button';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -37,20 +38,20 @@ export function Navbar() {
                                 <span className="text-sm text-gray-700">
                                     {session.user.email}
                                 </span>
-                                <button
+                                <Button
+                                    variant="outline"
                                     onClick={handleSignOut}
-                                    className="rounded bg-gray-100 px-3 py-1 text-sm text-gray-700 hover:bg-gray-200"
+                                    className="text-sm"
                                 >
                                     Sign Out
-                                </button>
+                                </Button>
                             </div>
                         ) : (
-                            <Link
-                                href="/auth/login"
-                                className="rounded bg-blue-500 px-4 py-2 text-sm text-white hover:bg-blue-600"
-                            >
-                                Sign In
-                            </Link>
+                            <Button asChild>
+                                <Link href="/auth/login" className="text-sm">
+                                    Sign In
+                                </Link>
+                            </Button>
                         )}
                     </div>
                 </div>

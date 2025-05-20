@@ -5,6 +5,9 @@ import React, { useState } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function NewPostPage() {
     const router = useRouter();
@@ -59,12 +62,11 @@ export default function NewPostPage() {
                     >
                         Title
                     </label>
-                    <input
+                    <Input
                         type="text"
                         id="title"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        className="w-full rounded border p-2"
                         required
                     />
                 </div>
@@ -76,23 +78,18 @@ export default function NewPostPage() {
                     >
                         Content
                     </label>
-                    <textarea
+                    <Textarea
                         id="content"
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
-                        className="w-full rounded border p-2"
                         rows={10}
                         required
                     />
                 </div>
 
-                <button
-                    type="submit"
-                    disabled={createPost.isPending}
-                    className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600 disabled:opacity-50"
-                >
+                <Button type="submit" disabled={createPost.isPending}>
                     {createPost.isPending ? 'Creating...' : 'Create Post'}
-                </button>
+                </Button>
             </form>
         </div>
     );
