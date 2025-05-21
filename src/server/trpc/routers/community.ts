@@ -1,36 +1,27 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '@/server/trpc/trpc';
-import { posts, comments } from '@/server/db/schema';
+import { posts, comments, users } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
 import { eq, desc } from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
 
-// Define types for the responses
-type User = {
-    id: string;
-    name: string | null;
-    email: string;
+// Define types for the responses based on schema
+type UserType = typeof users.$inferSelect;
+type PostType = typeof posts.$inferSelect;
+type CommentType = typeof comments.$inferSelect;
+
+type PostWithAuthor = PostType & {
+    author: UserType | null;
 };
 
-type Post = {
-    id: number;
-    title: string;
-    content: string;
-    authorId: string;
-    createdAt: Date;
-    updatedAt: Date;
-    author: User;
+type CommentWithAuthor = CommentType & {
+    author: UserType | null;
 };
 
-type Comment = {
-    id: number;
-    content: string;
-    postId: number;
-    authorId: string;
-    createdAt: Date;
-    updatedAt: Date;
-    author: User;
+type PostWithAuthorAndComments = PostType & {
+    author: UserType | null;
+    comments: CommentWithAuthor[];
 };
 
 export const communityRouter = router({
@@ -58,12 +49,24 @@ export const communityRouter = router({
                 }
 
                 try {
+                    // Always fetch orgId from DB
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.id, ctx.session.user.id),
+                    });
+                    const orgId = user?.orgId;
+                    if (!orgId) {
+                        throw new TRPCError({
+                            code: 'UNAUTHORIZED',
+                            message: 'User does not have an organization.',
+                        });
+                    }
                     const [post] = await db
                         .insert(posts)
                         .values({
                             title: input.title,
                             content: input.content,
                             authorId: ctx.session.user.id,
+                            orgId: orgId,
                             createdAt: new Date(),
                             updatedAt: new Date(),
                         })
@@ -80,25 +83,44 @@ export const communityRouter = router({
             },
         ),
 
-    // Get all posts
-    getPosts: publicProcedure.query(async (): Promise<Post[]> => {
-        try {
-            const allPosts = await db.query.posts.findMany({
-                orderBy: desc(posts.createdAt),
-                with: {
-                    author: true,
-                },
-            });
-
-            return allPosts;
-        } catch (error) {
-            console.error('Error fetching posts:', error);
-            throw new TRPCError({
-                code: 'INTERNAL_SERVER_ERROR',
-                message: 'Failed to fetch posts',
-            });
-        }
-    }),
+    // Get all posts (org-specific)
+    getPosts: publicProcedure.query(
+        async ({ ctx }): Promise<PostWithAuthor[]> => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to view posts',
+                });
+            }
+            try {
+                // Always fetch orgId from DB
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                });
+                const orgId = user?.orgId;
+                if (!orgId) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User does not have an organization.',
+                    });
+                }
+                const allPostsFromDb = await db.query.posts.findMany({
+                    where: eq(posts.orgId, orgId),
+                    orderBy: desc(posts.createdAt),
+                    with: {
+                        author: true,
+                    },
+                });
+                return allPostsFromDb as PostWithAuthor[];
+            } catch (error) {
+                console.error('Error fetching posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch posts',
+                });
+            }
+        },
+    ),
 
     // Get a single post with its comments
     getPost: publicProcedure
@@ -107,9 +129,9 @@ export const communityRouter = router({
                 postId: z.number(),
             }),
         )
-        .query(async ({ input }): Promise<Post & { comments: Comment[] }> => {
+        .query(async ({ input }): Promise<PostWithAuthorAndComments> => {
             try {
-                const post = await db.query.posts.findFirst({
+                const postFromDb = await db.query.posts.findFirst({
                     where: eq(posts.id, input.postId),
                     with: {
                         author: true,
@@ -122,14 +144,15 @@ export const communityRouter = router({
                     },
                 });
 
-                if (!post) {
+                if (!postFromDb) {
                     throw new TRPCError({
                         code: 'NOT_FOUND',
                         message: 'Post not found',
                     });
                 }
 
-                return post;
+                // Ensure comments and their authors are correctly typed (Drizzle's 'with' should handle this)
+                return postFromDb as PostWithAuthorAndComments;
             } catch (error) {
                 if (error instanceof TRPCError) {
                     throw error;
@@ -165,8 +188,11 @@ export const communityRouter = router({
                     });
                 }
 
+                console.log('Session user:', ctx.session.user);
+
                 try {
                     // First check if the post exists
+                    const orgId = (ctx.session?.user as any).orgId;
                     const post = await db.query.posts.findFirst({
                         where: eq(posts.id, input.postId),
                     });
@@ -187,7 +213,14 @@ export const communityRouter = router({
                             createdAt: new Date(),
                             updatedAt: new Date(),
                         })
-                        .returning();
+                        .returning({
+                            id: comments.id,
+                            content: comments.content,
+                            postId: comments.postId,
+                            authorId: comments.authorId,
+                            createdAt: comments.createdAt,
+                            updatedAt: comments.updatedAt,
+                        });
 
                     return comment;
                 } catch (error) {
@@ -202,4 +235,112 @@ export const communityRouter = router({
                 }
             },
         ),
+
+    // Update a comment
+    updateComment: publicProcedure
+        .input(
+            z.object({
+                commentId: z.number(),
+                content: z.string().min(1),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to edit a comment',
+                });
+            }
+
+            const commentToUpdate = await db.query.comments.findFirst({
+                where: eq(comments.id, input.commentId),
+            });
+
+            if (!commentToUpdate) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Comment not found',
+                });
+            }
+
+            if (commentToUpdate.authorId !== ctx.session.user.id) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You are not authorized to edit this comment',
+                });
+            }
+
+            try {
+                const [updatedComment] = await db
+                    .update(comments)
+                    .set({
+                        content: input.content,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(comments.id, input.commentId))
+                    .returning();
+
+                if (!updatedComment) {
+                    // This case should ideally not happen if the findFirst above succeeded
+                    // and no one deleted the comment in between.
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to update comment after verification',
+                    });
+                }
+
+                return updatedComment;
+            } catch (error) {
+                console.error('Error updating comment:', error);
+                if (error instanceof TRPCError) throw error;
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to update comment',
+                });
+            }
+        }),
+
+    // Edit a post
+    editPost: publicProcedure
+        .input(
+            z.object({
+                postId: z.number(),
+                title: z.string().min(1).max(200),
+                content: z.string().min(1),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to edit a post',
+                });
+            }
+            // Find the post
+            const post = await db.query.posts.findFirst({
+                where: eq(posts.id, input.postId),
+            });
+            if (!post) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Post not found',
+                });
+            }
+            if (post.authorId !== ctx.session.user.id) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You are not allowed to edit this post',
+                });
+            }
+            const [updatedPost] = await db
+                .update(posts)
+                .set({
+                    title: input.title,
+                    content: input.content,
+                    updatedAt: new Date(),
+                })
+                .where(eq(posts.id, input.postId))
+                .returning();
+            return updatedPost;
+        }),
 });

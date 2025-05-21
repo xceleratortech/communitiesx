@@ -1,5 +1,5 @@
 import { pgTable, serial, text, timestamp, integer } from 'drizzle-orm/pg-core';
-import { users } from './auth-schema';
+import { users, orgs } from './auth-schema';
 import { relations } from 'drizzle-orm';
 
 // Existing table
@@ -16,11 +16,15 @@ export const posts = pgTable('posts', {
     authorId: text('author_id')
         .notNull()
         .references(() => users.id),
+    orgId: text('org_id')
+        .notNull()
+        .references(() => orgs.id),
+    groupId: text('group_id'), // optional, for future use
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const comments = pgTable('comments', {
+export const comments: any = pgTable('comments', {
     id: serial('id').primaryKey(),
     content: text('content').notNull(),
     postId: integer('post_id')
@@ -29,6 +33,7 @@ export const comments = pgTable('comments', {
     authorId: text('author_id')
         .notNull()
         .references(() => users.id),
+    parentId: integer('parent_id').references(() => comments.id), // nullable for top-level comments
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

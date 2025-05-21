@@ -5,29 +5,53 @@ import React from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardContent,
+    CardFooter,
+    CardAction,
+} from '@/components/ui/card';
+import { Edit } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { posts, users } from '@/server/db/schema';
 
-type Post = {
-    id: number;
-    title: string;
-    content: string;
-    authorId: string;
-    createdAt: Date;
-    updatedAt: Date;
-    author: {
-        id: string;
-        name: string | null;
-        email: string;
-    };
+// Updated Post type to match the backend and include all fields from posts schema
+// and correctly typed author from users schema
+type PostFromDb = typeof posts.$inferSelect;
+type UserFromDb = typeof users.$inferSelect;
+
+type PostDisplay = PostFromDb & {
+    author: UserFromDb | null; // Author can be null if relation is not found
 };
 
 export default function PostsPage() {
-    const { data: session } = useSession();
-    const { data: posts, isLoading } = trpc.community.getPosts.useQuery(
-        undefined,
-        {
-            enabled: !!session, // Only fetch posts if user is authenticated
-        },
-    );
+    // const { data: session } = useSession();
+    const sessionData = useSession();
+    const session = sessionData.data;
+    const router = useRouter();
+
+    // const { data: posts, isLoading } = trpc.community.getPosts.useQuery(
+    //     undefined,
+    //     {
+    //         enabled: !!session, // Only fetch posts if user is authenticated
+    //     },
+    // );
+
+    const postsQuery = trpc.community.getPosts.useQuery(undefined, {
+        enabled: !!session,
+    });
+
+    const posts = postsQuery.data;
+    const isLoading = postsQuery.isLoading;
+
+    if (session === undefined) {
+        return null;
+    }
+    if (isLoading) {
+        return <div className="p-4">Loading posts...</div>;
+    }
 
     if (!session) {
         return (
@@ -41,10 +65,6 @@ export default function PostsPage() {
                 </Button>
             </div>
         );
-    }
-
-    if (isLoading) {
-        return <div className="p-4">Loading posts...</div>;
     }
 
     if (!posts || posts.length === 0) {
@@ -77,24 +97,54 @@ export default function PostsPage() {
             </div>
 
             <div className="space-y-4">
-                {posts.map((post: Post) => (
+                {posts.map((post: PostDisplay) => (
                     <Link
                         key={post.id}
                         href={`/posts/${post.id}`}
-                        className="block rounded-lg bg-white p-6 shadow transition-shadow hover:shadow-md"
+                        className="block"
+                        style={{ textDecoration: 'none' }}
                     >
-                        <h2 className="mb-2 text-xl font-semibold">
-                            {post.title}
-                        </h2>
-                        <p className="mb-2 text-gray-600">
-                            {post.content.length > 200
-                                ? `${post.content.slice(0, 200)}...`
-                                : post.content}
-                        </p>
-                        <div className="text-sm text-gray-500">
-                            Posted by {post.author?.name || 'Unknown'} on{' '}
-                            {new Date(post.createdAt).toLocaleDateString()}
-                        </div>
+                        <Card className="relative transition-shadow hover:shadow-md">
+                            <CardHeader className="flex flex-row items-center justify-between gap-2">
+                                <CardTitle className="flex-1 truncate text-xl font-semibold">
+                                    {post.title}
+                                </CardTitle>
+                                {session?.user?.id === post.authorId && (
+                                    <CardAction className="ml-2 p-0">
+                                        <button
+                                            type="button"
+                                            onClick={(e: React.MouseEvent) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                router.push(
+                                                    `/posts/${post.id}/edit`,
+                                                );
+                                            }}
+                                            className="rounded-full p-2 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                            title="Edit post"
+                                        >
+                                            <Edit className="h-5 w-5 text-gray-500" />
+                                        </button>
+                                    </CardAction>
+                                )}
+                            </CardHeader>
+                            <CardContent>
+                                <p className="mb-2 text-gray-600">
+                                    {post.content.length > 200
+                                        ? `${post.content.slice(0, 200)}...`
+                                        : post.content}
+                                </p>
+                            </CardContent>
+                            <CardFooter>
+                                <div className="text-sm text-gray-500">
+                                    Posted by {post.author?.name || 'Unknown'}{' '}
+                                    on{' '}
+                                    {new Date(
+                                        post.createdAt,
+                                    ).toLocaleDateString()}
+                                </div>
+                            </CardFooter>
+                        </Card>
                     </Link>
                 ))}
             </div>
