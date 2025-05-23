@@ -1,4 +1,11 @@
-import { pgTable, serial, text, timestamp, integer } from 'drizzle-orm/pg-core';
+import {
+    pgTable,
+    serial,
+    text,
+    timestamp,
+    integer,
+    boolean,
+} from 'drizzle-orm/pg-core';
 import { users, orgs } from './auth-schema';
 import { relations } from 'drizzle-orm';
 
@@ -20,11 +27,13 @@ export const posts = pgTable('posts', {
         .notNull()
         .references(() => orgs.id),
     groupId: text('group_id'), // optional, for future use
+    isDeleted: boolean('is_deleted').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const comments: any = pgTable('comments', {
+// Define comments table with type assertion to handle self-reference
+export const comments = pgTable('comments', {
     id: serial('id').primaryKey(),
     content: text('content').notNull(),
     postId: integer('post_id')
@@ -33,7 +42,8 @@ export const comments: any = pgTable('comments', {
     authorId: text('author_id')
         .notNull()
         .references(() => users.id),
-    parentId: integer('parent_id').references(() => comments.id), // nullable for top-level comments
+    parentId: integer('parent_id').references((): any => comments.id),
+    isDeleted: boolean('is_deleted').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

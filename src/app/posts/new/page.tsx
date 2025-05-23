@@ -7,7 +7,7 @@ import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import TipTapEditor from '@/components/TipTapEditor';
 
 export default function NewPostPage() {
     const router = useRouter();
@@ -28,12 +28,9 @@ export default function NewPostPage() {
                 <p className="mb-4 text-gray-600">
                     Please sign in to create a new post.
                 </p>
-                <Link
-                    href="/auth/login"
-                    className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-blue-600"
-                >
-                    Sign In
-                </Link>
+                <Button asChild>
+                    <Link href="/auth/login">Sign In</Link>
+                </Button>
             </div>
         );
     }
@@ -78,12 +75,10 @@ export default function NewPostPage() {
                     >
                         Content
                     </label>
-                    <Textarea
-                        id="content"
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        rows={10}
-                        required
+                    <TipTapEditor
+                        content={content}
+                        onChange={setContent}
+                        placeholder="Write your post content here..."
                     />
                 </div>
 

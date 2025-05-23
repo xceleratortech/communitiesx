@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '@/server/trpc/trpc';
-import { posts, comments, users } from '@/server/db/schema';
+import { posts, comments, users, orgs } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, count, and } from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
 
@@ -17,6 +17,7 @@ type PostWithAuthor = PostType & {
 
 type CommentWithAuthor = CommentType & {
     author: UserType | null;
+    replies?: CommentWithAuthor[]; // Add replies array for nesting
 };
 
 type PostWithAuthorAndComments = PostType & {
@@ -135,12 +136,13 @@ export const communityRouter = router({
                     where: eq(posts.id, input.postId),
                     with: {
                         author: true,
-                        comments: {
-                            with: {
-                                author: true,
-                            },
-                            orderBy: desc(comments.createdAt),
-                        },
+                        // We will fetch comments as a flat list and then structure them
+                        // comments: {
+                        //     with: {
+                        //         author: true,
+                        //     },
+                        //     orderBy: desc(comments.createdAt),
+                        // },
                     },
                 });
 
@@ -151,8 +153,46 @@ export const communityRouter = router({
                     });
                 }
 
-                // Ensure comments and their authors are correctly typed (Drizzle's 'with' should handle this)
-                return postFromDb as PostWithAuthorAndComments;
+                // Fetch all comments for the post separately
+                const allCommentsForPost = await db.query.comments.findMany({
+                    where: eq(comments.postId, input.postId),
+                    with: {
+                        author: true,
+                    },
+                    orderBy: desc(comments.createdAt), // Or asc(comments.createdAt) depending on desired order
+                });
+
+                // Structure comments into a tree
+                const commentsById: { [key: number]: CommentWithAuthor } = {};
+                allCommentsForPost.forEach((comment) => {
+                    commentsById[comment.id] = {
+                        ...(comment as CommentWithAuthor),
+                        replies: [],
+                    };
+                });
+
+                const nestedComments: CommentWithAuthor[] = [];
+                allCommentsForPost.forEach((comment) => {
+                    if (comment.parentId && commentsById[comment.parentId]) {
+                        commentsById[comment.parentId].replies?.push(
+                            commentsById[comment.id],
+                        );
+                    } else {
+                        nestedComments.push(commentsById[comment.id]);
+                    }
+                });
+
+                // The Drizzle 'with' for comments is removed, so we manually add the structured comments.
+                const result: PostWithAuthorAndComments = {
+                    ...(postFromDb as PostWithAuthorAndComments),
+                    comments: nestedComments.sort(
+                        (a, b) =>
+                            new Date(b.createdAt).getTime() -
+                            new Date(a.createdAt).getTime(),
+                    ), // Ensure top-level comments are sorted as before
+                };
+
+                return result;
             } catch (error) {
                 if (error instanceof TRPCError) {
                     throw error;
@@ -171,6 +211,7 @@ export const communityRouter = router({
             z.object({
                 postId: z.number(),
                 content: z.string().min(1),
+                parentId: z.number().optional(),
             }),
         )
         .mutation(
@@ -178,7 +219,7 @@ export const communityRouter = router({
                 input,
                 ctx,
             }: {
-                input: { postId: number; content: string };
+                input: { postId: number; content: string; parentId?: number };
                 ctx: Context;
             }) => {
                 if (!ctx.session?.user) {
@@ -210,6 +251,7 @@ export const communityRouter = router({
                             content: input.content,
                             postId: input.postId,
                             authorId: ctx.session.user.id,
+                            parentId: input.parentId,
                             createdAt: new Date(),
                             updatedAt: new Date(),
                         })
@@ -343,4 +385,207 @@ export const communityRouter = router({
                 .returning();
             return updatedPost;
         }),
+
+    // Soft delete a comment
+    deleteComment: publicProcedure
+        .input(
+            z.object({
+                commentId: z.number(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to delete a comment',
+                });
+            }
+
+            const commentToDelete = await db.query.comments.findFirst({
+                where: eq(comments.id, input.commentId),
+            });
+
+            if (!commentToDelete) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Comment not found',
+                });
+            }
+
+            if (commentToDelete.authorId !== ctx.session.user.id) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You are not authorized to delete this comment',
+                });
+            }
+
+            try {
+                const [updatedComment] = await db
+                    .update(comments)
+                    .set({
+                        isDeleted: true,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(comments.id, input.commentId))
+                    .returning();
+
+                return updatedComment;
+            } catch (error) {
+                console.error('Error deleting comment:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete comment',
+                });
+            }
+        }),
+
+    // Soft delete a post
+    deletePost: publicProcedure
+        .input(
+            z.object({
+                postId: z.number(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to delete a post',
+                });
+            }
+
+            const postToDelete = await db.query.posts.findFirst({
+                where: eq(posts.id, input.postId),
+            });
+
+            if (!postToDelete) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Post not found',
+                });
+            }
+
+            if (postToDelete.authorId !== ctx.session.user.id) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You are not authorized to delete this post',
+                });
+            }
+
+            try {
+                const [updatedPost] = await db
+                    .update(posts)
+                    .set({
+                        isDeleted: true,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(posts.id, input.postId))
+                    .returning();
+
+                return updatedPost;
+            } catch (error) {
+                console.error('Error deleting post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete post',
+                });
+            }
+        }),
+
+    // Get statistics for the community
+    getStats: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view statistics',
+            });
+        }
+
+        try {
+            // Get the user's organization
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, ctx.session.user.id),
+            });
+
+            const orgId = user?.orgId;
+            if (!orgId) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'User does not have an organization.',
+                });
+            }
+
+            // Count total users in the organization
+            const usersResult = await db
+                .select({ count: count() })
+                .from(users)
+                .where(eq(users.orgId, orgId));
+
+            const totalUsers = usersResult[0]?.count || 0;
+
+            // Count total posts in the organization
+            const postsResult = await db
+                .select({ count: count() })
+                .from(posts)
+                .where(eq(posts.orgId, orgId));
+
+            const totalPosts = postsResult[0]?.count || 0;
+
+            // Count total communities (orgs) in the database
+            const orgsResult = await db.select({ count: count() }).from(orgs);
+
+            const totalCommunities = orgsResult[0]?.count || 0;
+
+            return {
+                totalUsers,
+                totalPosts,
+                totalCommunities,
+            };
+        } catch (error) {
+            console.error('Error fetching statistics:', error);
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch statistics',
+            });
+        }
+    }),
+
+    // Get admin users for the community
+    getAdmins: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view admins',
+            });
+        }
+
+        try {
+            // Get the user's organization
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, ctx.session.user.id),
+            });
+
+            const orgId = user?.orgId;
+            if (!orgId) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'User does not have an organization.',
+                });
+            }
+
+            // Find admin users in the organization
+            const adminUsers = await db.query.users.findMany({
+                where: and(eq(users.orgId, orgId), eq(users.role, 'admin')),
+                orderBy: [users.name],
+            });
+
+            return adminUsers;
+        } catch (error) {
+            console.error('Error fetching admins:', error);
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch admins',
+            });
+        }
+    }),
 });

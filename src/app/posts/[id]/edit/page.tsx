@@ -7,6 +7,7 @@ import { useSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import TipTapEditor from '@/components/TipTapEditor';
 
 export default function EditPostPage() {
     const params = useParams();
@@ -57,12 +58,17 @@ export default function EditPostPage() {
         return <div className="p-4">Post not found</div>;
     }
 
+    if (post.isDeleted) {
+        router.push(`/posts/${postId}`);
+        return null;
+    }
+
     if (post.authorId !== session.user.id) {
         return (
             <div className="mx-auto max-w-4xl p-4">
                 <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
                 <p className="mb-4 text-gray-600">
-                    You are not allowed to edit this post.
+                    You are not authorized to edit this post.
                 </p>
             </div>
         );
@@ -109,12 +115,11 @@ export default function EditPostPage() {
                     >
                         Content
                     </label>
-                    <Textarea
-                        id="content"
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        rows={10}
-                        required
+                    <TipTapEditor
+                        key={`editor-${post?.id}-${post?.updatedAt}`}
+                        content={content}
+                        onChange={setContent}
+                        placeholder="Edit your post content here..."
                     />
                 </div>
                 <Button type="submit" disabled={editPost.isPending}>
