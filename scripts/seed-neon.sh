@@ -3,7 +3,7 @@
 # Exit on error
 set -e
 
-echo "🚀 Applying schema migrations to Neon database..."
+echo "🚀 Seeding Neon database from backup..."
 
 # Check if DATABASE_URL is set and contains 'neon'
 if [[ -z "${DATABASE_URL}" || ! "${DATABASE_URL}" =~ neon ]]; then
@@ -12,8 +12,8 @@ if [[ -z "${DATABASE_URL}" || ! "${DATABASE_URL}" =~ neon ]]; then
   exit 1
 fi
 
-# Run the schema push
-echo "🔄 Pushing schema to Neon..."
-npx drizzle-kit push
+# Run the seed script
+echo "🌱 Running seed script..."
+npx tsx src/server/db/seed-from-backup.ts
 
-echo "✅ Schema migrations applied successfully!" 
+echo "✅ Neon database seeded successfully!" 

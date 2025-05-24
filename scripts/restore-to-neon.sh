@@ -25,14 +25,14 @@ echo "Restoring backup to Neon database: $DB_NAME"
 echo "This will overwrite existing data. Press Ctrl+C to cancel or Enter to continue..."
 read
 
-# Apply the backup to Neon
-echo "Applying backup to Neon database..."
-psql "$NEON_DB_URL" < $BACKUP_FILE
+# Apply the backup to Neon with verbose output
+echo "Applying backup to Neon database (verbose mode)..."
+psql --echo-all --set ON_ERROR_STOP=on "$NEON_DB_URL" < "$BACKUP_FILE"
 
 if [ $? -eq 0 ]; then
   echo "Restore completed successfully!"
 else
-  echo "Restore failed!"
+  echo "Restore failed! Check verbose output above for details."
   exit 1
 fi
 
