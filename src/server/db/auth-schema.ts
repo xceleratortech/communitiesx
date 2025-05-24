@@ -5,6 +5,7 @@ import {
     boolean,
     // integer,
 } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
 
 export const orgs = pgTable('orgs', {
     id: text('id').primaryKey(),
@@ -24,6 +25,18 @@ export const users = pgTable('users', {
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
 });
+
+// Define relations between users and organizations
+export const usersRelations = relations(users, ({ one }) => ({
+    organization: one(orgs, {
+        fields: [users.orgId],
+        references: [orgs.id],
+    }),
+}));
+
+export const orgsRelations = relations(orgs, ({ many }) => ({
+    users: many(users),
+}));
 
 export const sessions = pgTable('sessions', {
     id: text('id').primaryKey(),

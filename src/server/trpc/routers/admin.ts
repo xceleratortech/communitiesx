@@ -21,7 +21,7 @@ export const adminRouter = router({
         try {
             const allUsers = await db.query.users.findMany({
                 with: {
-                    // Include organization data if you have the relation defined
+                    organization: true,
                 },
             });
 
