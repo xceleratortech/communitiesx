@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,13 @@ import {
     CardFooter,
     CardAction,
 } from '@/components/ui/card';
-import { Edit, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+    Edit,
+    Trash2,
+    ChevronDown,
+    ChevronUp,
+    PlusCircleIcon,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { posts, users } from '@/server/db/schema';
 
@@ -30,6 +36,7 @@ export default function PostsPage() {
     const sessionData = useSession();
     const session = sessionData.data;
     const router = useRouter();
+    const [isClient, setIsClient] = useState(false);
 
     // State for collapsible sections
     const [aboutOpen, setAboutOpen] = useState(true);
@@ -121,10 +128,22 @@ export default function PostsPage() {
         return colors[colorIndex];
     };
 
+    // Use useEffect to mark when component is hydrated on client
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    // Don't render anything meaningful during SSR to avoid hydration mismatches
+    if (!isClient) {
+        return <div className="p-4">Loading...</div>;
+    }
+
     if (session === undefined) {
         return null;
     }
-    if (isLoading) {
+
+    // Only show loading state on client after hydration
+    if (isClient && isLoading) {
         return <div className="p-4">Loading posts...</div>;
     }
 
@@ -216,16 +235,15 @@ export default function PostsPage() {
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="prose mb-2 max-w-none text-gray-600">
-                                        <div
-                                            dangerouslySetInnerHTML={{
-                                                __html:
-                                                    post.content.length > 200
-                                                        ? `${post.content.slice(0, 200)}...`
-                                                        : post.content,
-                                            }}
-                                        />
-                                    </div>
+                                    <div
+                                        className="prose mb-2 max-w-none text-gray-600"
+                                        dangerouslySetInnerHTML={{
+                                            __html:
+                                                post.content.length > 200
+                                                    ? `${post.content.slice(0, 200)}...`
+                                                    : post.content,
+                                        }}
+                                    />
                                 )}
                             </CardContent>
                             <CardFooter>
@@ -253,7 +271,9 @@ export default function PostsPage() {
                         <h1 className="text-3xl font-bold">Community Posts</h1>
                         {session && (
                             <Button asChild>
-                                <Link href="/posts/new">Create Post</Link>
+                                <Link href="/posts/new">
+                                    <PlusCircleIcon /> Create Post
+                                </Link>
                             </Button>
                         )}
                     </div>

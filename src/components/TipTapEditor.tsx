@@ -28,16 +28,21 @@ interface TipTapEditorProps {
     content: string;
     onChange: (richText: string) => void;
     placeholder?: string;
+    variant?: 'default' | 'compact';
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
     content,
     onChange,
     placeholder = 'Write something...',
+    variant = 'default',
 }) => {
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
+                heading: {
+                    levels: [1, 2],
+                },
                 bulletList: {
                     keepMarks: true,
                     keepAttributes: false,
@@ -85,10 +90,20 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     });
 
     useEffect(() => {
-        if (editor && content) {
+        if (editor) {
             // Only update content if it's different from current editor content
             // to avoid cursor jumping issues
             const currentContent = editor.getHTML();
+
+            // Special case for empty content - always clear the editor
+            if (content === '') {
+                if (currentContent !== '<p></p>' && currentContent !== '') {
+                    editor.commands.clearContent(true);
+                }
+                return;
+            }
+
+            // For non-empty content, only update if different
             if (currentContent !== content) {
                 editor.commands.setContent(content);
             }
@@ -307,7 +322,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             </div>
             <EditorContent
                 editor={editor}
-                className="prose prose-ul:list-disc prose-ol:list-decimal min-h-[200px] max-w-none p-4 focus:outline-none"
+                className={`prose prose-ul:list-disc prose-ol:list-decimal max-w-none p-4 focus:outline-none ${
+                    variant === 'compact'
+                        ? 'min-h-[120px] text-sm'
+                        : 'min-h-[200px]'
+                }`}
             />
         </div>
     );

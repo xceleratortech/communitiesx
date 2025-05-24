@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { users } from '@/server/db/schema'; // Assuming UserFromDb is similar or can be imported
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
+import TipTapEditor from '@/components/TipTapEditor';
 
 // Infer Session type from useSession hook
 type SessionData = ReturnType<typeof useSession>['data'];
@@ -126,11 +127,11 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 )}
                 {isEditingThisComment ? (
                     <div className="space-y-2">
-                        <Textarea
-                            value={editedCommentContent}
-                            onChange={(e) => onSetEditedContent(e.target.value)}
-                            rows={3}
-                            className="w-full"
+                        <TipTapEditor
+                            content={editedCommentContent}
+                            onChange={onSetEditedContent}
+                            placeholder="Edit your comment..."
+                            variant="compact"
                         />
                         <div className="flex justify-end space-x-2">
                             <Button
@@ -183,9 +184,12 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             [Comment deleted]
                                         </p>
                                     ) : (
-                                        <p className="mb-2 break-words whitespace-pre-wrap">
-                                            {comment.content}
-                                        </p>
+                                        <div
+                                            className="prose prose-sm mb-2 max-w-none break-words"
+                                            dangerouslySetInnerHTML={{
+                                                __html: comment.content,
+                                            }}
+                                        />
                                     )}
                                 </div>
                                 <div className="flex flex-shrink-0 items-start space-x-1">
@@ -270,12 +274,11 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 {/* Reply Form */}
                 {isReplyingToThisComment && (
                     <div className="mt-3 space-y-2">
-                        <Textarea
-                            value={replyContent}
-                            onChange={(e) => onSetReplyContent(e.target.value)}
+                        <TipTapEditor
+                            content={replyContent}
+                            onChange={onSetReplyContent}
                             placeholder="Write your reply..."
-                            rows={2}
-                            className="w-full"
+                            variant="compact"
                         />
                         <div className="flex justify-end space-x-2">
                             <Button

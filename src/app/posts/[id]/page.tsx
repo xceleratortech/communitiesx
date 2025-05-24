@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Edit, Trash2 } from 'lucide-react';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
+import TipTapEditor from '@/components/TipTapEditor';
 
 type User = {
     id: string;
@@ -35,6 +36,8 @@ export default function PostPage() {
     const { data: session } = useSession();
     const [comment, setComment] = useState('');
     const router = useRouter();
+    const [isClient, setIsClient] = useState(false);
+    const editorRef = useRef<{ reset: () => void } | null>(null);
 
     // State for inline comment editing
     const [editingCommentId, setEditingCommentId] = useState<number | null>(
@@ -62,9 +65,24 @@ export default function PostPage() {
         },
     );
 
+    // Use useEffect to mark when component is hydrated on client
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
+
     const createComment = trpc.community.createComment.useMutation({
         onSuccess: () => {
+            // Reset the editor content to empty string
             setComment('');
+
+            // Force editor reset if needed
+            if (comment !== '') {
+                // This is a backup in case the state update doesn't trigger the editor to clear
+                setTimeout(() => {
+                    setComment('');
+                }, 0);
+            }
+
             setReplyContent(''); // Clear reply content on success
             setReplyingToCommentId(null); // Reset replying state
             utils.community.getPost.invalidate({ postId });
@@ -97,6 +115,11 @@ export default function PostPage() {
         },
     });
 
+    // Don't render anything meaningful during SSR to avoid hydration mismatches
+    if (!isClient) {
+        return <div className="p-4">Loading...</div>;
+    }
+
     if (!session) {
         return (
             <div className="mx-auto max-w-4xl p-4">
@@ -111,13 +134,18 @@ export default function PostPage() {
         );
     }
 
-    if (isLoading) {
+    // Only show loading state on client after hydration
+    if (isClient && isLoading) {
         return <div className="p-4">Loading post...</div>;
     }
 
-    if (!post) {
+    if (isClient && !post) {
         return <div className="p-4">Post not found</div>;
     }
+
+    // Since we've checked for post existence above, we can safely assert it's defined
+    // Add this type guard to make TypeScript happy
+    const postData = post!;
 
     const handleStartEdit = (commentToEdit: CommentWithReplies) => {
         setEditingCommentId(commentToEdit.id);
@@ -141,10 +169,17 @@ export default function PostPage() {
         e.preventDefault();
         if (!comment.trim()) return;
 
-        await createComment.mutate({
-            postId,
-            content: comment.trim(),
-        });
+        try {
+            await createComment.mutate({
+                postId,
+                content: comment.trim(),
+            });
+
+            // Explicitly clear the comment state after submission
+            setComment('');
+        } catch (error) {
+            console.error('Error posting comment:', error);
+        }
     };
 
     // New handlers for reply functionality
@@ -197,53 +232,58 @@ export default function PostPage() {
                 <div className="mb-4 flex items-start justify-between">
                     <div>
                         <h1 className="mb-2 text-3xl font-bold">
-                            {post.isDeleted ? '[Deleted]' : post.title}
+                            {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
                         <div className="text-sm text-gray-500">
-                            Posted by {post.author?.name || 'Unknown'} on{' '}
-                            {new Date(post.createdAt).toLocaleString()}
+                            Posted by {postData.author?.name || 'Unknown'} on{' '}
+                            {new Date(postData.createdAt).toLocaleString()}
                         </div>
                     </div>
-                    {session.user.id === post.authorId && !post.isDeleted && (
-                        <div className="flex space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                    router.push(`/posts/${post.id}/edit`)
-                                }
-                                className="flex items-center gap-2"
-                            >
-                                <Edit className="h-4 w-4" />
-                                Edit
-                            </Button>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleDeletePost}
-                                className="flex items-center gap-2 text-red-600 hover:bg-red-50"
-                                disabled={deletePostMutation.isPending}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                                Delete
-                            </Button>
-                        </div>
-                    )}
+                    {session.user.id === postData.authorId &&
+                        !postData.isDeleted && (
+                            <div className="flex space-x-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                        router.push(
+                                            `/posts/${postData.id}/edit`,
+                                        )
+                                    }
+                                    className="flex items-center gap-2"
+                                >
+                                    <Edit className="h-4 w-4" />
+                                    Edit
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleDeletePost}
+                                    className="flex items-center gap-2 text-red-600 hover:bg-red-50"
+                                    disabled={deletePostMutation.isPending}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                </Button>
+                            </div>
+                        )}
                 </div>
                 <div className="prose prose-ul:list-disc prose-ol:list-decimal max-w-none rounded-lg bg-white p-6 shadow-sm">
-                    {post.isDeleted ? (
+                    {postData.isDeleted ? (
                         <div className="space-y-2">
                             <span className="block text-gray-500 italic">
                                 [Content deleted]
                             </span>
                             <span className="block text-sm text-gray-400">
                                 Removed on{' '}
-                                {new Date(post.updatedAt).toLocaleString()}
+                                {new Date(postData.updatedAt).toLocaleString()}
                             </span>
                         </div>
                     ) : (
                         <div
-                            dangerouslySetInnerHTML={{ __html: post.content }}
+                            dangerouslySetInnerHTML={{
+                                __html: postData.content,
+                            }}
                         />
                     )}
                 </div>
@@ -251,13 +291,13 @@ export default function PostPage() {
 
             <div className="mb-8">
                 <h2 className="mb-4 text-2xl font-bold">Comments</h2>
-                {session && !post.isDeleted && (
+                {session && !postData.isDeleted && (
                     <form onSubmit={handleSubmitComment} className="mb-6">
-                        <Textarea
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                            rows={3}
+                        <TipTapEditor
+                            content={comment}
+                            onChange={setComment}
                             placeholder="Write a comment..."
+                            variant="compact"
                         />
                         <Button
                             type="submit"
@@ -271,7 +311,7 @@ export default function PostPage() {
                     </form>
                 )}
 
-                {post.isDeleted && (
+                {postData.isDeleted && (
                     <div className="mb-6 rounded-lg bg-gray-50 p-4 text-gray-500">
                         <p>
                             This post has been deleted. New comments are
@@ -281,7 +321,7 @@ export default function PostPage() {
                 )}
 
                 <div className="space-y-4">
-                    {post.comments?.map((comment: CommentWithReplies) => (
+                    {postData.comments?.map((comment: CommentWithReplies) => (
                         <CommentItem
                             key={comment.id}
                             comment={comment}
