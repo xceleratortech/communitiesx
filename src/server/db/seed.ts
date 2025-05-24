@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { hashPassword } from 'better-auth/crypto';
 import { db } from '@/server/db';
-import { accounts, users } from '@/server/db/auth-schema';
+import { accounts, users, orgs } from '@/server/db/auth-schema';
 import { posts, comments, reactions } from '@/server/db/schema';
 
 // Parse command-line arguments for demo mode
@@ -20,10 +20,20 @@ async function seed() {
         await db.delete(posts);
         await db.delete(accounts);
         await db.delete(users);
+        await db.delete(orgs);
         console.log('🗑️ Data cleared.');
 
         if (isDemo) {
             console.log('🚀 Demo seeding mode: Creating demo data...');
+            // Create an organization
+            const orgId = `org-${randomUUID()}`;
+            const [org] = await db
+                .insert(orgs)
+                .values({
+                    id: orgId,
+                    name: 'Xcelerator',
+                })
+                .returning();
             // Demo: Create admin user
             const adminId = `admin-${randomUUID()}`;
             const hashedPassword = await hashPassword('password123');
@@ -34,6 +44,8 @@ async function seed() {
                     name: 'Demo Admin',
                     email: 'it@xcelerator.co.in',
                     emailVerified: true,
+                    orgId: org.id,
+                    role: 'admin',
                     createdAt: new Date(),
                     updatedAt: new Date(),
                 })
@@ -67,6 +79,8 @@ async function seed() {
                         name: user.name,
                         email: user.email,
                         emailVerified: true,
+                        orgId: org.id,
+                        role: 'user',
                         createdAt: new Date(),
                         updatedAt: new Date(),
                     })
@@ -94,6 +108,7 @@ async function seed() {
                             title: `${user.name}'s Post ${i}`,
                             content: `This is a demo post ${i} by ${user.name}. It contains some sample content for demonstration purposes.`,
                             authorId: user.id,
+                            orgId: org.id,
                             createdAt: new Date(),
                             updatedAt: new Date(),
                         })
@@ -143,6 +158,15 @@ async function seed() {
         // --- Production Seeding ---
         console.log('🌱 Creating production seed data...');
 
+        // Create an organization
+        const orgId = `org-${randomUUID()}`;
+        const [org] = await db
+            .insert(orgs)
+            .values({
+                id: orgId,
+                name: 'Xcelerator',
+            })
+            .returning();
         // Create admin user
         const adminId = `admin-${randomUUID()}`;
         const hashedPassword = await hashPassword('password123');
@@ -153,6 +177,8 @@ async function seed() {
                 name: 'Admin User',
                 email: 'it@xcelerator.co.in',
                 emailVerified: true,
+                orgId: org.id,
+                role: 'admin',
                 createdAt: new Date(),
                 updatedAt: new Date(),
             })
@@ -177,6 +203,8 @@ async function seed() {
                 name: 'Regular User',
                 email: 'raj@xcelerator.co.in',
                 emailVerified: true,
+                orgId: org.id,
+                role: 'user',
                 createdAt: new Date(),
                 updatedAt: new Date(),
             })
@@ -200,6 +228,7 @@ async function seed() {
                 content:
                     'This is our first community post. Feel free to engage and share your thoughts!',
                 authorId: adminUser.id,
+                orgId: org.id,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             })

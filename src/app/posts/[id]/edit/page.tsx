@@ -1,47 +1,88 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import React, { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import TipTapEditor from '@/components/TipTapEditor';
 
-export default function NewPostPage() {
+export default function EditPostPage() {
+    const params = useParams();
     const router = useRouter();
     const { data: session } = useSession();
+    const postId = parseInt(params.id as string);
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [error, setError] = useState('');
 
-    const createPost = trpc.community.createPost.useMutation({
-        onSuccess: (post) => {
-            router.push(`/posts/${post.id}`);
+    const { data: post, isLoading } = trpc.community.getPost.useQuery(
+        { postId },
+        { enabled: !!session },
+    );
+
+    const editPost = trpc.community.editPost.useMutation({
+        onSuccess: () => {
+            router.push(`/posts/${postId}`);
+        },
+        onError: (err: any) => {
+            setError(err.message || 'Failed to update post');
         },
     });
+
+    useEffect(() => {
+        if (post) {
+            setTitle(post.title);
+            setContent(post.content);
+        }
+    }, [post]);
 
     if (!session) {
         return (
             <div className="mx-auto max-w-4xl p-4">
                 <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
                 <p className="mb-4 text-gray-600">
-                    Please sign in to create a new post.
+                    Please sign in to edit this post.
                 </p>
-                <Button asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                </Button>
+            </div>
+        );
+    }
+
+    if (isLoading) {
+        return <div className="p-4">Loading post...</div>;
+    }
+
+    if (!post) {
+        return <div className="p-4">Post not found</div>;
+    }
+
+    if (post.isDeleted) {
+        router.push(`/posts/${postId}`);
+        return null;
+    }
+
+    if (post.authorId !== session.user.id) {
+        return (
+            <div className="mx-auto max-w-4xl p-4">
+                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
+                <p className="mb-4 text-gray-600">
+                    You are not authorized to edit this post.
+                </p>
             </div>
         );
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         if (!title.trim() || !content.trim()) {
+            setError('Title and content are required.');
             return;
         }
-
-        await createPost.mutate({
+        editPost.mutate({
+            postId,
             title: title.trim(),
             content: content.trim(),
         });
@@ -49,8 +90,8 @@ export default function NewPostPage() {
 
     return (
         <div className="mx-auto max-w-4xl p-4">
-            <h1 className="mb-6 text-3xl font-bold">Create New Post</h1>
-
+            <h1 className="mb-6 text-3xl font-bold">Edit Post</h1>
+            {error && <div className="mb-4 text-red-500">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                     <label
@@ -67,7 +108,6 @@ export default function NewPostPage() {
                         required
                     />
                 </div>
-
                 <div>
                     <label
                         htmlFor="content"
@@ -76,14 +116,14 @@ export default function NewPostPage() {
                         Content
                     </label>
                     <TipTapEditor
+                        key={`editor-${post?.id}-${post?.updatedAt}`}
                         content={content}
                         onChange={setContent}
-                        placeholder="Write your post content here..."
+                        placeholder="Edit your post content here..."
                     />
                 </div>
-
-                <Button type="submit" disabled={createPost.isPending}>
-                    {createPost.isPending ? 'Creating...' : 'Create Post'}
+                <Button type="submit" disabled={editPost.isPending}>
+                    {editPost.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
             </form>
         </div>

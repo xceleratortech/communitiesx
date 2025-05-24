@@ -6,12 +6,21 @@ import {
     // integer,
 } from 'drizzle-orm/pg-core';
 
+export const orgs = pgTable('orgs', {
+    id: text('id').primaryKey(),
+    name: text('name').notNull().unique(),
+});
+
 export const users = pgTable('users', {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull(),
     image: text('image'),
+    orgId: text('org_id')
+        .notNull()
+        .references(() => orgs.id),
+    role: text('role').notNull().default('user'), // 'admin' | 'user'
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
 });

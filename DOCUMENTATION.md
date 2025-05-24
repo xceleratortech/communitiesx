@@ -43,9 +43,15 @@ To maintain consistency and quality throughout the project lifecycle, all team m
     - Keep commits focused on single logical changes
 
 3. **Code Quality Requirements**:
+
     - All code MUST pass linting before commit (enforced by husky)
     - Unit tests MUST be written for critical business logic
     - Authentication-related changes MUST undergo security review
+
+    > **⚠️ Type Safety Callout:**
+    >
+    > - **Avoid using the `any` type.** Always strive for explicit, safe types to maintain type safety across the codebase.
+    > - **Avoid using `new type` declarations when the type can be inferred.** Prefer type inference to reduce redundancy and improve maintainability.
 
 ### API Development Rules
 

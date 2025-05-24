@@ -18,6 +18,7 @@ export const auth = betterAuth({
         provider: 'pg',
         usePlural: true,
     }),
+    selectUserFields: ['id', 'name', 'email', ['org_id', 'orgId'], 'role'],
     plugins: [
         nextCookies(),
         admin({

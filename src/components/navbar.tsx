@@ -24,6 +24,14 @@ export function Navbar() {
                             <span className="text-xl font-bold">Community</span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+                            {session?.user?.role === 'admin' && (
+                                <Link
+                                    href="/admin"
+                                    className="inline-flex items-center px-1 pt-1 text-gray-900"
+                                >
+                                    Admin Dashboard
+                                </Link>
+                            )}
                             <Link
                                 href="/posts"
                                 className="inline-flex items-center px-1 pt-1 text-gray-900"
