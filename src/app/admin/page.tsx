@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
@@ -49,6 +49,10 @@ type User = {
     emailVerified: boolean;
     image: string | null;
     orgId: string;
+    organization?: {
+        id: string;
+        name: string;
+    };
     role: string;
     createdAt: string | Date;
     updatedAt: string | Date;
@@ -153,14 +157,20 @@ export default function AdminDashboard() {
         inviteUserMutation.mutate(inviteUser);
     };
 
+    // Use useEffect for navigation instead of doing it during render
+    useEffect(() => {
+        if (session === null) {
+            router.push('/auth/login');
+        }
+    }, [session, router]);
+
     // Check if user is admin
     if (session === undefined) {
         return <div>Loading...</div>;
     }
 
     if (!session) {
-        router.push('/auth/login');
-        return null;
+        return null; // Return null and let the useEffect handle the redirect
     }
 
     if (session.user.role !== 'admin') {
@@ -556,7 +566,8 @@ export default function AdminDashboard() {
                                                     {user.role}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {user.orgId}
+                                                    {user.organization?.name ||
+                                                        user.orgId}
                                                 </TableCell>
                                                 <TableCell>
                                                     {user.emailVerified
