@@ -5,10 +5,7 @@ import { eq } from 'drizzle-orm';
 
 // Helper function to verify the invitation token
 async function verifyInvitation(token: string | null, email: string | null) {
-    console.log(`Verifying invitation: token=${token}, email=${email}`);
-
     if (!token || !email) {
-        console.log('Missing token or email');
         return { error: 'Missing token or email', status: 400 };
     }
 
@@ -18,13 +15,8 @@ async function verifyInvitation(token: string | null, email: string | null) {
             where: eq(verifications.identifier, email),
         });
 
-        console.log(
-            `Found ${allVerifications.length} verification records for email:`,
-            email,
-        );
-
         if (!allVerifications.length) {
-            console.log('No verification found for email:', email);
+            console.error('No verification found for email:', email);
             return { error: 'No invitation found for this email', status: 400 };
         }
 
@@ -34,12 +26,9 @@ async function verifyInvitation(token: string | null, email: string | null) {
 
         for (const verification of allVerifications) {
             try {
-                console.log('Checking verification record:', verification.id);
                 const parsed = JSON.parse(verification.value);
-                console.log('Parsed value:', parsed);
 
                 if (parsed.token === token) {
-                    console.log('Token match found!');
                     matchedVerification = verification;
                     parsedValue = parsed;
                     break;
@@ -51,7 +40,6 @@ async function verifyInvitation(token: string | null, email: string | null) {
         }
 
         if (!matchedVerification || !parsedValue) {
-            console.log('No matching token found in any verification record');
             return { error: 'Invalid token', status: 400 };
         }
 
@@ -61,7 +49,7 @@ async function verifyInvitation(token: string | null, email: string | null) {
             matchedVerification.expiresAt &&
             new Date(matchedVerification.expiresAt) < now
         ) {
-            console.log('Token expired:', matchedVerification.expiresAt);
+            console.error('Token expired:', matchedVerification.expiresAt);
             return { error: 'Token has expired', status: 400 };
         }
 
@@ -71,7 +59,6 @@ async function verifyInvitation(token: string | null, email: string | null) {
             orgId: parsedValue.orgId,
             role: parsedValue.role || 'user',
         };
-        console.log('Verification successful:', response);
         return { data: response, status: 200 };
     } catch (error) {
         console.error('Error verifying invitation:', error);

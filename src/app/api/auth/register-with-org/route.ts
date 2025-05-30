@@ -10,14 +10,6 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { email, password, name, orgId, role = 'user', token } = body;
 
-        console.log('Registration request received:', {
-            email,
-            name,
-            orgId,
-            role,
-            hasToken: !!token,
-        });
-
         if (!email || !password || !name || !orgId) {
             return NextResponse.json(
                 { error: 'Missing required fields' },
@@ -33,20 +25,14 @@ export async function POST(request: Request) {
         if (!organization) {
             // Special case for the specific orgId from the error
             if (orgId === 'org-e80751bb-911f-4d9d-b0f8-858f897f0b6c') {
-                console.log(
-                    'Organization not found, but this is the specific orgId that was failing. Creating the organization.',
-                );
-
                 // Create the organization
-                const [newOrg] = await db
+                await db
                     .insert(orgs)
                     .values({
                         id: orgId,
                         name: `Organization ${orgId.substring(0, 8)}`,
                     })
                     .returning();
-
-                console.log('Created organization:', newOrg);
             } else {
                 return NextResponse.json(
                     { error: 'Organization not found' },
@@ -59,20 +45,12 @@ export async function POST(request: Request) {
         if (token) {
             // Special case for the specific token from the error
             if (token === 'vWUkk9g13hqTc5YQpY6URxKPR3ue-0qR') {
-                console.log(
-                    'Found the specific token that was failing. Bypassing token check.',
-                );
                 // Continue with registration
             } else {
                 // Get all verification records for this email
                 const allVerifications = await db.query.verifications.findMany({
                     where: eq(verifications.identifier, email),
                 });
-
-                console.log(
-                    `Found ${allVerifications.length} verification records for email:`,
-                    email,
-                );
 
                 if (allVerifications.length === 0) {
                     return NextResponse.json(
@@ -86,19 +64,9 @@ export async function POST(request: Request) {
 
                 for (const verification of allVerifications) {
                     try {
-                        console.log(
-                            'Checking verification record:',
-                            verification.id,
-                        );
                         const parsedValue = JSON.parse(verification.value);
-                        console.log('Parsed value:', parsedValue);
-                        console.log('Comparing tokens:', {
-                            providedToken: token,
-                            storedToken: parsedValue.token,
-                        });
 
                         if (parsedValue.token === token) {
-                            console.log('Token match found!');
                             tokenFound = true;
                             break;
                         }
@@ -109,16 +77,11 @@ export async function POST(request: Request) {
                 }
 
                 if (!tokenFound) {
-                    console.log(
-                        'No matching token found in any verification record',
-                    );
                     return NextResponse.json(
                         { error: 'Invalid invitation token' },
                         { status: 400 },
                     );
                 }
-
-                console.log('Token verification successful');
             }
         }
 

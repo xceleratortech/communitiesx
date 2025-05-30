@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
@@ -11,7 +11,7 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 
-export default function NewPostPage() {
+function NewPostForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const communityId = searchParams.get('communityId')
@@ -185,5 +185,15 @@ export default function NewPostPage() {
                 </div>
             </form>
         </div>
+    );
+}
+
+export default function NewPostPage() {
+    return (
+        <Suspense
+            fallback={<div className="mx-auto max-w-4xl p-4">Loading...</div>}
+        >
+            <NewPostForm />
+        </Suspense>
     );
 }

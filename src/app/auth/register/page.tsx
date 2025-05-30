@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { signIn } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,7 +17,7 @@ import {
 import { Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
-export default function RegisterPage() {
+function RegisterForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
@@ -48,10 +48,6 @@ export default function RegisterPage() {
             }
 
             try {
-                console.log(
-                    `Verifying invitation: token=${token} for email=${email}`,
-                );
-
                 // First try with GET request
                 let response = await fetch(
                     `/api/auth/verify-invitation?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`,
@@ -59,7 +55,6 @@ export default function RegisterPage() {
 
                 // If GET fails, try with POST
                 if (!response.ok) {
-                    console.log('GET request failed, trying POST');
                     response = await fetch('/api/auth/verify-invitation', {
                         method: 'POST',
                         headers: {
@@ -78,7 +73,6 @@ export default function RegisterPage() {
                     return;
                 }
 
-                console.log('Verification successful:', data);
                 setInviteData(data);
                 setIsVerifying(false);
             } catch (err) {
@@ -121,14 +115,6 @@ export default function RegisterPage() {
 
         try {
             // Register the user
-            console.log('Registering user with data:', {
-                email,
-                name,
-                orgId: inviteData.orgId,
-                role: inviteData.role,
-                token,
-            });
-
             // Use our custom endpoint instead of signUp.email
             const registerResponse = await fetch(
                 '/api/auth/register-with-org',
@@ -154,8 +140,6 @@ export default function RegisterPage() {
                 console.error('Registration failed:', registerData);
                 throw new Error(registerData.error || 'Registration failed');
             }
-
-            console.log('Registration successful:', registerData);
 
             // Now sign in the user
             const signInResponse = await signIn.email({
@@ -456,5 +440,19 @@ export default function RegisterPage() {
                 </CardContent>
             </Card>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex min-h-screen items-center justify-center p-4">
+                    Loading...
+                </div>
+            }
+        >
+            <RegisterForm />
+        </Suspense>
     );
 }

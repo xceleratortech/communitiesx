@@ -18,11 +18,7 @@ async function retrySendEmail(emailOptions: EmailOptions, maxRetries = 3) {
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-            console.log(
-                `Email sending attempt ${attempt + 1} of ${maxRetries}`,
-            );
             await sendEmail(emailOptions);
-            console.log('Email sent successfully');
             return true;
         } catch (error) {
             lastError = error;
@@ -34,7 +30,6 @@ async function retrySendEmail(emailOptions: EmailOptions, maxRetries = 3) {
             // Don't wait after the last attempt
             if (attempt < maxRetries - 1) {
                 const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
-                console.log(`Waiting ${waitTime}ms before next attempt...`);
                 await new Promise((resolve) => setTimeout(resolve, waitTime));
             }
         }
@@ -58,16 +53,10 @@ export async function POST(request: Request) {
             );
         }
 
-        console.log(`Resending invitation for email: ${email}`);
-
         // Find existing verification records for this email
         const existingVerifications = await db.query.verifications.findMany({
             where: eq(verifications.identifier, email),
         });
-
-        console.log(
-            `Found ${existingVerifications.length} existing verification records`,
-        );
 
         // Extract the most recent verification data
         let orgId = null;
@@ -90,9 +79,6 @@ export async function POST(request: Request) {
                 const parsedValue = JSON.parse(mostRecent.value);
                 orgId = parsedValue.orgId;
                 role = parsedValue.role || 'user';
-                console.log(
-                    `Using existing data: orgId=${orgId}, role=${role}`,
-                );
             } catch (e) {
                 console.error('Error parsing verification value:', e);
             }
@@ -124,7 +110,7 @@ export async function POST(request: Request) {
         expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
 
         // Store new invite in verifications table
-        const newVerification = await db
+        await db
             .insert(verifications)
             .values({
                 id: nanoid(),
@@ -139,8 +125,6 @@ export async function POST(request: Request) {
                 updatedAt: now,
             })
             .returning();
-
-        console.log('Created new verification record:', newVerification);
 
         // Create the invitation URL
         const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${encodeURIComponent(email)}`;

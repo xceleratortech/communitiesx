@@ -67,31 +67,19 @@ export const auth = betterAuth({
         user: {
             create: {
                 before: async (userData, ctx) => {
-                    console.log(
-                        'User creation hook triggered with data:',
-                        userData,
-                    );
-                    console.log('Context:', ctx);
-
                     // Try to get orgId from various possible sources
                     let orgId = null;
 
                     // Check if there's a user object in the request body with org_id
                     if (ctx?.body?.user?.org_id) {
                         orgId = ctx.body.user.org_id;
-                        console.log(
-                            `Found orgId in ctx.body.user.org_id: ${orgId}`,
-                        );
                     }
                     // Check for direct orgId in request body
                     else if (ctx?.body?.orgId) {
                         orgId = ctx.body.orgId;
-                        console.log(`Found orgId in ctx.body.orgId: ${orgId}`);
                     }
 
                     if (orgId) {
-                        console.log(`Setting org_id to: ${orgId}`);
-
                         // Return modified user data with org_id explicitly set
                         return {
                             data: {
@@ -101,7 +89,6 @@ export const auth = betterAuth({
                         };
                     }
 
-                    console.log('No orgId found in request');
                     return { data: userData };
                 },
             },
