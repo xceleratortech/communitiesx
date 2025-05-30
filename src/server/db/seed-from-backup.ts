@@ -310,7 +310,8 @@ async function seedFromBackup() {
                 createdAt: new Date('2025-05-20 11:09:55.602'),
                 updatedAt: new Date('2025-05-20 11:09:55.602'),
                 orgId: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                groupId: null,
+                communityId: null,
+                visibility: 'public',
                 isDeleted: false,
             },
             {
@@ -322,7 +323,8 @@ async function seedFromBackup() {
                 createdAt: new Date('2025-05-20 11:09:55.606'),
                 updatedAt: new Date('2025-05-20 11:09:55.606'),
                 orgId: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                groupId: null,
+                communityId: null,
+                visibility: 'public',
                 isDeleted: false,
             },
             {
@@ -334,7 +336,8 @@ async function seedFromBackup() {
                 createdAt: new Date('2025-05-20 11:09:55.608'),
                 updatedAt: new Date('2025-05-20 11:09:55.608'),
                 orgId: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                groupId: null,
+                communityId: null,
+                visibility: 'public',
                 isDeleted: false,
             },
             // Adding more posts from the backup...
@@ -347,7 +350,8 @@ async function seedFromBackup() {
                 createdAt: new Date('2025-05-22 06:52:29.103'),
                 updatedAt: new Date('2025-05-22 06:52:29.103'),
                 orgId: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                groupId: null,
+                communityId: null,
+                visibility: 'public',
                 isDeleted: false,
             },
             {
@@ -359,7 +363,8 @@ async function seedFromBackup() {
                 createdAt: new Date('2025-05-23 10:50:34.661'),
                 updatedAt: new Date('2025-05-23 10:50:43.444'),
                 orgId: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                groupId: null,
+                communityId: null,
+                visibility: 'public',
                 isDeleted: false,
             },
             // Add more posts as needed

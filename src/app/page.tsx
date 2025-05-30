@@ -1,12 +1,23 @@
+'use client';
+
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
+import { useSession } from '@/server/auth/client';
+import { useEffect, useState } from 'react';
 
 export default function Home() {
+    const { data: session } = useSession();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
     return (
         <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden px-4 text-center">
-            <div className="absolute inset-0 h-full w-full bg-gradient-to-b from-blue-50 to-white">
+            <div className="absolute inset-0 h-full w-full bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
@@ -19,11 +30,13 @@ export default function Home() {
                 />
             </div>
             <div className="relative z-10">
-                <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl">
+                <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl dark:text-gray-100">
                     Let&apos;s Build a{' '}
-                    <span className="text-blue-600">Community</span>
+                    <span className="text-blue-600 dark:text-blue-400">
+                        Community
+                    </span>
                 </h1>
-                <p className="mx-auto mb-8 max-w-2xl text-center text-xl text-gray-600">
+                <p className="mx-auto mb-8 max-w-2xl text-center text-xl text-gray-600 dark:text-gray-300">
                     Join us in creating a space where we can learn, share, and
                     grow together. Your journey of growth starts here with our
                     community.
@@ -39,24 +52,29 @@ export default function Home() {
                     </Button>
                     <Button asChild variant="outline" size="lg">
                         <a
-                            href="/auth/login"
-                            className="rounded-lg px-8 py-3 text-lg font-semibold text-blue-600 shadow-sm ring-1 ring-blue-200 ring-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                            href={
+                                mounted && session
+                                    ? '/communities'
+                                    : '/auth/login'
+                            }
+                            className="rounded-lg px-8 py-3 text-lg font-semibold text-blue-600 shadow-sm ring-1 ring-blue-200 ring-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:text-blue-400 dark:ring-blue-800"
                         >
+                            {/* {mounted && session ? "Browse Communities" : "Join Community"} */}
                             Join Community
                         </a>
                     </Button>
                 </div>
                 <div className="mt-16 grid grid-cols-1 gap-8 text-center sm:grid-cols-3 sm:gap-12">
-                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm">
+                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm dark:bg-gray-800/80">
                         <CardHeader className="flex items-center justify-center">
-                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     strokeWidth={1.5}
                                     stroke="currentColor"
-                                    className="h-6 w-6 text-blue-600"
+                                    className="h-6 w-6 text-blue-600 dark:text-blue-400"
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -68,22 +86,22 @@ export default function Home() {
                         </CardHeader>
                         <CardContent>
                             <CardTitle>Connect</CardTitle>
-                            <p className="mt-2 text-gray-600">
+                            <p className="mt-2 text-gray-600 dark:text-gray-300">
                                 Meet like-minded individuals and build
                                 meaningful connections
                             </p>
                         </CardContent>
                     </Card>
-                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm">
+                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm dark:bg-gray-800/80">
                         <CardHeader className="flex items-center justify-center">
-                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     strokeWidth={1.5}
                                     stroke="currentColor"
-                                    className="h-6 w-6 text-blue-600"
+                                    className="h-6 w-6 text-blue-600 dark:text-blue-400"
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -95,22 +113,22 @@ export default function Home() {
                         </CardHeader>
                         <CardContent>
                             <CardTitle>Learn</CardTitle>
-                            <p className="mt-2 text-gray-600">
+                            <p className="mt-2 text-gray-600 dark:text-gray-300">
                                 Share knowledge and learn from community
                                 experiences
                             </p>
                         </CardContent>
                     </Card>
-                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm">
+                    <Card className="bg-white/80 shadow-lg backdrop-blur-sm dark:bg-gray-800/80">
                         <CardHeader className="flex items-center justify-center">
-                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100">
+                            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900">
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     fill="none"
                                     viewBox="0 0 24 24"
                                     strokeWidth={1.5}
                                     stroke="currentColor"
-                                    className="h-6 w-6 text-blue-600"
+                                    className="h-6 w-6 text-blue-600 dark:text-blue-400"
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -122,7 +140,7 @@ export default function Home() {
                         </CardHeader>
                         <CardContent>
                             <CardTitle>Grow</CardTitle>
-                            <p className="mt-2 text-gray-600">
+                            <p className="mt-2 text-gray-600 dark:text-gray-300">
                                 Achieve your goals and grow together as a
                                 community
                             </p>

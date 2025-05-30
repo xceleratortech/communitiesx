@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { users } from '@/server/db/schema'; // Assuming UserFromDb is similar or can be imported
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
+import TipTapEditor from '@/components/TipTapEditor';
 
 // Infer Session type from useSession hook
 type SessionData = ReturnType<typeof useSession>['data'];
@@ -87,14 +88,14 @@ const CommentItem: React.FC<CommentItemProps> = ({
         const clampedDepth = Math.min(depth, 3);
         switch (clampedDepth) {
             case 0:
-                return 'bg-gray-50';
+                return 'bg-gray-50 dark:bg-gray-800';
             case 1:
-                return 'bg-gray-100';
+                return 'bg-gray-100 dark:bg-gray-700';
             case 2:
-                return 'bg-gray-200';
+                return 'bg-gray-200 dark:bg-gray-600';
             case 3:
             default:
-                return 'bg-gray-300';
+                return 'bg-gray-300 dark:bg-gray-500';
         }
     };
 
@@ -122,15 +123,15 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 className={`rounded p-3 ${getBackgroundColor(depth)} group relative min-w-0`}
             >
                 {depth > 0 && (
-                    <div className="absolute top-0 bottom-0 -left-[1px] w-[1px] bg-gray-300/50 transition-colors group-hover:bg-gray-400/70" />
+                    <div className="absolute top-0 bottom-0 -left-[1px] w-[1px] bg-gray-300/50 transition-colors group-hover:bg-gray-400/70 dark:bg-gray-500/70 dark:group-hover:bg-gray-400/80" />
                 )}
                 {isEditingThisComment ? (
                     <div className="space-y-2">
-                        <Textarea
-                            value={editedCommentContent}
-                            onChange={(e) => onSetEditedContent(e.target.value)}
-                            rows={3}
-                            className="w-full"
+                        <TipTapEditor
+                            content={editedCommentContent}
+                            onChange={onSetEditedContent}
+                            placeholder="Edit your comment..."
+                            variant="compact"
                         />
                         <div className="flex justify-end space-x-2">
                             <Button
@@ -162,7 +163,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     {hasReplies && (
                                         <button
                                             onClick={toggleExpanded}
-                                            className="mt-1 p-1 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                            className="mt-1 p-1 text-gray-500 hover:text-gray-700 focus:outline-none dark:text-gray-300 dark:hover:text-white"
                                             title={
                                                 isExpanded
                                                     ? 'Collapse replies'
@@ -179,20 +180,23 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 </div>
                                 <div className="min-w-0 flex-1">
                                     {comment.isDeleted ? (
-                                        <p className="mb-2 break-words text-gray-500 italic">
+                                        <p className="mb-2 break-words text-gray-500 italic dark:text-gray-300">
                                             [Comment deleted]
                                         </p>
                                     ) : (
-                                        <p className="mb-2 break-words whitespace-pre-wrap">
-                                            {comment.content}
-                                        </p>
+                                        <div
+                                            className="prose prose-sm dark:prose-invert dark:prose-headings:text-gray-100 dark:prose-a:text-blue-400 mb-2 max-w-none break-words dark:text-gray-100"
+                                            dangerouslySetInnerHTML={{
+                                                __html: comment.content,
+                                            }}
+                                        />
                                     )}
                                 </div>
                                 <div className="flex flex-shrink-0 items-start space-x-1">
                                     {canEdit && (
                                         <button
                                             onClick={() => onStartEdit(comment)}
-                                            className="p-1 text-gray-500 hover:text-gray-700"
+                                            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
                                             title="Edit comment"
                                         >
                                             <Edit className="h-4 w-4" />
@@ -203,7 +207,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             onClick={() =>
                                                 onDeleteComment(comment.id)
                                             }
-                                            className="p-1 text-gray-500 hover:text-red-600"
+                                            className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400"
                                             title="Delete comment"
                                             disabled={deleteCommentPending}
                                         >
@@ -213,14 +217,14 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 </div>
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="min-w-0 text-sm break-words text-gray-500">
+                                <div className="min-w-0 text-sm break-words text-gray-500 dark:text-gray-300">
                                     {comment.isDeleted ? (
                                         <span className="italic">
                                             Deleted comment
                                         </span>
                                     ) : (
                                         <>
-                                            <span className="font-medium">
+                                            <span className="font-medium dark:text-gray-100">
                                                 {comment.author?.name ||
                                                     'Unknown'}
                                             </span>{' '}
@@ -240,7 +244,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                                     •{' '}
                                                     <button
                                                         onClick={toggleExpanded}
-                                                        className="text-gray-400 hover:text-gray-600 focus:outline-none"
+                                                        className="text-gray-400 hover:text-gray-600 focus:outline-none dark:text-gray-300 dark:hover:text-white"
                                                     >
                                                         {replies.length}{' '}
                                                         {replies.length === 1
@@ -256,7 +260,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-auto px-2 py-1 text-xs"
+                                        className="h-auto px-2 py-1 text-xs dark:text-gray-200 dark:hover:bg-gray-700 dark:hover:text-white"
                                         onClick={() => onStartReply(comment.id)}
                                     >
                                         Reply
@@ -270,12 +274,11 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 {/* Reply Form */}
                 {isReplyingToThisComment && (
                     <div className="mt-3 space-y-2">
-                        <Textarea
-                            value={replyContent}
-                            onChange={(e) => onSetReplyContent(e.target.value)}
+                        <TipTapEditor
+                            content={replyContent}
+                            onChange={onSetReplyContent}
                             placeholder="Write your reply..."
-                            rows={2}
-                            className="w-full"
+                            variant="compact"
                         />
                         <div className="flex justify-end space-x-2">
                             <Button
@@ -303,8 +306,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
 
             {hasReplies && isExpanded && (
                 <div className="relative mt-1 pl-4">
-                    <div className="absolute top-0 bottom-0 left-0 w-[1px] bg-gray-200 transition-colors group-hover:bg-gray-300" />
-                    <div className="absolute top-0 left-0 h-3 w-4 rounded-bl border-b-[1px] border-l-[1px] border-gray-200 transition-colors group-hover:border-gray-300" />
+                    <div className="absolute top-0 bottom-0 left-0 w-[1px] bg-gray-200 transition-colors group-hover:bg-gray-300 dark:bg-gray-500 dark:group-hover:bg-gray-400" />
+                    <div className="absolute top-0 left-0 h-3 w-4 rounded-bl border-b-[1px] border-l-[1px] border-gray-200 transition-colors group-hover:border-gray-300 dark:border-gray-500 dark:group-hover:border-gray-400" />
                     <div className="space-y-1">
                         {replies.map((reply) => (
                             <CommentItem

@@ -30,6 +30,7 @@ export const auth = betterAuth({
         origin: [
             'http://localhost:3000',
             'https://communities-three.vercel.app',
+            'https://communities-git-dev-ranjan-bhats-projects.vercel.app',
         ],
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -46,7 +47,7 @@ export const auth = betterAuth({
     },
     emailAndPassword: {
         enabled: true,
-        disableSignUp: true,
+        disableSignUp: false,
         requireEmailVerification: true,
         minPasswordLength: 8,
         maxPasswordLength: 128,
@@ -61,6 +62,37 @@ export const auth = betterAuth({
         cookieCache: {
             enabled: true,
             maxAge: 5 * 60,
+        },
+    },
+    databaseHooks: {
+        user: {
+            create: {
+                before: async (userData, ctx) => {
+                    // Try to get orgId from various possible sources
+                    let orgId = null;
+
+                    // Check if there's a user object in the request body with org_id
+                    if (ctx?.body?.user?.org_id) {
+                        orgId = ctx.body.user.org_id;
+                    }
+                    // Check for direct orgId in request body
+                    else if (ctx?.body?.orgId) {
+                        orgId = ctx.body.orgId;
+                    }
+
+                    if (orgId) {
+                        // Return modified user data with org_id explicitly set
+                        return {
+                            data: {
+                                ...userData,
+                                org_id: orgId,
+                            },
+                        };
+                    }
+
+                    return { data: userData };
+                },
+            },
         },
     },
 });
