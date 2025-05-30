@@ -40,6 +40,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 
 // Define types for the data we're working with
 type User = {
@@ -91,6 +92,12 @@ export default function AdminDashboard() {
         role: 'user' as 'admin' | 'user',
         orgId: '',
     });
+
+    // For direct email verification
+    const [verifyEmail, setVerifyEmail] = useState('');
+    const [isVerifying, setIsVerifying] = useState(false);
+    const [verifyError, setVerifyError] = useState<string | null>(null);
+    const [verifySuccess, setVerifySuccess] = useState(false);
 
     // Queries
     const { data: users, isLoading: isLoadingUsers } =
@@ -157,6 +164,37 @@ export default function AdminDashboard() {
         inviteUserMutation.mutate(inviteUser);
     };
 
+    // Handle direct email verification
+    const handleVerifyEmail = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsVerifying(true);
+        setVerifyError(null);
+        setVerifySuccess(false);
+
+        try {
+            const response = await fetch('/api/auth/verify-email-direct', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: verifyEmail }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to verify email');
+            }
+
+            setVerifySuccess(true);
+            setVerifyEmail('');
+        } catch (err) {
+            setVerifyError(
+                err instanceof Error ? err.message : 'Failed to verify email',
+            );
+        } finally {
+            setIsVerifying(false);
+        }
+    };
+
     // Use useEffect for navigation instead of doing it during render
     useEffect(() => {
         if (session === null) {
@@ -192,6 +230,7 @@ export default function AdminDashboard() {
                     <TabsTrigger value="organizations">
                         Organizations
                     </TabsTrigger>
+                    <TabsTrigger value="tools">Admin Tools</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="users">
@@ -680,6 +719,73 @@ export default function AdminDashboard() {
                             )}
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                <TabsContent value="tools">
+                    <div className="grid gap-6 md:grid-cols-2">
+                        {/* Verify Email Card */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Verify User Email</CardTitle>
+                                <CardDescription>
+                                    Directly verify a user's email address
+                                </CardDescription>
+                            </CardHeader>
+                            <form onSubmit={handleVerifyEmail}>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label
+                                                htmlFor="verify-email"
+                                                className="text-sm font-medium"
+                                            >
+                                                Email Address
+                                            </label>
+                                            <Input
+                                                id="verify-email"
+                                                type="email"
+                                                placeholder="user@example.com"
+                                                value={verifyEmail}
+                                                onChange={(e) =>
+                                                    setVerifyEmail(
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                required
+                                            />
+                                        </div>
+
+                                        {verifyError && (
+                                            <div className="bg-destructive/15 text-destructive rounded-md p-3 text-sm">
+                                                {verifyError}
+                                            </div>
+                                        )}
+
+                                        {verifySuccess && (
+                                            <div className="rounded-md bg-green-100 p-3 text-sm text-green-800">
+                                                Email verified successfully!
+                                            </div>
+                                        )}
+                                    </div>
+                                </CardContent>
+                                <CardFooter>
+                                    <Button
+                                        type="submit"
+                                        disabled={isVerifying}
+                                    >
+                                        {isVerifying ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Verifying...
+                                            </>
+                                        ) : (
+                                            'Verify Email'
+                                        )}
+                                    </Button>
+                                </CardFooter>
+                            </form>
+                        </Card>
+                    </div>
                 </TabsContent>
             </Tabs>
         </div>

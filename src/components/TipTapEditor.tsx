@@ -23,6 +23,7 @@ import {
     Strikethrough,
     Pilcrow,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface TipTapEditorProps {
     content: string;
@@ -145,189 +146,212 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             .run();
     };
 
+    // Create a class string based on the variant
+    const editorClasses = cn(
+        'border border-input rounded-md focus-within:ring-1 focus-within:ring-ring overflow-hidden',
+        'prose prose-sm max-w-none dark:prose-invert dark:prose-headings:text-white',
+        variant === 'compact' ? 'min-h-[100px]' : 'min-h-[200px]',
+    );
+
+    // Create a class string for the toolbar
+    const toolbarClasses = cn(
+        'border-b border-input flex flex-wrap items-center gap-1 p-1 bg-muted/50 dark:bg-gray-800 dark:border-gray-700',
+    );
+
+    // Create a class string for the content
+    const contentClasses = cn(
+        'p-3 focus:outline-none dark:bg-gray-800 dark:text-gray-100',
+        variant === 'compact' ? 'max-h-[150px]' : 'max-h-[300px]',
+        'overflow-y-auto',
+    );
+
+    // Create a class string for the toolbar buttons
+    const buttonClasses = cn(
+        'p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors',
+        'text-gray-700 dark:text-gray-300',
+    );
+
+    // Create a class string for active toolbar buttons
+    const activeButtonClasses = cn(
+        'p-1 rounded transition-colors',
+        'bg-gray-200 text-gray-900 dark:bg-gray-600 dark:text-white',
+    );
+
     return (
-        <div className="rounded-md border border-gray-300">
-            <div className="flex flex-wrap gap-1 border-b border-gray-300 bg-gray-50 p-2">
-                <Button
-                    variant="ghost"
-                    size="sm"
+        <div className={editorClasses}>
+            <div className={toolbarClasses}>
+                <button
                     onClick={() => editor.chain().focus().toggleBold().run()}
-                    className={editor.isActive('bold') ? 'bg-gray-200' : ''}
+                    className={
+                        editor.isActive('bold')
+                            ? activeButtonClasses
+                            : buttonClasses
+                    }
                     type="button"
                     title="Bold"
                 >
                     <Bold className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() => editor.chain().focus().toggleItalic().run()}
-                    className={editor.isActive('italic') ? 'bg-gray-200' : ''}
+                    className={
+                        editor.isActive('italic')
+                            ? activeButtonClasses
+                            : buttonClasses
+                    }
                     type="button"
                     title="Italic"
                 >
                     <Italic className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() => editor.chain().focus().toggleStrike().run()}
-                    className={editor.isActive('strike') ? 'bg-gray-200' : ''}
+                    className={
+                        editor.isActive('strike')
+                            ? activeButtonClasses
+                            : buttonClasses
+                    }
                     type="button"
                     title="Strikethrough"
                 >
                     <Strikethrough className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleHeading({ level: 1 }).run()
                     }
                     className={
                         editor.isActive('heading', { level: 1 })
-                            ? 'bg-gray-200'
-                            : ''
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Heading 1"
                 >
                     <Heading1 className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleHeading({ level: 2 }).run()
                     }
                     className={
                         editor.isActive('heading', { level: 2 })
-                            ? 'bg-gray-200'
-                            : ''
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Heading 2"
                 >
                     <Heading2 className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleBulletList().run()
                     }
                     className={
-                        editor.isActive('bulletList') ? 'bg-gray-200' : ''
+                        editor.isActive('bulletList')
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Bullet List"
                 >
                     <List className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleOrderedList().run()
                     }
                     className={
-                        editor.isActive('orderedList') ? 'bg-gray-200' : ''
+                        editor.isActive('orderedList')
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Ordered List"
                 >
                     <ListOrdered className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleBlockquote().run()
                     }
                     className={
-                        editor.isActive('blockquote') ? 'bg-gray-200' : ''
+                        editor.isActive('blockquote')
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Quote"
                 >
                     <Quote className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() =>
                         editor.chain().focus().toggleCodeBlock().run()
                     }
                     className={
-                        editor.isActive('codeBlock') ? 'bg-gray-200' : ''
+                        editor.isActive('codeBlock')
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Code Block"
                 >
                     <Code className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={setLink}
-                    className={editor.isActive('link') ? 'bg-gray-200' : ''}
+                    className={
+                        editor.isActive('link')
+                            ? activeButtonClasses
+                            : buttonClasses
+                    }
                     type="button"
                     title="Link"
                 >
                     <LinkIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={addImage}
+                    className={buttonClasses}
                     type="button"
                     title="Image"
                 >
                     <ImageIcon className="h-4 w-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="sm"
+                </button>
+                <button
                     onClick={() => editor.chain().focus().setParagraph().run()}
                     className={
-                        editor.isActive('paragraph') ? 'bg-gray-200' : ''
+                        editor.isActive('paragraph')
+                            ? activeButtonClasses
+                            : buttonClasses
                     }
                     type="button"
                     title="Paragraph"
                 >
                     <Pilcrow className="h-4 w-4" />
-                </Button>
-                <div className="ml-auto flex gap-1">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => editor.chain().focus().undo().run()}
-                        disabled={!editor.can().undo()}
-                        type="button"
-                        title="Undo"
-                    >
-                        <Undo className="h-4 w-4" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => editor.chain().focus().redo().run()}
-                        disabled={!editor.can().redo()}
-                        type="button"
-                        title="Redo"
-                    >
-                        <Redo className="h-4 w-4" />
-                    </Button>
-                </div>
+                </button>
+                <button
+                    onClick={() => editor.chain().focus().undo().run()}
+                    className={buttonClasses}
+                    type="button"
+                    title="Undo"
+                    disabled={!editor.can().undo()}
+                >
+                    <Undo className="h-4 w-4" />
+                </button>
+                <button
+                    onClick={() => editor.chain().focus().redo().run()}
+                    className={buttonClasses}
+                    type="button"
+                    title="Redo"
+                    disabled={!editor.can().redo()}
+                >
+                    <Redo className="h-4 w-4" />
+                </button>
             </div>
-            <EditorContent
-                editor={editor}
-                className={`prose prose-ul:list-disc prose-ol:list-decimal max-w-none p-4 focus:outline-none ${
-                    variant === 'compact'
-                        ? 'min-h-[120px] text-sm'
-                        : 'min-h-[200px]'
-                }`}
-            />
+            <EditorContent editor={editor} className={contentClasses} />
         </div>
     );
 };

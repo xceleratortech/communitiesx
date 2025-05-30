@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/server/trpc/trpc';
+import { router, publicProcedure } from '../trpc';
 import { users, orgs, accounts, verifications } from '@/server/db/auth-schema';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
-import { hash } from 'bcryptjs';
+import { hashPassword } from 'better-auth/crypto';
 
 export const adminRouter = router({
     // Get all users
@@ -154,7 +154,7 @@ export const adminRouter = router({
                 const now = new Date();
 
                 // Hash the password
-                const hashedPassword = await hash(input.password, 10);
+                const hashedPassword = await hashPassword(input.password);
 
                 // Create the user
                 const [user] = await db
@@ -175,8 +175,8 @@ export const adminRouter = router({
                 await db.insert(accounts).values({
                     id: nanoid(),
                     userId: userId,
-                    providerId: 'email',
-                    accountId: input.email,
+                    providerId: 'credential',
+                    accountId: userId,
                     password: hashedPassword,
                     createdAt: now,
                     updatedAt: now,

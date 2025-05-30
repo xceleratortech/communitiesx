@@ -1,10 +1,21 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/server/trpc/trpc';
-import { posts, comments, users, orgs } from '@/server/db/schema';
+import { router, publicProcedure } from '../trpc';
+import {
+    posts,
+    comments,
+    users,
+    orgs,
+    communities,
+    communityMembers,
+    communityInvites,
+    communityMemberRequests,
+} from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, desc, count, and } from 'drizzle-orm';
+import { eq, desc, count, and, isNull, or, inArray } from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
+import crypto from 'crypto';
+import { sendEmail } from '@/lib/email';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -23,6 +34,18 @@ type CommentWithAuthor = CommentType & {
 type PostWithAuthorAndComments = PostType & {
     author: UserType | null;
     comments: CommentWithAuthor[];
+    community?: typeof communities.$inferSelect | null;
+};
+
+type PostWithSource = PostWithAuthor & {
+    source: {
+        type: string;
+        orgId?: string;
+        communityId?: number;
+        reason: string;
+    };
+    community?: typeof communities.$inferSelect | null;
+    comments?: CommentType[];
 };
 
 export const communityRouter = router({
@@ -32,6 +55,7 @@ export const communityRouter = router({
             z.object({
                 title: z.string().min(1).max(200),
                 content: z.string().min(1),
+                communityId: z.number().nullable().optional(),
             }),
         )
         .mutation(
@@ -39,7 +63,11 @@ export const communityRouter = router({
                 input,
                 ctx,
             }: {
-                input: { title: string; content: string };
+                input: {
+                    title: string;
+                    content: string;
+                    communityId?: number | null;
+                };
                 ctx: Context;
             }) => {
                 if (!ctx.session?.user) {
@@ -61,6 +89,44 @@ export const communityRouter = router({
                             message: 'User does not have an organization.',
                         });
                     }
+
+                    // If communityId is provided, verify the community exists and user has access
+                    if (input.communityId) {
+                        const community = await db.query.communities.findFirst({
+                            where: eq(communities.id, input.communityId),
+                            with: {
+                                members: {
+                                    where: eq(
+                                        communityMembers.userId,
+                                        ctx.session.user.id,
+                                    ),
+                                },
+                            },
+                        });
+
+                        if (!community) {
+                            throw new TRPCError({
+                                code: 'NOT_FOUND',
+                                message: 'Community not found',
+                            });
+                        }
+
+                        // Check if user is a member, regardless of community type
+                        const isMember = community.members.some(
+                            (m) =>
+                                m.membershipType === 'member' &&
+                                m.status === 'active',
+                        );
+
+                        if (!isMember) {
+                            throw new TRPCError({
+                                code: 'FORBIDDEN',
+                                message:
+                                    'You must be a member to post in this community',
+                            });
+                        }
+                    }
+
                     const [post] = await db
                         .insert(posts)
                         .values({
@@ -68,6 +134,10 @@ export const communityRouter = router({
                             content: input.content,
                             authorId: ctx.session.user.id,
                             orgId: orgId,
+                            communityId: input.communityId || null,
+                            visibility: input.communityId
+                                ? 'community'
+                                : 'public',
                             createdAt: new Date(),
                             updatedAt: new Date(),
                         })
@@ -84,7 +154,7 @@ export const communityRouter = router({
             },
         ),
 
-    // Get all posts (org-specific)
+    // Get all posts (org-specific) that don't belong to any community
     getPosts: publicProcedure.query(
         async ({ ctx }): Promise<PostWithAuthor[]> => {
             if (!ctx.session?.user) {
@@ -106,7 +176,10 @@ export const communityRouter = router({
                     });
                 }
                 const allPostsFromDb = await db.query.posts.findMany({
-                    where: eq(posts.orgId, orgId),
+                    where: and(
+                        eq(posts.orgId, orgId),
+                        isNull(posts.communityId), // Only include posts that don't belong to a community
+                    ),
                     orderBy: desc(posts.createdAt),
                     with: {
                         author: true,
@@ -123,6 +196,196 @@ export const communityRouter = router({
         },
     ),
 
+    // Get posts from communities the user is a member of or following
+    getRelevantPosts: publicProcedure.query(
+        async ({ ctx }): Promise<PostWithAuthor[]> => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to view posts',
+                });
+            }
+            try {
+                const userId = ctx.session.user.id;
+
+                // Get all communities where the user is a member or follower
+                const userCommunities =
+                    await db.query.communityMembers.findMany({
+                        where: and(
+                            eq(communityMembers.userId, userId),
+                            eq(communityMembers.status, 'active'),
+                        ),
+                        with: {
+                            community: true,
+                        },
+                    });
+
+                // Extract community IDs
+                const communityIds = userCommunities.map(
+                    (membership) => membership.communityId,
+                );
+
+                // If user isn't part of any communities, return an empty array
+                if (communityIds.length === 0) {
+                    return [];
+                }
+
+                // Get posts from these communities
+                const relevantPosts = await db.query.posts.findMany({
+                    where: and(
+                        inArray(posts.communityId, communityIds),
+                        eq(posts.isDeleted, false),
+                    ),
+                    orderBy: desc(posts.createdAt),
+                    with: {
+                        author: true,
+                        community: true,
+                    },
+                });
+
+                return relevantPosts as PostWithAuthor[];
+            } catch (error) {
+                console.error('Error fetching relevant posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch relevant posts',
+                });
+            }
+        },
+    ),
+
+    // Get all posts relevant to user (org-wide + community posts)
+    getAllRelevantPosts: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view posts',
+            });
+        }
+        try {
+            const userId = ctx.session.user.id;
+
+            // Get user's org ID
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, userId),
+            });
+            const orgId = user?.orgId;
+
+            if (!orgId) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'User does not have an organization.',
+                });
+            }
+
+            // Get all communities where the user is a member or follower
+            const userMemberships = await db.query.communityMembers.findMany({
+                where: and(
+                    eq(communityMembers.userId, userId),
+                    eq(communityMembers.status, 'active'),
+                ),
+                with: {
+                    community: true,
+                },
+            });
+
+            // Create a map of community ID to membership type for quick lookup
+            const communityMembershipMap = new Map();
+            userMemberships.forEach((membership) => {
+                communityMembershipMap.set(
+                    membership.communityId,
+                    membership.membershipType,
+                );
+            });
+
+            // Extract community IDs
+            const communityIds = userMemberships.map(
+                (membership) => membership.communityId,
+            );
+
+            // Get organization-wide posts (not belonging to any community)
+            const orgPosts = await db.query.posts.findMany({
+                where: and(
+                    eq(posts.orgId, orgId),
+                    isNull(posts.communityId),
+                    eq(posts.isDeleted, false),
+                ),
+                orderBy: desc(posts.createdAt),
+                with: {
+                    author: true,
+                    comments: true,
+                },
+            });
+
+            // Get organization name
+            const organization = await db.query.orgs.findFirst({
+                where: eq(orgs.id, orgId),
+            });
+
+            const orgName = organization?.name || 'your organization';
+
+            // Add source information to org posts
+            const orgPostsWithSource = orgPosts.map((post) => ({
+                ...post,
+                source: {
+                    type: 'org',
+                    orgId,
+                    reason: `Because you are part of ${orgName}`,
+                },
+            }));
+
+            // Get community posts if user is part of any communities
+            let communityPosts: PostWithSource[] = [];
+            if (communityIds.length > 0) {
+                const rawCommunityPosts = await db.query.posts.findMany({
+                    where: and(
+                        inArray(posts.communityId, communityIds),
+                        eq(posts.isDeleted, false),
+                    ),
+                    orderBy: desc(posts.createdAt),
+                    with: {
+                        author: true,
+                        community: true,
+                        comments: true,
+                    },
+                });
+
+                // Add source information to community posts
+                communityPosts = rawCommunityPosts.map((post) => {
+                    const membershipType = communityMembershipMap.get(
+                        post.communityId,
+                    );
+                    return {
+                        ...post,
+                        source: {
+                            type: 'community',
+                            communityId: post.communityId ?? undefined,
+                            reason:
+                                membershipType === 'member'
+                                    ? `Because you are a member of ${post.community?.name}`
+                                    : `Because you are following ${post.community?.name}`,
+                        },
+                    } as PostWithSource;
+                });
+            }
+
+            // Combine and sort all posts by creation date
+            const allPosts = [...orgPostsWithSource, ...communityPosts].sort(
+                (a, b) =>
+                    new Date(b.createdAt).getTime() -
+                    new Date(a.createdAt).getTime(),
+            );
+
+            return allPosts;
+        } catch (error) {
+            console.error('Error fetching all relevant posts:', error);
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch posts',
+            });
+        }
+    }),
+
     // Get a single post with its comments
     getPost: publicProcedure
         .input(
@@ -130,19 +393,20 @@ export const communityRouter = router({
                 postId: z.number(),
             }),
         )
-        .query(async ({ input }): Promise<PostWithAuthorAndComments> => {
+        .query(async ({ input, ctx }): Promise<PostWithAuthorAndComments> => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to view posts',
+                });
+            }
+
             try {
                 const postFromDb = await db.query.posts.findFirst({
                     where: eq(posts.id, input.postId),
                     with: {
                         author: true,
-                        // We will fetch comments as a flat list and then structure them
-                        // comments: {
-                        //     with: {
-                        //         author: true,
-                        //     },
-                        //     orderBy: desc(comments.createdAt),
-                        // },
+                        community: true,
                     },
                 });
 
@@ -151,6 +415,36 @@ export const communityRouter = router({
                         code: 'NOT_FOUND',
                         message: 'Post not found',
                     });
+                }
+
+                // Check if post is from a private community and if user has access
+                if (
+                    postFromDb.communityId &&
+                    postFromDb.community?.type === 'private'
+                ) {
+                    // Check if user is a member or follower of the community
+                    const membership =
+                        await db.query.communityMembers.findFirst({
+                            where: and(
+                                eq(
+                                    communityMembers.userId,
+                                    ctx.session.user.id,
+                                ),
+                                eq(
+                                    communityMembers.communityId,
+                                    postFromDb.communityId,
+                                ),
+                                eq(communityMembers.status, 'active'),
+                            ),
+                        });
+
+                    if (!membership) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'You must be a member or follower of this community to view this post',
+                        });
+                    }
                 }
 
                 // Fetch all comments for the post separately
@@ -588,4 +882,755 @@ export const communityRouter = router({
             });
         }
     }),
+
+    // Create a new community
+    create: publicProcedure
+        .input(
+            z.object({
+                name: z.string().min(3).max(50),
+                slug: z
+                    .string()
+                    .min(3)
+                    .max(50)
+                    .regex(/^[a-z0-9-]+$/),
+                description: z.string().max(500).nullable(),
+                type: z.enum(['public', 'private']),
+                rules: z.string().max(2000).nullable(),
+            }),
+        )
+        .mutation(
+            async ({
+                input,
+                ctx,
+            }: {
+                input: {
+                    name: string;
+                    slug: string;
+                    description: string | null;
+                    type: 'public' | 'private';
+                    rules: string | null;
+                };
+                ctx: Context;
+            }) => {
+                if (!ctx.session?.user) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'You must be logged in to create a community',
+                    });
+                }
+
+                try {
+                    // Check if slug is already taken
+                    const existingCommunity =
+                        await db.query.communities.findFirst({
+                            where: eq(communities.slug, input.slug),
+                        });
+
+                    if (existingCommunity) {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message: 'Community URL is already taken',
+                        });
+                    }
+
+                    // Create the community
+                    const [community] = await db
+                        .insert(communities)
+                        .values({
+                            name: input.name,
+                            slug: input.slug,
+                            description: input.description,
+                            type: input.type,
+                            rules: input.rules,
+                            createdBy: ctx.session.user.id,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        })
+                        .returning();
+
+                    // Add creator as an admin
+                    await db.insert(communityMembers).values({
+                        userId: ctx.session.user.id,
+                        communityId: community.id,
+                        role: 'admin',
+                        membershipType: 'member',
+                        status: 'active',
+                        joinedAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+
+                    return community;
+                } catch (error) {
+                    if (error instanceof TRPCError) {
+                        throw error;
+                    }
+                    console.error('Error creating community:', error);
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to create community',
+                    });
+                }
+            },
+        ),
+
+    // Update community details (admin only)
+    updateCommunity: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                name: z.string().min(3).max(50).optional(),
+                description: z.string().max(500).nullable().optional(),
+                rules: z.string().max(2000).nullable().optional(),
+                banner: z.string().nullable().optional(),
+                avatar: z.string().nullable().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to update a community',
+                });
+            }
+
+            // Check if user is an admin of the community
+            const membership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, ctx.session.user.id),
+                    eq(communityMembers.communityId, input.communityId),
+                    eq(communityMembers.role, 'admin'),
+                ),
+            });
+
+            if (!membership) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins can update community details',
+                });
+            }
+
+            try {
+                const updateData: any = {
+                    updatedAt: new Date(),
+                };
+
+                if (input.name) updateData.name = input.name;
+                if (input.description !== undefined)
+                    updateData.description = input.description;
+                if (input.rules !== undefined) updateData.rules = input.rules;
+                if (input.banner !== undefined)
+                    updateData.banner = input.banner;
+                if (input.avatar !== undefined)
+                    updateData.avatar = input.avatar;
+
+                const [updatedCommunity] = await db
+                    .update(communities)
+                    .set(updateData)
+                    .where(eq(communities.id, input.communityId))
+                    .returning();
+
+                return updatedCommunity;
+            } catch (error) {
+                console.error('Error updating community:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to update community',
+                });
+            }
+        }),
+
+    // Assign moderator role to a community member (admin only)
+    assignModerator: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                userId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to assign moderators',
+                });
+            }
+
+            // Check if the current user is an admin of the community
+            const adminMembership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, ctx.session.user.id),
+                    eq(communityMembers.communityId, input.communityId),
+                    eq(communityMembers.role, 'admin'),
+                ),
+            });
+
+            if (!adminMembership) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only community admins can assign moderators',
+                });
+            }
+
+            // Check if the target user is a member of the community
+            const targetMembership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, input.userId),
+                    eq(communityMembers.communityId, input.communityId),
+                    eq(communityMembers.membershipType, 'member'),
+                ),
+            });
+
+            if (!targetMembership) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message:
+                        'The user must be a member of the community to be assigned as moderator',
+                });
+            }
+
+            try {
+                const [updatedMembership] = await db
+                    .update(communityMembers)
+                    .set({
+                        role: 'moderator',
+                        updatedAt: new Date(),
+                    })
+                    .where(
+                        and(
+                            eq(communityMembers.userId, input.userId),
+                            eq(communityMembers.communityId, input.communityId),
+                        ),
+                    )
+                    .returning();
+
+                return updatedMembership;
+            } catch (error) {
+                console.error('Error assigning moderator:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to assign moderator role',
+                });
+            }
+        }),
+
+    // Remove moderator role from a community member (admin only)
+    removeModerator: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                userId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to remove moderators',
+                });
+            }
+
+            // Check if the current user is an admin of the community
+            const adminMembership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, ctx.session.user.id),
+                    eq(communityMembers.communityId, input.communityId),
+                    eq(communityMembers.role, 'admin'),
+                ),
+            });
+
+            if (!adminMembership) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only community admins can remove moderators',
+                });
+            }
+
+            // Check if the target user is a moderator of the community
+            const targetMembership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, input.userId),
+                    eq(communityMembers.communityId, input.communityId),
+                    eq(communityMembers.role, 'moderator'),
+                ),
+            });
+
+            if (!targetMembership) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'The user is not a moderator of this community',
+                });
+            }
+
+            try {
+                const [updatedMembership] = await db
+                    .update(communityMembers)
+                    .set({
+                        role: 'member',
+                        updatedAt: new Date(),
+                    })
+                    .where(
+                        and(
+                            eq(communityMembers.userId, input.userId),
+                            eq(communityMembers.communityId, input.communityId),
+                        ),
+                    )
+                    .returning();
+
+                return updatedMembership;
+            } catch (error) {
+                console.error('Error removing moderator:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to remove moderator role',
+                });
+            }
+        }),
+
+    // Create invite link for a community (admin and moderator)
+    createInviteLink: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                role: z.enum(['member', 'moderator']).default('member'),
+                expiresInDays: z.number().min(1).max(30).default(7),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to create invite links',
+                });
+            }
+
+            // Check if the current user is an admin or moderator of the community
+            const membership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, ctx.session.user.id),
+                    eq(communityMembers.communityId, input.communityId),
+                    or(
+                        eq(communityMembers.role, 'admin'),
+                        eq(communityMembers.role, 'moderator'),
+                    ),
+                ),
+            });
+
+            if (!membership) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins and moderators can create invite links',
+                });
+            }
+
+            // Only admins can create moderator invites
+            if (input.role === 'moderator' && membership.role !== 'admin') {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins can create moderator invites',
+                });
+            }
+
+            try {
+                // Generate a unique code
+                const code = crypto.randomUUID();
+
+                // Calculate expiration date
+                const expiresAt = new Date();
+                expiresAt.setDate(expiresAt.getDate() + input.expiresInDays);
+
+                const [invite] = await db
+                    .insert(communityInvites)
+                    .values({
+                        communityId: input.communityId,
+                        code,
+                        role: input.role,
+                        createdBy: ctx.session.user.id,
+                        createdAt: new Date(),
+                        expiresAt,
+                    })
+                    .returning();
+
+                return {
+                    ...invite,
+                    inviteLink: `/communities/join/${code}`,
+                };
+            } catch (error) {
+                console.error('Error creating invite link:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create invite link',
+                });
+            }
+        }),
+
+    // Get information about an invitation
+    getInviteInfo: publicProcedure
+        .input(
+            z.object({
+                inviteCode: z.string(),
+            }),
+        )
+        .query(async ({ input }) => {
+            try {
+                // Find the invite with community information
+                const invite = await db.query.communityInvites.findFirst({
+                    where: eq(communityInvites.code, input.inviteCode),
+                    with: {
+                        community: true,
+                        organization: true,
+                    },
+                });
+
+                if (!invite) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Invalid invite code',
+                    });
+                }
+
+                // Check if the invite has expired
+                if (invite.expiresAt < new Date()) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has expired',
+                    });
+                }
+
+                // Check if the invite has already been used
+                if (invite.usedAt) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has already been used',
+                    });
+                }
+
+                // Only return the necessary information
+                return {
+                    email: invite.email || null,
+                    role: invite.role,
+                    communityName: invite.community.name,
+                    orgId: invite.orgId || null,
+                };
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error getting invite info:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to get invite information',
+                });
+            }
+        }),
+
+    // Join a community via invite link
+    joinViaInvite: publicProcedure
+        .input(
+            z.object({
+                inviteCode: z.string(),
+                // Add optional registration fields for new users
+                registration: z
+                    .object({
+                        name: z.string().min(1),
+                        password: z.string().min(8),
+                    })
+                    .optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to join a community',
+                });
+            }
+
+            try {
+                // Find the invite
+                const invite = await db.query.communityInvites.findFirst({
+                    where: eq(communityInvites.code, input.inviteCode),
+                    with: {
+                        community: true,
+                    },
+                });
+
+                if (!invite) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Invalid invite code',
+                    });
+                }
+
+                // Check if the invite has expired
+                if (invite.expiresAt < new Date()) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has expired',
+                    });
+                }
+
+                // Check if the invite has already been used
+                if (invite.usedAt) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has already been used',
+                    });
+                }
+
+                // Check if the user is already a member of the community
+                const existingMembership =
+                    await db.query.communityMembers.findFirst({
+                        where: and(
+                            eq(communityMembers.userId, ctx.session.user.id),
+                            eq(
+                                communityMembers.communityId,
+                                invite.communityId,
+                            ),
+                        ),
+                    });
+
+                if (existingMembership) {
+                    if (existingMembership.membershipType === 'member') {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message:
+                                'You are already a member of this community',
+                        });
+                    }
+
+                    // Update membership from follower to member if needed
+                    const [updatedMembership] = await db
+                        .update(communityMembers)
+                        .set({
+                            membershipType: 'member',
+                            role: invite.role,
+                            status: 'active',
+                            updatedAt: new Date(),
+                        })
+                        .where(
+                            and(
+                                eq(
+                                    communityMembers.userId,
+                                    ctx.session.user.id,
+                                ),
+                                eq(
+                                    communityMembers.communityId,
+                                    invite.communityId,
+                                ),
+                            ),
+                        )
+                        .returning();
+
+                    // Mark the invite as used
+                    await db
+                        .update(communityInvites)
+                        .set({
+                            usedAt: new Date(),
+                            usedBy: ctx.session.user.id,
+                        })
+                        .where(eq(communityInvites.id, invite.id));
+
+                    return {
+                        membership: updatedMembership,
+                        community: invite.community,
+                    };
+                }
+
+                // Create a new membership with the role from the invitation
+                const [newMembership] = await db
+                    .insert(communityMembers)
+                    .values({
+                        userId: ctx.session.user.id,
+                        communityId: invite.communityId,
+                        role: invite.role,
+                        membershipType: 'member',
+                        status: 'active',
+                        joinedAt: new Date(),
+                        updatedAt: new Date(),
+                    })
+                    .returning();
+
+                // Mark the invite as used
+                await db
+                    .update(communityInvites)
+                    .set({
+                        usedAt: new Date(),
+                        usedBy: ctx.session.user.id,
+                    })
+                    .where(eq(communityInvites.id, invite.id));
+
+                return {
+                    membership: newMembership,
+                    community: invite.community,
+                };
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error joining community via invite:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to join community',
+                });
+            }
+        }),
+
+    // Send email invites to users for a community (admin and moderator)
+    inviteUsersByEmail: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                emails: z.array(z.string().email()),
+                role: z.enum(['member', 'moderator']).default('member'),
+                senderName: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to send invites',
+                });
+            }
+
+            // Check if the current user is an admin or moderator of the community
+            const membership = await db.query.communityMembers.findFirst({
+                where: and(
+                    eq(communityMembers.userId, ctx.session.user.id),
+                    eq(communityMembers.communityId, input.communityId),
+                    or(
+                        eq(communityMembers.role, 'admin'),
+                        eq(communityMembers.role, 'moderator'),
+                    ),
+                ),
+            });
+
+            if (!membership) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins and moderators can send invites',
+                });
+            }
+
+            // Only admins can create moderator invites
+            if (input.role === 'moderator' && membership.role !== 'admin') {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Only community admins can invite moderators',
+                });
+            }
+
+            // Get community details
+            const community = await db.query.communities.findFirst({
+                where: eq(communities.id, input.communityId),
+            });
+
+            if (!community) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Community not found',
+                });
+            }
+
+            // Get the current user's organization
+            const currentUser = await db.query.users.findFirst({
+                where: eq(users.id, ctx.session.user.id),
+            });
+
+            if (!currentUser?.orgId) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'User does not have an organization',
+                });
+            }
+
+            try {
+                const results = [];
+
+                for (const email of input.emails) {
+                    // Generate a unique code for this invite
+                    const code = crypto.randomUUID();
+
+                    // Calculate expiration date (7 days)
+                    const expiresAt = new Date();
+                    expiresAt.setDate(expiresAt.getDate() + 7);
+
+                    // Create the invite record
+                    const [invite] = await db
+                        .insert(communityInvites)
+                        .values({
+                            communityId: input.communityId,
+                            email,
+                            code,
+                            role: input.role,
+                            orgId: currentUser.orgId, // Include the organization ID
+                            createdBy: ctx.session.user.id,
+                            createdAt: new Date(),
+                            expiresAt,
+                        })
+                        .returning();
+
+                    // Generate the invite link
+                    const inviteLink = `/communities/join/${code}`;
+                    const fullInviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${inviteLink}`;
+
+                    // Determine the sender name to use
+                    const senderName = input.senderName || community.name;
+
+                    // Use the DEFAULT_EMAIL_FROM environment variable instead of SMTP_USER
+                    const defaultFrom =
+                        process.env.DEFAULT_EMAIL_FROM ||
+                        'noreply@communities.app';
+
+                    // Send the email directly to the recipient
+                    const emailResult = await sendEmail({
+                        to: email,
+                        subject: `You're invited to join ${community.name}`,
+                        from: senderName
+                            ? `${senderName} <${defaultFrom}>`
+                            : defaultFrom,
+                        html: `
+                            <h1>You've been invited to join ${community.name}</h1>
+                            <p>${ctx.session.user.name || 'Someone'} has invited you to join the ${community.name} community as a ${input.role}.</p>
+                            <p>Click the link below to accept the invitation:</p>
+                            <p><a href="${fullInviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
+                            <p>Or copy and paste this link into your browser:</p>
+                            <p>${fullInviteLink}</p>
+                            <p><strong>If you don't have an account yet, you'll be able to create one when you accept the invitation.</strong></p>
+                            <p>This invitation will expire in 7 days.</p>
+                        `,
+                    });
+
+                    // Add detailed logging for email sending results
+                    console.log('Email invitation result:', {
+                        email,
+                        success: emailResult.success,
+                        error: emailResult.error,
+                        data: emailResult.data,
+                    });
+
+                    results.push({
+                        email,
+                        invite,
+                        emailSent: emailResult.success,
+                    });
+                }
+
+                return {
+                    success: true,
+                    count: results.length,
+                    results,
+                };
+            } catch (error) {
+                console.error('Error sending invites:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to send invites',
+                });
+            }
+        }),
 });

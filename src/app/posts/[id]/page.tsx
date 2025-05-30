@@ -123,8 +123,10 @@ export default function PostPage() {
     if (!session) {
         return (
             <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
-                <p className="mb-4 text-gray-600">
+                <h1 className="mb-4 text-3xl font-bold dark:text-white">
+                    Access Denied
+                </h1>
+                <p className="mb-4 text-gray-600 dark:text-gray-400">
                     Please sign in to view this post.
                 </p>
                 <Button onClick={() => router.push('/auth/login')}>
@@ -136,11 +138,11 @@ export default function PostPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoading) {
-        return <div className="p-4">Loading post...</div>;
+        return <div className="p-4 dark:text-gray-300">Loading post...</div>;
     }
 
     if (isClient && !post) {
-        return <div className="p-4">Post not found</div>;
+        return <div className="p-4 dark:text-gray-300">Post not found</div>;
     }
 
     // Since we've checked for post existence above, we can safely assert it's defined
@@ -231,10 +233,10 @@ export default function PostPage() {
             <div className="mb-8">
                 <div className="mb-4 flex items-start justify-between">
                     <div>
-                        <h1 className="mb-2 text-3xl font-bold">
+                        <h1 className="mb-2 text-3xl font-bold dark:text-white">
                             {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
-                        <div className="text-sm text-gray-500">
+                        <div className="mb-2 text-sm text-gray-500 dark:text-gray-300">
                             Posted by {postData.author?.name || 'Unknown'} on{' '}
                             {new Date(postData.createdAt).toLocaleString()}
                         </div>
@@ -250,7 +252,7 @@ export default function PostPage() {
                                             `/posts/${postData.id}/edit`,
                                         )
                                     }
-                                    className="flex items-center gap-2"
+                                    className="flex items-center gap-2 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
                                 >
                                     <Edit className="h-4 w-4" />
                                     Edit
@@ -259,7 +261,7 @@ export default function PostPage() {
                                     variant="outline"
                                     size="sm"
                                     onClick={handleDeletePost}
-                                    className="flex items-center gap-2 text-red-600 hover:bg-red-50"
+                                    className="flex items-center gap-2 text-red-600 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/20"
                                     disabled={deletePostMutation.isPending}
                                 >
                                     <Trash2 className="h-4 w-4" />
@@ -268,13 +270,13 @@ export default function PostPage() {
                             </div>
                         )}
                 </div>
-                <div className="prose prose-ul:list-disc prose-ol:list-decimal max-w-none rounded-lg bg-white p-6 shadow-sm">
+                <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 dark:text-gray-100 dark:shadow-gray-900">
                     {postData.isDeleted ? (
                         <div className="space-y-2">
-                            <span className="block text-gray-500 italic">
+                            <span className="block text-gray-500 italic dark:text-gray-300">
                                 [Content deleted]
                             </span>
-                            <span className="block text-sm text-gray-400">
+                            <span className="block text-sm text-gray-400 dark:text-gray-400">
                                 Removed on{' '}
                                 {new Date(postData.updatedAt).toLocaleString()}
                             </span>
@@ -290,7 +292,9 @@ export default function PostPage() {
             </div>
 
             <div className="mb-8">
-                <h2 className="mb-4 text-2xl font-bold">Comments</h2>
+                <h2 className="mb-4 text-2xl font-bold dark:text-white">
+                    Comments
+                </h2>
                 {session && !postData.isDeleted && (
                     <form onSubmit={handleSubmitComment} className="mb-6">
                         <TipTapEditor
@@ -312,7 +316,7 @@ export default function PostPage() {
                 )}
 
                 {postData.isDeleted && (
-                    <div className="mb-6 rounded-lg bg-gray-50 p-4 text-gray-500">
+                    <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
                         <p>
                             This post has been deleted. New comments are
                             disabled, but existing comments are still visible.

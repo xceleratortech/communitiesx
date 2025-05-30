@@ -26,7 +26,8 @@ export const users = pgTable('users', {
     updatedAt: timestamp('updated_at').notNull(),
 });
 
-// Define relations between users and organizations
+// Define basic relations between users and organizations
+// Note: Community-related relations will be defined in schema.ts
 export const usersRelations = relations(users, ({ one }) => ({
     organization: one(orgs, {
         fields: [users.orgId],
