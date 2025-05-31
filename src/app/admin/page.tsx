@@ -41,6 +41,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
 
 // Define types for the data we're working with
 type User = {
@@ -68,6 +69,7 @@ export default function AdminDashboard() {
     const router = useRouter();
     const { data: session } = useSession();
     const [activeTab, setActiveTab] = useState('users');
+    const [isClient, setIsClient] = useState(false);
 
     // State for create user dialog
     const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
@@ -197,10 +199,13 @@ export default function AdminDashboard() {
 
     // Use useEffect for navigation instead of doing it during render
     useEffect(() => {
-        if (session === null) {
-            router.push('/auth/login');
-        }
-    }, [session, router]);
+        setIsClient(true);
+    }, []);
+
+    // Don't render anything meaningful during SSR to avoid hydration mismatches
+    if (!isClient) {
+        return <div>Loading...</div>;
+    }
 
     // Check if user is admin
     if (session === undefined) {
@@ -208,7 +213,19 @@ export default function AdminDashboard() {
     }
 
     if (!session) {
-        return null; // Return null and let the useEffect handle the redirect
+        return (
+            <div className="container mx-auto px-4 py-16 text-center">
+                <h1 className="mb-4 text-3xl font-bold">
+                    Authentication Required
+                </h1>
+                <p className="text-muted-foreground mb-8">
+                    Please sign in to access the admin dashboard.
+                </p>
+                <Button asChild>
+                    <Link href="/auth/login">Sign In</Link>
+                </Button>
+            </div>
+        );
     }
 
     if (session.user.role !== 'admin') {
