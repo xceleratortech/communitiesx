@@ -172,7 +172,7 @@ function LoginForm() {
                     <CardFooter className="flex flex-col space-y-4">
                         <Button
                             type="submit"
-                            className="w-full"
+                            className="mt-4 w-full"
                             disabled={loading}
                         >
                             {loading ? (
