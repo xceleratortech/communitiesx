@@ -4,7 +4,9 @@ import './globals.css';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
+import { ChatProvider } from '@/providers/chat-provider';
 import { Navbar } from '@/components/navbar';
+import { ChatContainer } from '@/components/chat/chat-container';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -42,8 +44,13 @@ export default function RootLayout({
                     disableTransitionOnChange
                 >
                     <TRPCProvider>
-                        <Navbar />
-                        <main>{children}</main>
+                        <ChatProvider>
+                            <Navbar />
+                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                <main>{children}</main>
+                            </div>
+                            <ChatContainer />
+                        </ChatProvider>
                     </TRPCProvider>
                 </ThemeProvider>
             </body>

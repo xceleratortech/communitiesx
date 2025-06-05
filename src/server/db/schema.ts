@@ -298,3 +298,83 @@ export const extendedOrgsRelations = relations(orgs, ({ many }) => ({
     allowedCommunities: many(communityAllowedOrgs),
     posts: many(posts),
 }));
+
+// Chat schema for direct messaging
+export const chatThreads = pgTable('chat_threads', {
+    id: serial('id').primaryKey(),
+    user1Id: text('user1_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    user2Id: text('user2_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    orgId: text('org_id')
+        .notNull()
+        .references(() => orgs.id, { onDelete: 'cascade' }),
+    lastMessageAt: timestamp('last_message_at').notNull().defaultNow(),
+    lastMessagePreview: text('last_message_preview'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const directMessages = pgTable('direct_messages', {
+    id: serial('id').primaryKey(),
+    threadId: integer('thread_id')
+        .notNull()
+        .references(() => chatThreads.id, { onDelete: 'cascade' }),
+    senderId: text('sender_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    recipientId: text('recipient_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    content: text('content').notNull(),
+    isRead: boolean('is_read').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+// Chat relations
+export const chatThreadsRelations = relations(chatThreads, ({ one, many }) => ({
+    user1: one(users, {
+        fields: [chatThreads.user1Id],
+        references: [users.id],
+        relationName: 'user1Threads',
+    }),
+    user2: one(users, {
+        fields: [chatThreads.user2Id],
+        references: [users.id],
+        relationName: 'user2Threads',
+    }),
+    organization: one(orgs, {
+        fields: [chatThreads.orgId],
+        references: [orgs.id],
+    }),
+    messages: many(directMessages),
+}));
+
+export const directMessagesRelations = relations(directMessages, ({ one }) => ({
+    thread: one(chatThreads, {
+        fields: [directMessages.threadId],
+        references: [chatThreads.id],
+    }),
+    sender: one(users, {
+        fields: [directMessages.senderId],
+        references: [users.id],
+        relationName: 'sentMessages',
+    }),
+    recipient: one(users, {
+        fields: [directMessages.recipientId],
+        references: [users.id],
+        relationName: 'receivedMessages',
+    }),
+}));
+
+// Add chat relations to users
+export const userChatRelations = relations(users, ({ many }) => ({
+    // Existing relations...
+    user1Threads: many(chatThreads, { relationName: 'user1Threads' }),
+    user2Threads: many(chatThreads, { relationName: 'user2Threads' }),
+    sentMessages: many(directMessages, { relationName: 'sentMessages' }),
+    receivedMessages: many(directMessages, {
+        relationName: 'receivedMessages',
+    }),
+}));

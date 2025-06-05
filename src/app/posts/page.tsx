@@ -23,6 +23,16 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { posts, users, communities, comments } from '@/server/db/schema';
+import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -48,9 +58,7 @@ export default function PostsPage() {
     const session = sessionData.data;
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
-    const [selectedCommunity, setSelectedCommunity] = useState<string | null>(
-        null,
-    );
+    const [selectedCommunity, setSelectedCommunity] = useState<string>('all');
 
     // State for collapsible sections
     const [aboutOpen, setAboutOpen] = useState(true);
@@ -199,16 +207,17 @@ export default function PostsPage() {
 
     const renderPosts = () => {
         // Filter posts based on selected community
-        const filteredPosts = selectedCommunity
-            ? selectedCommunity === 'org-only'
-                ? posts?.filter(
-                      (post: PostDisplay) => post.source?.type === 'org',
-                  )
-                : posts?.filter(
-                      (post: PostDisplay) =>
-                          post.community?.id === parseInt(selectedCommunity),
-                  )
-            : posts;
+        const filteredPosts =
+            selectedCommunity === 'all'
+                ? posts
+                : selectedCommunity === 'org-only'
+                  ? posts?.filter(
+                        (post: PostDisplay) => post.source?.type === 'org',
+                    )
+                  : posts?.filter(
+                        (post: PostDisplay) =>
+                            post.community?.id === parseInt(selectedCommunity),
+                    );
 
         if (!filteredPosts || filteredPosts.length === 0) {
             return (
@@ -216,7 +225,7 @@ export default function PostsPage() {
                     <p className="mb-4 text-gray-600 dark:text-gray-400">
                         {selectedCommunity === 'org-only'
                             ? 'No organization posts found.'
-                            : selectedCommunity
+                            : selectedCommunity !== 'all'
                               ? 'No posts found in this community.'
                               : 'No posts found. Join or follow more communities to see posts here.'}
                     </p>
@@ -302,7 +311,19 @@ export default function PostsPage() {
                                         )}
                                         <span className="text-xs text-gray-500 dark:text-gray-400">
                                             Posted by{' '}
-                                            {post.author?.name || 'Unknown'} •{' '}
+                                            {post.author?.id ? (
+                                                <UserProfilePopover
+                                                    userId={post.author.id}
+                                                >
+                                                    <span className="cursor-pointer hover:underline">
+                                                        {post.author.name ||
+                                                            'Unknown'}
+                                                    </span>
+                                                </UserProfilePopover>
+                                            ) : (
+                                                'Unknown'
+                                            )}{' '}
+                                            •{' '}
                                             {new Date(
                                                 post.createdAt,
                                             ).toLocaleDateString()}
@@ -383,11 +404,11 @@ export default function PostsPage() {
     };
 
     return (
-        <div className="mx-auto max-w-7xl p-4">
+        <div className="py-4">
             <div className="mb-4">
                 {/* Simplified header with cleaner styling */}
                 <div className="mb-4 flex flex-col items-center justify-between sm:flex-row">
-                    {/* Filter dropdown */}
+                    {/* Filter dropdown - replaced with shadcn Select */}
                     <div className="flex items-center">
                         <label
                             htmlFor="community-filter"
@@ -395,24 +416,30 @@ export default function PostsPage() {
                         >
                             Filter:
                         </label>
-                        <select
-                            id="community-filter"
-                            className="rounded-md border border-gray-300 bg-white px-3 py-1 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
-                            value={selectedCommunity || ''}
-                            onChange={(e) =>
-                                setSelectedCommunity(e.target.value || null)
+                        <Select
+                            value={selectedCommunity}
+                            onValueChange={(value) =>
+                                setSelectedCommunity(value)
                             }
                         >
-                            <option value="">All posts</option>
-                            <option value="org-only">
-                                Organization posts only
-                            </option>
-                            {userCommunities.map((community) => (
-                                <option key={community.id} value={community.id}>
-                                    {community.name}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Select filter" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All posts</SelectItem>
+                                <SelectItem value="org-only">
+                                    Organization posts only
+                                </SelectItem>
+                                {userCommunities.map((community) => (
+                                    <SelectItem
+                                        key={community.id}
+                                        value={community.id.toString()}
+                                    >
+                                        {community.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="flex items-center space-x-4">

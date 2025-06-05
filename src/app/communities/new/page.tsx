@@ -185,10 +185,10 @@ export default function NewCommunityPage() {
                         Back to Communities
                     </Link>
                 </Button>
-                <h1 className="text-3xl font-bold tracking-tight">
+                <h1 className="text-center text-3xl font-bold tracking-tight">
                     Create a New Community
                 </h1>
-                <p className="text-muted-foreground mt-2">
+                <p className="text-muted-foreground mt-2 text-center">
                     Set up your community space where people can gather to
                     discuss and share content
                 </p>

@@ -1,12 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Edit, Trash2, Plus, Minus } from 'lucide-react';
+import { Edit, Trash2, Plus, Minus, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { users } from '@/server/db/schema'; // Assuming UserFromDb is similar or can be imported
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
 import TipTapEditor from '@/components/TipTapEditor';
+import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 
 // Infer Session type from useSession hook
 type SessionData = ReturnType<typeof useSession>['data'];
@@ -224,10 +225,20 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                         </span>
                                     ) : (
                                         <>
-                                            <span className="font-medium dark:text-gray-100">
-                                                {comment.author?.name ||
-                                                    'Unknown'}
-                                            </span>{' '}
+                                            {comment.author?.id ? (
+                                                <UserProfilePopover
+                                                    userId={comment.author.id}
+                                                >
+                                                    <span className="cursor-pointer font-medium hover:underline dark:text-gray-100">
+                                                        {comment.author.name ||
+                                                            'Unknown'}
+                                                    </span>
+                                                </UserProfilePopover>
+                                            ) : (
+                                                <span className="font-medium dark:text-gray-100">
+                                                    Unknown
+                                                </span>
+                                            )}{' '}
                                             •{' '}
                                             {new Date(
                                                 comment.createdAt,

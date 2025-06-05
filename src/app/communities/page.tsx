@@ -97,19 +97,16 @@ export default function CommunitiesPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
-            <div className="mb-8 flex items-center justify-between">
+        <div className="py-8">
+            <div className="mb-0 flex items-center justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
+                    {/* <h1 className="text-3xl font-bold tracking-tight">
                         Communities
-                    </h1>
-                    <p className="text-muted-foreground mt-2">
+                    </h1> */}
+                    <p className="text-muted-foreground mt-0 mb-2">
                         Discover and join communities based on your interests
                     </p>
                 </div>
-                <Button asChild>
-                    <Link href="/communities/new">Create Community</Link>
-                </Button>
             </div>
 
             <Tabs
@@ -117,11 +114,16 @@ export default function CommunitiesPage() {
                 className="w-full"
                 onValueChange={setActiveTab}
             >
-                <TabsList className="mb-6">
-                    <TabsTrigger value="all">All Communities</TabsTrigger>
-                    <TabsTrigger value="my">My Communities</TabsTrigger>
-                    <TabsTrigger value="popular">Popular</TabsTrigger>
-                </TabsList>
+                <div className="mb-6 flex items-center justify-between">
+                    <TabsList>
+                        <TabsTrigger value="all">All Communities</TabsTrigger>
+                        <TabsTrigger value="my">My Communities</TabsTrigger>
+                        <TabsTrigger value="popular">Popular</TabsTrigger>
+                    </TabsList>
+                    <Button asChild>
+                        <Link href="/communities/new">Create Community</Link>
+                    </Button>
+                </div>
 
                 <TabsContent value="all" className="space-y-4">
                     {isLoading ? (

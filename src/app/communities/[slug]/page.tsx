@@ -49,6 +49,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { InviteEmailDialog } from '@/components/invite-email-dialog';
+import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 
 // Function to calculate relative time
 function getRelativeTime(date: Date): string {
@@ -370,7 +371,7 @@ export default function CommunityDetailPage() {
     const isAdmin = !!userMembership && userMembership.role === 'admin';
 
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="py-8">
             {/* Banner and Community Info */}
             <div className="relative mb-16">
                 <div className="h-48 w-full overflow-hidden rounded-t-lg bg-gradient-to-r from-blue-400 to-blue-600">
@@ -691,47 +692,103 @@ export default function CommunityDetailPage() {
                         <CardContent>
                             {community.members &&
                             community.members.length > 0 ? (
-                                <div className="space-y-4">
+                                <div className="space-y-2">
                                     {community.members
-                                        .filter(
-                                            (m) =>
-                                                m.membershipType === 'member',
-                                        )
+                                        .sort((a, b) => {
+                                            // Sort by role: admins first, then moderators, then members
+                                            const roleOrder = {
+                                                admin: 0,
+                                                moderator: 1,
+                                                member: 2,
+                                                follower: 3,
+                                            };
+                                            return (
+                                                roleOrder[
+                                                    a.role as keyof typeof roleOrder
+                                                ] -
+                                                roleOrder[
+                                                    b.role as keyof typeof roleOrder
+                                                ]
+                                            );
+                                        })
                                         .map((member: any) => (
                                             <div
                                                 key={member.userId}
                                                 className="flex items-center justify-between"
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <Avatar>
-                                                        <AvatarImage
-                                                            src={
-                                                                member.user
-                                                                    ?.image
+                                                    {member.user?.id ? (
+                                                        <UserProfilePopover
+                                                            userId={
+                                                                member.user.id
                                                             }
-                                                        />
-                                                        <AvatarFallback>
-                                                            {member.user?.name
-                                                                ?.substring(
-                                                                    0,
-                                                                    2,
-                                                                )
-                                                                .toUpperCase() ||
-                                                                'U'}
-                                                        </AvatarFallback>
-                                                    </Avatar>
+                                                        >
+                                                            <Avatar className="cursor-pointer">
+                                                                <AvatarImage
+                                                                    src={
+                                                                        member
+                                                                            .user
+                                                                            ?.image
+                                                                    }
+                                                                />
+                                                                <AvatarFallback>
+                                                                    {member.user?.name
+                                                                        ?.substring(
+                                                                            0,
+                                                                            2,
+                                                                        )
+                                                                        .toUpperCase() ||
+                                                                        'U'}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        </UserProfilePopover>
+                                                    ) : (
+                                                        <Avatar>
+                                                            <AvatarImage
+                                                                src={
+                                                                    member.user
+                                                                        ?.image
+                                                                }
+                                                            />
+                                                            <AvatarFallback>
+                                                                {member.user?.name
+                                                                    ?.substring(
+                                                                        0,
+                                                                        2,
+                                                                    )
+                                                                    .toUpperCase() ||
+                                                                    'U'}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                    )}
                                                     <div>
-                                                        <p className="font-medium">
-                                                            {member.user?.name}
-                                                        </p>
-                                                        <p className="text-muted-foreground text-sm">
-                                                            {member.role ===
-                                                            'admin'
-                                                                ? 'Admin'
-                                                                : member.role ===
-                                                                    'moderator'
-                                                                  ? 'Moderator'
-                                                                  : 'Member'}
+                                                        {member.user?.id ? (
+                                                            <UserProfilePopover
+                                                                userId={
+                                                                    member.user
+                                                                        .id
+                                                                }
+                                                            >
+                                                                <p className="cursor-pointer text-sm font-medium hover:underline">
+                                                                    {member.user
+                                                                        ?.name ||
+                                                                        'Unknown User'}
+                                                                </p>
+                                                            </UserProfilePopover>
+                                                        ) : (
+                                                            <p className="text-sm font-medium">
+                                                                {member.user
+                                                                    ?.name ||
+                                                                    'Unknown User'}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-muted-foreground text-xs">
+                                                            {member.role
+                                                                .charAt(0)
+                                                                .toUpperCase() +
+                                                                member.role.slice(
+                                                                    1,
+                                                                )}
                                                         </p>
                                                     </div>
                                                 </div>
