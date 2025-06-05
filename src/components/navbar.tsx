@@ -36,7 +36,7 @@ export function Navbar() {
     const getNavLinkClass = (path: string) => {
         const baseClass = 'inline-flex items-center px-1 pt-1 border-b-2';
         const activeClass =
-            'border-black text-black font-medium dark:text-black dark:border-black';
+            'border-black text-black font-medium dark:border-white dark:text-white';
         const inactiveClass =
             'border-transparent text-gray-900 dark:text-gray-100 hover:border-gray-300 dark:hover:border-gray-700';
 
@@ -47,7 +47,7 @@ export function Navbar() {
     const getMobileNavLinkClass = (path: string) => {
         const baseClass = 'block px-3 py-2 rounded-md text-base font-medium';
         const activeClass =
-            'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
+            'bg-blue-50 text-blue-600 dark:bg-blue-900 dark:text-white';
         const inactiveClass =
             'text-gray-900 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800';
 
@@ -55,7 +55,7 @@ export function Navbar() {
     };
 
     return (
-        <nav className="bg-white shadow-sm dark:bg-gray-900 dark:shadow-gray-800">
+        <nav className="bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex h-16 justify-between">
                     <div className="flex">
