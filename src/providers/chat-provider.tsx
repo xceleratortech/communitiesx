@@ -57,7 +57,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const { data: unreadCount = 0, refetch: refetchUnreadCount } =
         trpc.chat.getUnreadCount.useQuery(
             undefined,
-            { enabled: !!session, refetchInterval: 20000 }, // Refetch every 20 seconds
+            { enabled: !!session, refetchInterval: 4000 }, // Refetch every 4 seconds
         );
 
     // Toggle chat open/closed
