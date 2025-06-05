@@ -1,0 +1,226 @@
+{
+    "version": "5",
+    "dialect": "pg",
+    "id": "0b1b6b0d-2c8d-4a8c-9a76-8f3a3e2c4f5d",
+    "prevId": "00000000-0000-0000-0000-000000000002",
+    "tables": {
+        "chat_threads": {
+            "name": "chat_threads",
+            "schema": "",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "serial",
+                    "primaryKey": true,
+                    "notNull": true
+                },
+                "user1_id": {
+                    "name": "user1_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "user2_id": {
+                    "name": "user2_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "org_id": {
+                    "name": "org_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "last_message_at": {
+                    "name": "last_message_at",
+                    "type": "timestamp",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "default": "now()"
+                },
+                "last_message_preview": {
+                    "name": "last_message_preview",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": false
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "default": "now()"
+                }
+            },
+            "indexes": {
+                "chat_threads_user1_id_idx": {
+                    "name": "chat_threads_user1_id_idx",
+                    "columns": ["user1_id"],
+                    "isUnique": false
+                },
+                "chat_threads_user2_id_idx": {
+                    "name": "chat_threads_user2_id_idx",
+                    "columns": ["user2_id"],
+                    "isUnique": false
+                },
+                "chat_threads_org_id_idx": {
+                    "name": "chat_threads_org_id_idx",
+                    "columns": ["org_id"],
+                    "isUnique": false
+                },
+                "chat_threads_last_message_at_idx": {
+                    "name": "chat_threads_last_message_at_idx",
+                    "columns": ["last_message_at"],
+                    "isUnique": false
+                },
+                "chat_threads_user_pair_idx": {
+                    "name": "chat_threads_user_pair_idx",
+                    "columns": ["user1_id", "user2_id"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {
+                "chat_threads_user1_id_users_id_fk": {
+                    "name": "chat_threads_user1_id_users_id_fk",
+                    "tableFrom": "chat_threads",
+                    "tableTo": "users",
+                    "columnsFrom": ["user1_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "chat_threads_user2_id_users_id_fk": {
+                    "name": "chat_threads_user2_id_users_id_fk",
+                    "tableFrom": "chat_threads",
+                    "tableTo": "users",
+                    "columnsFrom": ["user2_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "chat_threads_org_id_orgs_id_fk": {
+                    "name": "chat_threads_org_id_orgs_id_fk",
+                    "tableFrom": "chat_threads",
+                    "tableTo": "orgs",
+                    "columnsFrom": ["org_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {}
+        },
+        "direct_messages": {
+            "name": "direct_messages",
+            "schema": "",
+            "columns": {
+                "id": {
+                    "name": "id",
+                    "type": "serial",
+                    "primaryKey": true,
+                    "notNull": true
+                },
+                "thread_id": {
+                    "name": "thread_id",
+                    "type": "integer",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "sender_id": {
+                    "name": "sender_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "recipient_id": {
+                    "name": "recipient_id",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "content": {
+                    "name": "content",
+                    "type": "text",
+                    "primaryKey": false,
+                    "notNull": true
+                },
+                "is_read": {
+                    "name": "is_read",
+                    "type": "boolean",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "default": false
+                },
+                "created_at": {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "primaryKey": false,
+                    "notNull": true,
+                    "default": "now()"
+                }
+            },
+            "indexes": {
+                "direct_messages_thread_id_idx": {
+                    "name": "direct_messages_thread_id_idx",
+                    "columns": ["thread_id"],
+                    "isUnique": false
+                },
+                "direct_messages_sender_id_idx": {
+                    "name": "direct_messages_sender_id_idx",
+                    "columns": ["sender_id"],
+                    "isUnique": false
+                },
+                "direct_messages_recipient_id_idx": {
+                    "name": "direct_messages_recipient_id_idx",
+                    "columns": ["recipient_id"],
+                    "isUnique": false
+                },
+                "direct_messages_created_at_idx": {
+                    "name": "direct_messages_created_at_idx",
+                    "columns": ["created_at"],
+                    "isUnique": false
+                },
+                "direct_messages_is_read_idx": {
+                    "name": "direct_messages_is_read_idx",
+                    "columns": ["is_read"],
+                    "isUnique": false
+                }
+            },
+            "foreignKeys": {
+                "direct_messages_thread_id_chat_threads_id_fk": {
+                    "name": "direct_messages_thread_id_chat_threads_id_fk",
+                    "tableFrom": "direct_messages",
+                    "tableTo": "chat_threads",
+                    "columnsFrom": ["thread_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "direct_messages_sender_id_users_id_fk": {
+                    "name": "direct_messages_sender_id_users_id_fk",
+                    "tableFrom": "direct_messages",
+                    "tableTo": "users",
+                    "columnsFrom": ["sender_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                },
+                "direct_messages_recipient_id_users_id_fk": {
+                    "name": "direct_messages_recipient_id_users_id_fk",
+                    "tableFrom": "direct_messages",
+                    "tableTo": "users",
+                    "columnsFrom": ["recipient_id"],
+                    "columnsTo": ["id"],
+                    "onDelete": "cascade",
+                    "onUpdate": "no action"
+                }
+            },
+            "compositePrimaryKeys": {},
+            "uniqueConstraints": {}
+        }
+    },
+    "enums": {},
+    "schemas": {}
+}

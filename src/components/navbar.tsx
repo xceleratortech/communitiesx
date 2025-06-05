@@ -7,6 +7,7 @@ import { useSession, signOut } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Globe, Menu, X } from 'lucide-react';
+import { ChatButton } from '@/components/chat-button';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -99,6 +100,7 @@ export function Navbar() {
                         {mounted ? (
                             session ? (
                                 <div className="hidden items-center space-x-4 sm:flex">
+                                    <ChatButton />
                                     <span className="text-sm text-gray-700 dark:text-gray-300">
                                         {session.user.email}
                                     </span>

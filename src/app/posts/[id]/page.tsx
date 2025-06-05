@@ -11,6 +11,7 @@ import { Edit, Trash2 } from 'lucide-react';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
+import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 
 type User = {
     id: string;
@@ -237,8 +238,17 @@ export default function PostPage() {
                             {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
                         <div className="mb-2 text-sm text-gray-500 dark:text-gray-300">
-                            Posted by {postData.author?.name || 'Unknown'} on{' '}
-                            {new Date(postData.createdAt).toLocaleString()}
+                            Posted by{' '}
+                            {postData.author?.id ? (
+                                <UserProfilePopover userId={postData.author.id}>
+                                    <span className="cursor-pointer hover:underline">
+                                        {postData.author.name || 'Unknown'}
+                                    </span>
+                                </UserProfilePopover>
+                            ) : (
+                                'Unknown'
+                            )}{' '}
+                            on {new Date(postData.createdAt).toLocaleString()}
                         </div>
                     </div>
                     {session.user.id === postData.authorId &&
