@@ -32,6 +32,16 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -40,8 +50,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle, UserMinus } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 // Define types for the data we're working with
 type User = {
@@ -70,6 +81,10 @@ export default function AdminDashboard() {
     const { data: session } = useSession();
     const [activeTab, setActiveTab] = useState('users');
     const [isClient, setIsClient] = useState(false);
+
+    // State for user removal alert dialog
+    const [isRemoveUserDialogOpen, setIsRemoveUserDialogOpen] = useState(false);
+    const [userToRemove, setUserToRemove] = useState<string | null>(null);
 
     // State for create user dialog
     const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
@@ -148,6 +163,12 @@ export default function AdminDashboard() {
         },
     });
 
+    const removeUserMutation = trpc.admin.removeUser.useMutation({
+        onSuccess: () => {
+            utils.admin.getUsers.invalidate();
+        },
+    });
+
     const utils = trpc.useUtils();
 
     // Handle form submissions
@@ -164,6 +185,27 @@ export default function AdminDashboard() {
     const handleInviteUser = (e: React.FormEvent) => {
         e.preventDefault();
         inviteUserMutation.mutate(inviteUser);
+    };
+
+    // Updated to open the alert dialog instead of using browser confirm
+    const handleRemoveUser = (userId: string) => {
+        // Prevent admins from removing themselves
+        if (userId === session?.user.id) {
+            toast.error('You cannot remove yourself from the platform');
+            return;
+        }
+
+        setUserToRemove(userId);
+        setIsRemoveUserDialogOpen(true);
+    };
+
+    // Actual removal function called from the alert dialog
+    const confirmRemoveUser = () => {
+        if (userToRemove) {
+            removeUserMutation.mutate({ userId: userToRemove });
+            setIsRemoveUserDialogOpen(false);
+            setUserToRemove(null);
+        }
     };
 
     // Handle direct email verification
@@ -607,6 +649,7 @@ export default function AdminDashboard() {
                                             <TableHead>Organization</TableHead>
                                             <TableHead>Verified</TableHead>
                                             <TableHead>Created</TableHead>
+                                            <TableHead>Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -634,6 +677,29 @@ export default function AdminDashboard() {
                                                     {new Date(
                                                         user.createdAt,
                                                     ).toLocaleDateString()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() =>
+                                                            handleRemoveUser(
+                                                                user.id,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            user.id ===
+                                                            session.user.id
+                                                        }
+                                                        title={
+                                                            user.id ===
+                                                            session.user.id
+                                                                ? 'You cannot remove yourself'
+                                                                : 'Kick user'
+                                                        }
+                                                    >
+                                                        <UserMinus className="h-4 w-4" />
+                                                    </Button>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -805,6 +871,33 @@ export default function AdminDashboard() {
                     </div>
                 </TabsContent>
             </Tabs>
+
+            {/* Remove User Alert Dialog */}
+            <AlertDialog
+                open={isRemoveUserDialogOpen}
+                onOpenChange={setIsRemoveUserDialogOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Kick User</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove this user? This
+                            action cannot be undone and will delete the user's
+                            account, community memberships, and all associated
+                            data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveUser}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Kick User
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

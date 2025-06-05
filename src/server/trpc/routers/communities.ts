@@ -1159,4 +1159,103 @@ export const communitiesRouter = router({
             });
         }
     }),
+
+    // Add a new procedure to remove a user from a community
+    removeUserFromCommunity: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                userId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to perform this action',
+                });
+            }
+
+            try {
+                // Check if community exists
+                const community = await db.query.communities.findFirst({
+                    where: eq(communities.id, input.communityId),
+                    with: {
+                        members: true,
+                    },
+                });
+
+                if (!community) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Community not found',
+                    });
+                }
+
+                // Check if the current user is an admin of the community
+                const currentUserMembership = community.members.find(
+                    (m) =>
+                        m.userId === ctx.session?.user.id && m.role === 'admin',
+                );
+
+                if (!currentUserMembership) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'Only community admins can remove users',
+                    });
+                }
+
+                // Check if the target user is a member of the community
+                const targetUserMembership = community.members.find(
+                    (m) => m.userId === input.userId,
+                );
+
+                if (!targetUserMembership) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'User is not a member of this community',
+                    });
+                }
+
+                // Don't allow removing the community creator (who should be an admin)
+                if (community.createdBy === input.userId) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'Cannot remove the community creator',
+                    });
+                }
+
+                // Remove the user from the community
+                await db
+                    .delete(communityMembers)
+                    .where(
+                        and(
+                            eq(communityMembers.communityId, input.communityId),
+                            eq(communityMembers.userId, input.userId),
+                        ),
+                    );
+
+                // Also delete any pending requests from this user
+                await db
+                    .delete(communityMemberRequests)
+                    .where(
+                        and(
+                            eq(
+                                communityMemberRequests.communityId,
+                                input.communityId,
+                            ),
+                            eq(communityMemberRequests.userId, input.userId),
+                        ),
+                    );
+
+                return { success: true };
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error removing user from community:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to remove user from community',
+                });
+            }
+        }),
 });

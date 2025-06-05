@@ -13,7 +13,7 @@ interface ChatMessageViewProps {
 }
 
 // Dynamically import components
-// @ts-ignore - Module resolution will happen at runtime
+// @ts-ignore
 const ChatThreadList = dynamic(() => import('./chat-thread-list'), {
     ssr: false,
     loading: () => (
@@ -23,7 +23,7 @@ const ChatThreadList = dynamic(() => import('./chat-thread-list'), {
     ),
 });
 
-// @ts-ignore - Module resolution will happen at runtime
+// @ts-ignore
 const ChatMessageView = dynamic<ChatMessageViewProps>(
     () => import('./chat-message-view'),
     {
@@ -36,7 +36,7 @@ const ChatMessageView = dynamic<ChatMessageViewProps>(
     },
 );
 
-// @ts-ignore - Module resolution will happen at runtime
+// @ts-ignore
 const NewChatDialog = dynamic(() => import('./new-chat-dialog'), {
     ssr: false,
 });
