@@ -7,6 +7,7 @@ import { db } from '@/server/db';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
 import { hashPassword } from 'better-auth/crypto';
+import { communityMembers } from '@/server/db/schema';
 
 export const adminRouter = router({
     // Get all users
@@ -275,6 +276,66 @@ export const adminRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to send invitation',
+                });
+            }
+        }),
+
+    // Remove a user from the platform
+    removeUser: publicProcedure
+        .input(
+            z.object({
+                userId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user || ctx.session.user.role !== 'admin') {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'Only admins can remove users',
+                });
+            }
+
+            try {
+                // Check if user exists
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, input.userId),
+                });
+
+                if (!user) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'User not found',
+                    });
+                }
+
+                // Don't allow admins to remove themselves
+                if (user.id === ctx.session.user.id) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'You cannot remove yourself',
+                    });
+                }
+
+                // Remove user's community memberships
+                await db
+                    .delete(communityMembers)
+                    .where(eq(communityMembers.userId, input.userId));
+
+                // Remove user's accounts
+                await db
+                    .delete(accounts)
+                    .where(eq(accounts.userId, input.userId));
+
+                // Finally remove the user
+                await db.delete(users).where(eq(users.id, input.userId));
+
+                return { success: true };
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error removing user:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to remove user',
                 });
             }
         }),

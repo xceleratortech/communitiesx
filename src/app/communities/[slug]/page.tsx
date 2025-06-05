@@ -41,6 +41,16 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
     Table,
     TableBody,
     TableCell,
@@ -101,6 +111,17 @@ export default function CommunityDetailPage() {
         useState(false);
     const [isInviteEmailDialogOpen, setIsInviteEmailDialogOpen] =
         useState(false);
+
+    // Alert dialog states
+    const [isLeaveCommunityDialogOpen, setIsLeaveCommunityDialogOpen] =
+        useState(false);
+    const [isRemoveModeratorDialogOpen, setIsRemoveModeratorDialogOpen] =
+        useState(false);
+    const [isRemoveUserDialogOpen, setIsRemoveUserDialogOpen] = useState(false);
+    const [userToRemove, setUserToRemove] = useState<string | null>(null);
+    const [moderatorToRemove, setModeratorToRemove] = useState<string | null>(
+        null,
+    );
 
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
@@ -251,6 +272,20 @@ export default function CommunityDetailPage() {
             },
         });
 
+    // Remove user from community mutation
+    const removeUserFromCommunityMutation =
+        trpc.communities.removeUserFromCommunity.useMutation({
+            onSuccess: () => {
+                refetch();
+                toast.success('User removed from community');
+            },
+            onError: (error) => {
+                toast.error(
+                    error.message || 'Failed to remove user from community',
+                );
+            },
+        });
+
     // Handle membership actions
     const handleJoinCommunity = () => {
         if (!community || isActionInProgress) return;
@@ -269,10 +304,15 @@ export default function CommunityDetailPage() {
     const handleLeaveCommunity = () => {
         if (!community || isActionInProgress) return;
 
-        if (confirm('Are you sure you want to leave this community?')) {
-            setIsActionInProgress(true);
-            leaveCommunityMutation.mutate({ communityId: community.id });
-        }
+        setIsLeaveCommunityDialogOpen(true);
+    };
+
+    const confirmLeaveCommunity = () => {
+        if (!community || isActionInProgress) return;
+
+        setIsActionInProgress(true);
+        leaveCommunityMutation.mutate({ communityId: community.id });
+        setIsLeaveCommunityDialogOpen(false);
     };
 
     const handleUnfollowCommunity = () => {
@@ -302,12 +342,37 @@ export default function CommunityDetailPage() {
 
     const handleRemoveModerator = (userId: string) => {
         if (!community) return;
-        if (confirm('Are you sure you want to remove this moderator?')) {
-            removeModeratorMutation.mutate({
-                communityId: community.id,
-                userId,
-            });
-        }
+        setModeratorToRemove(userId);
+        setIsRemoveModeratorDialogOpen(true);
+    };
+
+    const confirmRemoveModerator = () => {
+        if (!community || !moderatorToRemove) return;
+
+        removeModeratorMutation.mutate({
+            communityId: community.id,
+            userId: moderatorToRemove,
+        });
+        setIsRemoveModeratorDialogOpen(false);
+        setModeratorToRemove(null);
+    };
+
+    // Handle removing a user from the community
+    const handleRemoveUserFromCommunity = (userId: string) => {
+        if (!community) return;
+        setUserToRemove(userId);
+        setIsRemoveUserDialogOpen(true);
+    };
+
+    const confirmRemoveUserFromCommunity = () => {
+        if (!community || !userToRemove) return;
+
+        removeUserFromCommunityMutation.mutate({
+            communityId: community.id,
+            userId: userToRemove,
+        });
+        setIsRemoveUserDialogOpen(false);
+        setUserToRemove(null);
     };
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
@@ -845,6 +910,25 @@ export default function CommunityDetailPage() {
                                                                 Remove Mod
                                                             </Button>
                                                         )}
+
+                                                    {isAdmin &&
+                                                        member.role !==
+                                                            'admin' &&
+                                                        community.createdBy !==
+                                                            member.userId && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() =>
+                                                                    handleRemoveUserFromCommunity(
+                                                                        member.userId,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <UserMinus className="mr-1 h-4 w-4" />
+                                                                Kick User
+                                                            </Button>
+                                                        )}
                                                 </div>
                                             </div>
                                         ))}
@@ -1040,6 +1124,84 @@ export default function CommunityDetailPage() {
                     </TabsContent>
                 )}
             </Tabs>
+
+            {/* Leave Community Alert Dialog */}
+            <AlertDialog
+                open={isLeaveCommunityDialogOpen}
+                onOpenChange={setIsLeaveCommunityDialogOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Leave Community</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to leave this community? You
+                            will no longer have access to member-only content.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmLeaveCommunity}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Leave Community
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Remove Moderator Alert Dialog */}
+            <AlertDialog
+                open={isRemoveModeratorDialogOpen}
+                onOpenChange={setIsRemoveModeratorDialogOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove Moderator</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove this user's
+                            moderator role? They will remain a member of the
+                            community but will no longer have moderation
+                            privileges.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveModerator}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Remove Moderator
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Remove User Alert Dialog */}
+            <AlertDialog
+                open={isRemoveUserDialogOpen}
+                onOpenChange={setIsRemoveUserDialogOpen}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Remove User</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to remove this user from the
+                            community? They will lose access to all community
+                            content and will need to rejoin to access it again.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmRemoveUserFromCommunity}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Remove User
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }
