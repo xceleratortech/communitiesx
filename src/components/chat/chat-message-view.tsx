@@ -44,7 +44,7 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
     // Get new messages via polling
     const { data: newMessages = [] } = trpc.chat.getNewMessages.useQuery(
         { threadId, since: lastPolled },
-        { refetchInterval: 20000 }, // Poll every 20 seconds
+        { refetchInterval: 2000 }, // Poll every 2 seconds
     );
 
     // Handle new messages
