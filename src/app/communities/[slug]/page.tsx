@@ -123,6 +123,10 @@ export default function CommunityDetailPage() {
         null,
     );
 
+    // Pagination for members
+    const [currentMembersPage, setCurrentMembersPage] = useState(1);
+    const membersPerPage = 10;
+
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
     useEffect(() => {
@@ -375,6 +379,13 @@ export default function CommunityDetailPage() {
         setUserToRemove(null);
     };
 
+    // Handle tab change and reset pagination
+    const handleTabChange = (value: string) => {
+        setActiveTab(value);
+        // Reset pagination when switching tabs
+        setCurrentMembersPage(1);
+    };
+
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
         return <CommunityDetailSkeleton />;
@@ -575,7 +586,7 @@ export default function CommunityDetailPage() {
             <Tabs
                 defaultValue="posts"
                 className="w-full"
-                onValueChange={setActiveTab}
+                onValueChange={handleTabChange}
             >
                 <TabsList className="mb-6">
                     <TabsTrigger value="posts">Posts</TabsTrigger>
@@ -757,38 +768,67 @@ export default function CommunityDetailPage() {
                         <CardContent>
                             {community.members &&
                             community.members.length > 0 ? (
-                                <div className="space-y-2">
-                                    {community.members
-                                        .sort((a, b) => {
-                                            // Sort by role: admins first, then moderators, then members
-                                            const roleOrder = {
-                                                admin: 0,
-                                                moderator: 1,
-                                                member: 2,
-                                                follower: 3,
-                                            };
-                                            return (
-                                                roleOrder[
-                                                    a.role as keyof typeof roleOrder
-                                                ] -
-                                                roleOrder[
-                                                    b.role as keyof typeof roleOrder
-                                                ]
-                                            );
-                                        })
-                                        .map((member: any) => (
-                                            <div
-                                                key={member.userId}
-                                                className="flex items-center justify-between"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    {member.user?.id ? (
-                                                        <UserProfilePopover
-                                                            userId={
-                                                                member.user.id
-                                                            }
-                                                        >
-                                                            <Avatar className="cursor-pointer">
+                                <>
+                                    <div className="space-y-2">
+                                        {community.members
+                                            .sort((a, b) => {
+                                                // Sort by role: admins first, then moderators, then members
+                                                const roleOrder = {
+                                                    admin: 0,
+                                                    moderator: 1,
+                                                    member: 2,
+                                                    follower: 3,
+                                                };
+                                                return (
+                                                    roleOrder[
+                                                        a.role as keyof typeof roleOrder
+                                                    ] -
+                                                    roleOrder[
+                                                        b.role as keyof typeof roleOrder
+                                                    ]
+                                                );
+                                            })
+                                            // Apply pagination
+                                            .slice(
+                                                (currentMembersPage - 1) *
+                                                    membersPerPage,
+                                                currentMembersPage *
+                                                    membersPerPage,
+                                            )
+                                            .map((member: any) => (
+                                                <div
+                                                    key={member.userId}
+                                                    className="flex items-center justify-between"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        {member.user?.id ? (
+                                                            <UserProfilePopover
+                                                                userId={
+                                                                    member.user
+                                                                        .id
+                                                                }
+                                                            >
+                                                                <Avatar className="cursor-pointer">
+                                                                    <AvatarImage
+                                                                        src={
+                                                                            member
+                                                                                .user
+                                                                                ?.image
+                                                                        }
+                                                                    />
+                                                                    <AvatarFallback>
+                                                                        {member.user?.name
+                                                                            ?.substring(
+                                                                                0,
+                                                                                2,
+                                                                            )
+                                                                            .toUpperCase() ||
+                                                                            'U'}
+                                                                    </AvatarFallback>
+                                                                </Avatar>
+                                                            </UserProfilePopover>
+                                                        ) : (
+                                                            <Avatar>
                                                                 <AvatarImage
                                                                     src={
                                                                         member
@@ -806,133 +846,321 @@ export default function CommunityDetailPage() {
                                                                         'U'}
                                                                 </AvatarFallback>
                                                             </Avatar>
-                                                        </UserProfilePopover>
-                                                    ) : (
-                                                        <Avatar>
-                                                            <AvatarImage
-                                                                src={
-                                                                    member.user
-                                                                        ?.image
-                                                                }
-                                                            />
-                                                            <AvatarFallback>
-                                                                {member.user?.name
-                                                                    ?.substring(
-                                                                        0,
-                                                                        2,
-                                                                    )
-                                                                    .toUpperCase() ||
-                                                                    'U'}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                    )}
-                                                    <div>
-                                                        {member.user?.id ? (
-                                                            <UserProfilePopover
-                                                                userId={
-                                                                    member.user
-                                                                        .id
-                                                                }
-                                                            >
-                                                                <p className="cursor-pointer text-sm font-medium hover:underline">
+                                                        )}
+                                                        <div>
+                                                            {member.user?.id ? (
+                                                                <UserProfilePopover
+                                                                    userId={
+                                                                        member
+                                                                            .user
+                                                                            .id
+                                                                    }
+                                                                >
+                                                                    <p className="cursor-pointer text-sm font-medium hover:underline">
+                                                                        {member
+                                                                            .user
+                                                                            ?.name ||
+                                                                            'Unknown User'}
+                                                                    </p>
+                                                                </UserProfilePopover>
+                                                            ) : (
+                                                                <p className="text-sm font-medium">
                                                                     {member.user
                                                                         ?.name ||
                                                                         'Unknown User'}
                                                                 </p>
-                                                            </UserProfilePopover>
-                                                        ) : (
-                                                            <p className="text-sm font-medium">
-                                                                {member.user
-                                                                    ?.name ||
-                                                                    'Unknown User'}
+                                                            )}
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {member.role
+                                                                    .charAt(0)
+                                                                    .toUpperCase() +
+                                                                    member.role.slice(
+                                                                        1,
+                                                                    )}
                                                             </p>
-                                                        )}
-                                                        <p className="text-muted-foreground text-xs">
-                                                            {member.role
-                                                                .charAt(0)
-                                                                .toUpperCase() +
-                                                                member.role.slice(
-                                                                    1,
-                                                                )}
-                                                        </p>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Badge
-                                                        variant={
-                                                            member.role ===
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge
+                                                            variant={
+                                                                member.role ===
+                                                                'admin'
+                                                                    ? 'default'
+                                                                    : member.role ===
+                                                                        'moderator'
+                                                                      ? 'secondary'
+                                                                      : 'outline'
+                                                            }
+                                                        >
+                                                            {member.role ===
                                                             'admin'
-                                                                ? 'default'
+                                                                ? 'Admin'
                                                                 : member.role ===
                                                                     'moderator'
-                                                                  ? 'secondary'
-                                                                  : 'outline'
+                                                                  ? 'Moderator'
+                                                                  : 'Member'}
+                                                        </Badge>
+
+                                                        {isAdmin &&
+                                                            member.role ===
+                                                                'member' && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleAssignModerator(
+                                                                            member.userId,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Shield className="mr-1 h-4 w-4" />
+                                                                    Make
+                                                                    Moderator
+                                                                </Button>
+                                                            )}
+
+                                                        {isAdmin &&
+                                                            member.role ===
+                                                                'moderator' && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleRemoveModerator(
+                                                                            member.userId,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <UserMinus className="mr-1 h-4 w-4" />
+                                                                    Remove Mod
+                                                                </Button>
+                                                            )}
+
+                                                        {isAdmin &&
+                                                            member.role !==
+                                                                'admin' &&
+                                                            community.createdBy !==
+                                                                member.userId && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        handleRemoveUserFromCommunity(
+                                                                            member.userId,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <UserMinus className="mr-1 h-4 w-4" />
+                                                                    Kick User
+                                                                </Button>
+                                                            )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+
+                                    {/* Pagination controls */}
+                                    {community.members.length >
+                                        membersPerPage && (
+                                        <div className="mt-6">
+                                            <div className="text-muted-foreground mb-2 text-center text-sm">
+                                                Showing{' '}
+                                                {(currentMembersPage - 1) *
+                                                    membersPerPage +
+                                                    1}{' '}
+                                                to{' '}
+                                                {Math.min(
+                                                    currentMembersPage *
+                                                        membersPerPage,
+                                                    community.members.length,
+                                                )}{' '}
+                                                of {community.members.length}{' '}
+                                                members
+                                            </div>
+                                            <div className="flex justify-center">
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setCurrentMembersPage(
+                                                                (prev) =>
+                                                                    Math.max(
+                                                                        prev -
+                                                                            1,
+                                                                        1,
+                                                                    ),
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentMembersPage ===
+                                                            1
                                                         }
                                                     >
-                                                        {member.role === 'admin'
-                                                            ? 'Admin'
-                                                            : member.role ===
-                                                                'moderator'
-                                                              ? 'Moderator'
-                                                              : 'Member'}
-                                                    </Badge>
+                                                        Previous
+                                                    </Button>
 
-                                                    {isAdmin &&
-                                                        member.role ===
-                                                            'member' && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() =>
-                                                                    handleAssignModerator(
-                                                                        member.userId,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Shield className="mr-1 h-4 w-4" />
-                                                                Make Moderator
-                                                            </Button>
-                                                        )}
+                                                    <div className="flex items-center gap-1">
+                                                        {(() => {
+                                                            const totalPages =
+                                                                Math.ceil(
+                                                                    community
+                                                                        .members
+                                                                        .length /
+                                                                        membersPerPage,
+                                                                );
+                                                            const pageNumbers =
+                                                                [];
 
-                                                    {isAdmin &&
-                                                        member.role ===
-                                                            'moderator' && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() =>
-                                                                    handleRemoveModerator(
-                                                                        member.userId,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <UserMinus className="mr-1 h-4 w-4" />
-                                                                Remove Mod
-                                                            </Button>
-                                                        )}
+                                                            // Always show first page
+                                                            if (
+                                                                totalPages > 0
+                                                            ) {
+                                                                pageNumbers.push(
+                                                                    1,
+                                                                );
+                                                            }
 
-                                                    {isAdmin &&
-                                                        member.role !==
-                                                            'admin' &&
-                                                        community.createdBy !==
-                                                            member.userId && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() =>
-                                                                    handleRemoveUserFromCommunity(
-                                                                        member.userId,
-                                                                    )
+                                                            // Show ellipsis if needed
+                                                            if (
+                                                                currentMembersPage >
+                                                                3
+                                                            ) {
+                                                                pageNumbers.push(
+                                                                    'ellipsis1',
+                                                                );
+                                                            }
+
+                                                            // Show current page and neighbors
+                                                            for (
+                                                                let i =
+                                                                    Math.max(
+                                                                        2,
+                                                                        currentMembersPage -
+                                                                            1,
+                                                                    );
+                                                                i <=
+                                                                Math.min(
+                                                                    totalPages -
+                                                                        1,
+                                                                    currentMembersPage +
+                                                                        1,
+                                                                );
+                                                                i++
+                                                            ) {
+                                                                if (
+                                                                    i !== 1 &&
+                                                                    i !==
+                                                                        totalPages
+                                                                ) {
+                                                                    pageNumbers.push(
+                                                                        i,
+                                                                    );
                                                                 }
-                                                            >
-                                                                <UserMinus className="mr-1 h-4 w-4" />
-                                                                Kick User
-                                                            </Button>
-                                                        )}
+                                                            }
+
+                                                            // Show ellipsis if needed
+                                                            if (
+                                                                currentMembersPage <
+                                                                totalPages - 2
+                                                            ) {
+                                                                pageNumbers.push(
+                                                                    'ellipsis2',
+                                                                );
+                                                            }
+
+                                                            // Always show last page
+                                                            if (
+                                                                totalPages > 1
+                                                            ) {
+                                                                pageNumbers.push(
+                                                                    totalPages,
+                                                                );
+                                                            }
+
+                                                            return pageNumbers.map(
+                                                                (
+                                                                    page,
+                                                                    index,
+                                                                ) => {
+                                                                    if (
+                                                                        page ===
+                                                                            'ellipsis1' ||
+                                                                        page ===
+                                                                            'ellipsis2'
+                                                                    ) {
+                                                                        return (
+                                                                            <span
+                                                                                key={`ellipsis-${index}`}
+                                                                                className="px-2"
+                                                                            >
+                                                                                ...
+                                                                            </span>
+                                                                        );
+                                                                    }
+
+                                                                    return (
+                                                                        <Button
+                                                                            key={`page-${page}`}
+                                                                            variant={
+                                                                                currentMembersPage ===
+                                                                                page
+                                                                                    ? 'default'
+                                                                                    : 'outline'
+                                                                            }
+                                                                            size="sm"
+                                                                            className="h-8 w-8 p-0"
+                                                                            onClick={() =>
+                                                                                setCurrentMembersPage(
+                                                                                    page as number,
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            {
+                                                                                page
+                                                                            }
+                                                                        </Button>
+                                                                    );
+                                                                },
+                                                            );
+                                                        })()}
+                                                    </div>
+
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setCurrentMembersPage(
+                                                                (prev) =>
+                                                                    Math.min(
+                                                                        prev +
+                                                                            1,
+                                                                        Math.ceil(
+                                                                            community
+                                                                                .members
+                                                                                .length /
+                                                                                membersPerPage,
+                                                                        ),
+                                                                    ),
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentMembersPage ===
+                                                            Math.ceil(
+                                                                community
+                                                                    .members
+                                                                    .length /
+                                                                    membersPerPage,
+                                                            )
+                                                        }
+                                                    >
+                                                        Next
+                                                    </Button>
                                                 </div>
                                             </div>
-                                        ))}
-                                </div>
+                                        </div>
+                                    )}
+                                </>
                             ) : (
                                 <p className="text-muted-foreground">
                                     No members found.
