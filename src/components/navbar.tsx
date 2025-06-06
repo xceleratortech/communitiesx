@@ -61,7 +61,10 @@ export function Navbar() {
                     <div className="flex">
                         <Link href="/" className="flex items-center">
                             <span className="text-xl font-bold dark:text-white">
-                                Community
+                                Community-
+                                <span className="text-blue-600 dark:text-blue-400">
+                                    X
+                                </span>
                             </span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
