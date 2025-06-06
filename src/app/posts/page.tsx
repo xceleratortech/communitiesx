@@ -33,6 +33,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -52,6 +53,59 @@ type PostDisplay = PostFromDb & {
     };
     comments?: CommentFromDb[]; // Properly typed comments array
 };
+
+// Post skeleton component for loading state
+function PostSkeleton() {
+    return (
+        <div className="space-y-4">
+            {[...Array(5)].map((_, index) => (
+                <Card
+                    key={index}
+                    className="relative gap-2 py-2 dark:border-gray-700 dark:bg-gray-800"
+                >
+                    {/* Source info skeleton */}
+                    {index % 2 === 0 && (
+                        <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
+                            <Skeleton className="h-3 w-48" />
+                        </div>
+                    )}
+
+                    {/* Post content skeleton */}
+                    <div className="px-4 py-0">
+                        {/* Title skeleton */}
+                        <Skeleton className="mb-2 h-6 w-3/4" />
+
+                        {/* Content skeleton */}
+                        <Skeleton className="mb-2 h-4 w-full" />
+                        <Skeleton className="mb-2 h-4 w-full" />
+                        <Skeleton className="mb-2 h-4 w-2/3" />
+
+                        {/* Post metadata skeleton */}
+                        <div className="mt-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                {index % 3 === 0 && (
+                                    <Skeleton className="mr-2 h-5 w-20 rounded-full" />
+                                )}
+                                <Skeleton className="h-4 w-32" />
+                                <div className="ml-4">
+                                    <Skeleton className="h-4 w-8" />
+                                </div>
+                            </div>
+
+                            {/* Action buttons skeleton */}
+                            {index % 2 === 1 && (
+                                <div className="flex space-x-1">
+                                    <Skeleton className="h-8 w-8 rounded-full" />
+                                    <Skeleton className="h-8 w-8 rounded-full" />
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </Card>
+            ))}
+        </div>
+    );
+}
 
 export default function PostsPage() {
     const sessionData = useSession();
@@ -177,7 +231,7 @@ export default function PostsPage() {
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
-        return <div className="p-4">Loading...</div>;
+        return <PostSkeleton />;
     }
 
     if (session === undefined) {
@@ -186,7 +240,7 @@ export default function PostsPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoading) {
-        return <div className="p-4">Loading posts...</div>;
+        return <PostSkeleton />;
     }
 
     if (!session) {
