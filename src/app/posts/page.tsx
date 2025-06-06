@@ -245,7 +245,7 @@ export default function PostsPage() {
                         className="block"
                         style={{ textDecoration: 'none' }}
                     >
-                        <Card className="relative py-2 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
+                        <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
                             {/* Source info at top */}
                             {post.source && (
                                 <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
