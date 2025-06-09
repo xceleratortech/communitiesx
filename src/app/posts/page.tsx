@@ -24,6 +24,8 @@ import {
 import { useRouter } from 'next/navigation';
 import { posts, users, communities, comments } from '@/server/db/schema';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { CommunityPopover } from '@/components/ui/community-popover';
+import { OrganizationPopover } from '@/components/ui/organization-popover';
 import {
     Select,
     SelectContent,
@@ -34,6 +36,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -43,7 +46,14 @@ type CommunityFromDb = typeof communities.$inferSelect;
 type CommentFromDb = typeof comments.$inferSelect;
 
 type PostDisplay = PostFromDb & {
-    author: UserFromDb | null; // Author can be null if relation is not found
+    author:
+        | (UserFromDb & {
+              organization?: {
+                  id: string;
+                  name: string;
+              };
+          })
+        | null; // Author can be null if relation is not found
     community?: CommunityFromDb | null; // Community can be null or undefined for non-community posts
     source?: {
         type: string;
@@ -66,7 +76,15 @@ function PostSkeleton() {
                     {/* Source info skeleton */}
                     {index % 2 === 0 && (
                         <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
-                            <Skeleton className="h-3 w-48" />
+                            <div className="flex items-center">
+                                {/* Community/Org avatar and name */}
+                                <div className="mr-2 flex items-center">
+                                    <Skeleton className="mr-1.5 h-5 w-5 rounded-full" />
+                                    <Skeleton className="h-3 w-20" />
+                                </div>
+                                {/* Source reason */}
+                                <Skeleton className="h-3 w-24" />
+                            </div>
                         </div>
                     )}
 
@@ -300,16 +318,99 @@ export default function PostsPage() {
                         style={{ textDecoration: 'none' }}
                     >
                         <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
-                            {/* Source info at top */}
-                            {post.source && (
+                            {/* Source info at top with community or org info */}
+                            {post.source ? (
                                 <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
                                     <div className="flex items-center">
+                                        {post.community ? (
+                                            <CommunityPopover
+                                                communityId={post.community.id}
+                                            >
+                                                <div className="mr-2 flex cursor-pointer items-center">
+                                                    <Avatar className="mr-1.5 h-5 w-5">
+                                                        <AvatarImage
+                                                            src={
+                                                                post.community
+                                                                    .avatar ||
+                                                                undefined
+                                                            }
+                                                        />
+                                                        <AvatarFallback className="text-xs">
+                                                            {post.community.name
+                                                                .substring(0, 2)
+                                                                .toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-xs font-medium hover:underline">
+                                                        {post.community.name}
+                                                    </span>
+                                                </div>
+                                            </CommunityPopover>
+                                        ) : post.source.type === 'org' &&
+                                          post.source.orgId ? (
+                                            <OrganizationPopover
+                                                orgId={post.source.orgId}
+                                                orgName={
+                                                    post.author?.organization
+                                                        ?.name || 'Organization'
+                                                }
+                                            >
+                                                <div className="mr-2 flex cursor-pointer items-center">
+                                                    <Avatar className="mr-1.5 h-5 w-5">
+                                                        <AvatarFallback className="bg-blue-100 text-xs text-blue-600">
+                                                            {(
+                                                                post.author
+                                                                    ?.organization
+                                                                    ?.name ||
+                                                                'Org'
+                                                            )
+                                                                .substring(0, 2)
+                                                                .toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-xs font-medium hover:underline">
+                                                        {post.author
+                                                            ?.organization
+                                                            ?.name ||
+                                                            'Organization'}
+                                                    </span>
+                                                </div>
+                                            </OrganizationPopover>
+                                        ) : null}
                                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                                            {post.source.reason}
+                                            • {post.source.reason}
                                         </span>
                                     </div>
                                 </div>
-                            )}
+                            ) : post.community ? (
+                                <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
+                                    <div className="flex items-center">
+                                        <CommunityPopover
+                                            communityId={post.community.id}
+                                        >
+                                            <div className="flex cursor-pointer items-center">
+                                                <Avatar className="mr-1.5 h-5 w-5">
+                                                    <AvatarImage
+                                                        src={
+                                                            post.community
+                                                                .avatar ||
+                                                            undefined
+                                                        }
+                                                    />
+                                                    <AvatarFallback className="text-xs">
+                                                        {post.community.name
+                                                            .substring(0, 2)
+                                                            .toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs font-medium hover:underline">
+                                                    {post.community.name}
+                                                </span>
+                                            </div>
+                                        </CommunityPopover>
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {/* Post content */}
                             <div className="px-4 py-0">
@@ -347,22 +448,6 @@ export default function PostsPage() {
                                 {/* Post metadata */}
                                 <div className="mt-3 flex items-center justify-between">
                                     <div className="flex items-center">
-                                        {post.community && (
-                                            <span
-                                                className="mr-2 inline-flex cursor-pointer items-center rounded-full bg-blue-50 px-2 py-0 text-xs font-medium text-blue-700 hover:underline dark:bg-blue-900/30 dark:text-blue-300"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    if (post.community?.slug) {
-                                                        router.push(
-                                                            `/communities/${post.community.slug}`,
-                                                        );
-                                                    }
-                                                }}
-                                            >
-                                                {post.community?.name}
-                                            </span>
-                                        )}
                                         <span className="text-xs text-gray-500 dark:text-gray-400">
                                             Posted by{' '}
                                             {post.author?.id ? (

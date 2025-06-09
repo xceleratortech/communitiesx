@@ -22,8 +22,15 @@ type UserType = typeof users.$inferSelect;
 type PostType = typeof posts.$inferSelect;
 type CommentType = typeof comments.$inferSelect;
 
+type UserWithOrg = UserType & {
+    organization?: {
+        id: string;
+        name: string;
+    };
+};
+
 type PostWithAuthor = PostType & {
-    author: UserType | null;
+    author: UserWithOrg | null;
 };
 
 type CommentWithAuthor = CommentType & {
@@ -312,7 +319,11 @@ export const communityRouter = router({
                 ),
                 orderBy: desc(posts.createdAt),
                 with: {
-                    author: true,
+                    author: {
+                        with: {
+                            organization: true,
+                        },
+                    },
                     comments: true,
                 },
             });
@@ -344,7 +355,11 @@ export const communityRouter = router({
                     ),
                     orderBy: desc(posts.createdAt),
                     with: {
-                        author: true,
+                        author: {
+                            with: {
+                                organization: true,
+                            },
+                        },
                         community: true,
                         comments: true,
                     },
