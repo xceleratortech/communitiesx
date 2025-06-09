@@ -11,7 +11,7 @@ import {
     communityMemberRequests,
 } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, desc, count, and, isNull, or, inArray } from 'drizzle-orm';
+import { eq, desc, count, and, isNull, or, inArray, lt } from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
 import crypto from 'crypto';
@@ -22,8 +22,15 @@ type UserType = typeof users.$inferSelect;
 type PostType = typeof posts.$inferSelect;
 type CommentType = typeof comments.$inferSelect;
 
+type UserWithOrg = UserType & {
+    organization?: {
+        id: string;
+        name: string;
+    };
+};
+
 type PostWithAuthor = PostType & {
-    author: UserType | null;
+    author: UserWithOrg | null;
 };
 
 type CommentWithAuthor = CommentType & {
@@ -255,136 +262,173 @@ export const communityRouter = router({
     ),
 
     // Get all posts relevant to user (org-wide + community posts)
-    getAllRelevantPosts: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view posts',
-            });
-        }
-        try {
-            const userId = ctx.session.user.id;
-
-            // Get user's org ID
-            const user = await db.query.users.findFirst({
-                where: eq(users.id, userId),
-            });
-            const orgId = user?.orgId;
-
-            if (!orgId) {
+    getAllRelevantPosts: publicProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(10),
+                offset: z.number().default(0), // Use offset-based pagination instead of cursor
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
                 throw new TRPCError({
                     code: 'UNAUTHORIZED',
-                    message: 'User does not have an organization.',
+                    message: 'You must be logged in to view posts',
                 });
             }
+            try {
+                const { limit, offset } = input;
+                const userId = ctx.session.user.id;
 
-            // Get all communities where the user is a member or follower
-            const userMemberships = await db.query.communityMembers.findMany({
-                where: and(
-                    eq(communityMembers.userId, userId),
-                    eq(communityMembers.status, 'active'),
-                ),
-                with: {
-                    community: true,
-                },
-            });
+                // Get user's org ID
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, userId),
+                });
+                const orgId = user?.orgId;
 
-            // Create a map of community ID to membership type for quick lookup
-            const communityMembershipMap = new Map();
-            userMemberships.forEach((membership) => {
-                communityMembershipMap.set(
-                    membership.communityId,
-                    membership.membershipType,
+                if (!orgId) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User does not have an organization.',
+                    });
+                }
+
+                // Get all communities where the user is a member or follower
+                const userMemberships =
+                    await db.query.communityMembers.findMany({
+                        where: and(
+                            eq(communityMembers.userId, userId),
+                            eq(communityMembers.status, 'active'),
+                        ),
+                        with: {
+                            community: true,
+                        },
+                    });
+
+                // Create a map of community ID to membership type for quick lookup
+                const communityMembershipMap = new Map();
+                userMemberships.forEach((membership) => {
+                    communityMembershipMap.set(
+                        membership.communityId,
+                        membership.membershipType,
+                    );
+                });
+
+                // Extract community IDs
+                const communityIds = userMemberships.map(
+                    (membership) => membership.communityId,
                 );
-            });
 
-            // Extract community IDs
-            const communityIds = userMemberships.map(
-                (membership) => membership.communityId,
-            );
-
-            // Get organization-wide posts (not belonging to any community)
-            const orgPosts = await db.query.posts.findMany({
-                where: and(
-                    eq(posts.orgId, orgId),
-                    isNull(posts.communityId),
-                    eq(posts.isDeleted, false),
-                ),
-                orderBy: desc(posts.createdAt),
-                with: {
-                    author: true,
-                    comments: true,
-                },
-            });
-
-            // Get organization name
-            const organization = await db.query.orgs.findFirst({
-                where: eq(orgs.id, orgId),
-            });
-
-            const orgName = organization?.name || 'your organization';
-
-            // Add source information to org posts
-            const orgPostsWithSource = orgPosts.map((post) => ({
-                ...post,
-                source: {
-                    type: 'org',
-                    orgId,
-                    reason: `Because you are part of ${orgName}`,
-                },
-            }));
-
-            // Get community posts if user is part of any communities
-            let communityPosts: PostWithSource[] = [];
-            if (communityIds.length > 0) {
-                const rawCommunityPosts = await db.query.posts.findMany({
+                // Get organization-wide posts (not belonging to any community)
+                const orgPosts = await db.query.posts.findMany({
                     where: and(
-                        inArray(posts.communityId, communityIds),
+                        eq(posts.orgId, orgId),
+                        isNull(posts.communityId),
                         eq(posts.isDeleted, false),
                     ),
-                    orderBy: desc(posts.createdAt),
+                    orderBy: [desc(posts.createdAt)],
                     with: {
-                        author: true,
-                        community: true,
+                        author: {
+                            with: {
+                                organization: true,
+                            },
+                        },
                         comments: true,
                     },
                 });
 
-                // Add source information to community posts
-                communityPosts = rawCommunityPosts.map((post) => {
-                    const membershipType = communityMembershipMap.get(
-                        post.communityId,
-                    );
-                    return {
-                        ...post,
-                        source: {
-                            type: 'community',
-                            communityId: post.communityId ?? undefined,
-                            reason:
-                                membershipType === 'member'
-                                    ? `Because you are a member of ${post.community?.name}`
-                                    : `Because you are following ${post.community?.name}`,
+                // Get organization name
+                const organization = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, orgId),
+                });
+
+                const orgName = organization?.name || 'your organization';
+
+                // Add source information to org posts
+                const orgPostsWithSource = orgPosts.map((post) => ({
+                    ...post,
+                    source: {
+                        type: 'org',
+                        orgId,
+                        reason: `Because you are part of ${orgName}`,
+                    },
+                }));
+
+                // Get community posts if user is part of any communities
+                let communityPosts: PostWithSource[] = [];
+                if (communityIds.length > 0) {
+                    const rawCommunityPosts = await db.query.posts.findMany({
+                        where: and(
+                            inArray(posts.communityId, communityIds),
+                            eq(posts.isDeleted, false),
+                        ),
+                        orderBy: [desc(posts.createdAt)],
+                        with: {
+                            author: {
+                                with: {
+                                    organization: true,
+                                },
+                            },
+                            community: true,
+                            comments: true,
                         },
-                    } as PostWithSource;
+                    });
+
+                    // Add source information to community posts
+                    communityPosts = rawCommunityPosts.map((post) => {
+                        const membershipType = communityMembershipMap.get(
+                            post.communityId,
+                        );
+                        return {
+                            ...post,
+                            source: {
+                                type: 'community',
+                                communityId: post.communityId ?? undefined,
+                                reason:
+                                    membershipType === 'member'
+                                        ? `Because you are a member of ${post.community?.name}`
+                                        : `Because you are following ${post.community?.name}`,
+                            },
+                        } as PostWithSource;
+                    });
+                }
+
+                // Combine and sort all posts by creation date
+                const allPosts = [
+                    ...orgPostsWithSource,
+                    ...communityPosts,
+                ].sort(
+                    (a, b) =>
+                        new Date(b.createdAt).getTime() -
+                        new Date(a.createdAt).getTime(),
+                );
+
+                // Calculate total count
+                const totalCount = allPosts.length;
+
+                // Apply pagination
+                const paginatedPosts = allPosts.slice(offset, offset + limit);
+
+                // Check if there are more results
+                const hasNextPage = offset + limit < totalCount;
+
+                // Calculate next offset
+                const nextOffset = hasNextPage ? offset + limit : null;
+
+                return {
+                    posts: paginatedPosts,
+                    nextOffset,
+                    hasNextPage,
+                    totalCount,
+                };
+            } catch (error) {
+                console.error('Error fetching all relevant posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch posts',
                 });
             }
-
-            // Combine and sort all posts by creation date
-            const allPosts = [...orgPostsWithSource, ...communityPosts].sort(
-                (a, b) =>
-                    new Date(b.createdAt).getTime() -
-                    new Date(a.createdAt).getTime(),
-            );
-
-            return allPosts;
-        } catch (error) {
-            console.error('Error fetching all relevant posts:', error);
-            throw new TRPCError({
-                code: 'INTERNAL_SERVER_ERROR',
-                message: 'Failed to fetch posts',
-            });
-        }
-    }),
+        }),
 
     // Get a single post with its comments
     getPost: publicProcedure

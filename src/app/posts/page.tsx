@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
@@ -20,10 +20,13 @@ import {
     ChevronUp,
     PlusCircleIcon,
     MessageSquare,
+    Loader2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { posts, users, communities, comments } from '@/server/db/schema';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { CommunityPopover } from '@/components/ui/community-popover';
+import { OrganizationPopover } from '@/components/ui/organization-popover';
 import {
     Select,
     SelectContent,
@@ -34,6 +37,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -43,7 +47,14 @@ type CommunityFromDb = typeof communities.$inferSelect;
 type CommentFromDb = typeof comments.$inferSelect;
 
 type PostDisplay = PostFromDb & {
-    author: UserFromDb | null; // Author can be null if relation is not found
+    author:
+        | (UserFromDb & {
+              organization?: {
+                  id: string;
+                  name: string;
+              };
+          })
+        | null; // Author can be null if relation is not found
     community?: CommunityFromDb | null; // Community can be null or undefined for non-community posts
     source?: {
         type: string;
@@ -66,7 +77,15 @@ function PostSkeleton() {
                     {/* Source info skeleton */}
                     {index % 2 === 0 && (
                         <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
-                            <Skeleton className="h-3 w-48" />
+                            <div className="flex items-center">
+                                {/* Community/Org avatar and name */}
+                                <div className="mr-2 flex items-center">
+                                    <Skeleton className="mr-1.5 h-5 w-5 rounded-full" />
+                                    <Skeleton className="h-3 w-20" />
+                                </div>
+                                {/* Source reason */}
+                                <Skeleton className="h-3 w-24" />
+                            </div>
                         </div>
                     )}
 
@@ -114,26 +133,110 @@ export default function PostsPage() {
     const [isClient, setIsClient] = useState(false);
     const [selectedCommunity, setSelectedCommunity] = useState<string>('all');
 
+    // State for infinite scrolling
+    const [posts, setPosts] = useState<PostDisplay[]>([]);
+    const [offset, setOffset] = useState(0);
+    const [hasNextPage, setHasNextPage] = useState(true);
+    const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
+    const [totalCount, setTotalCount] = useState(0);
+
     // State for collapsible sections
     const [aboutOpen, setAboutOpen] = useState(true);
     const [statsOpen, setStatsOpen] = useState(false);
     const [adminsOpen, setAdminsOpen] = useState(false);
 
     const utils = trpc.useUtils();
-
-    // Comment out the old queries
-    // const postsQuery = trpc.community.getPosts.useQuery(undefined, {
-    //     enabled: !!session,
-    // });
-
-    // const postsQuery = trpc.community.getRelevantPosts.useQuery(undefined, {
-    //     enabled: !!session,
-    // });
+    const observerRef = useRef<IntersectionObserver | null>(null);
+    const loadMoreRef = useRef<HTMLDivElement>(null);
 
     // Use the new getAllRelevantPosts query that includes both org and community posts
-    const postsQuery = trpc.community.getAllRelevantPosts.useQuery(undefined, {
-        enabled: !!session,
+    const postsQuery = trpc.community.getAllRelevantPosts.useQuery({
+        limit: 10,
+        offset: 0,
     });
+
+    // Update posts state when query data changes
+    useEffect(() => {
+        if (postsQuery.data) {
+            setPosts(postsQuery.data.posts);
+            setOffset(postsQuery.data.posts.length);
+            setHasNextPage(postsQuery.data.hasNextPage);
+            setTotalCount(postsQuery.data.totalCount);
+        }
+    }, [postsQuery.data]);
+
+    // Function to fetch more posts
+    const fetchNextPage = useCallback(async () => {
+        if (!session || !hasNextPage || isFetchingNextPage) return;
+
+        setIsFetchingNextPage(true);
+        try {
+            const data = await utils.community.getAllRelevantPosts.fetch({
+                limit: 10,
+                offset: offset,
+            });
+
+            setPosts((prev) => [...prev, ...data.posts]);
+            setOffset((prev) => prev + data.posts.length);
+            setHasNextPage(data.hasNextPage);
+            setTotalCount(data.totalCount);
+        } catch (error) {
+            console.error('Error fetching more posts:', error);
+        } finally {
+            setIsFetchingNextPage(false);
+        }
+    }, [
+        session,
+        hasNextPage,
+        isFetchingNextPage,
+        offset,
+        utils.community.getAllRelevantPosts,
+    ]);
+
+    // Setup intersection observer for infinite scrolling
+    useEffect(() => {
+        if (!isClient) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0]?.isIntersecting &&
+                    hasNextPage &&
+                    !isFetchingNextPage
+                ) {
+                    fetchNextPage();
+                }
+            },
+            {
+                rootMargin: '0px 0px 300px 0px', // Trigger 300px before the element comes into view
+                threshold: 0.1,
+            },
+        );
+
+        observerRef.current = observer;
+
+        return () => {
+            if (observerRef.current) {
+                observerRef.current.disconnect();
+            }
+        };
+    }, [isClient, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+    // Observe the load more element
+    useEffect(() => {
+        const currentObserver = observerRef.current;
+        const currentLoadMoreRef = loadMoreRef.current;
+
+        if (currentObserver && currentLoadMoreRef) {
+            currentObserver.observe(currentLoadMoreRef);
+
+            return () => {
+                if (currentLoadMoreRef) {
+                    currentObserver.unobserve(currentLoadMoreRef);
+                }
+            };
+        }
+    }, [posts]);
 
     // Fetch statistics data
     const statsQuery = trpc.community.getStats.useQuery(undefined, {
@@ -155,8 +258,12 @@ export default function PostsPage() {
 
     const deletePostMutation = trpc.community.deletePost.useMutation({
         onSuccess: () => {
+            // Reset pagination and refetch
+            setPosts([]);
+            setOffset(0);
+            setHasNextPage(true);
             // Invalidate the posts query to refresh the list
-            utils.community.getPosts.invalidate();
+            utils.community.getAllRelevantPosts.invalidate();
         },
     });
 
@@ -180,7 +287,6 @@ export default function PostsPage() {
         }
     };
 
-    const posts = postsQuery.data;
     const isLoading = postsQuery.isLoading;
     const stats = statsQuery.data || {
         totalUsers: 0,
@@ -239,7 +345,7 @@ export default function PostsPage() {
     }
 
     // Only show loading state on client after hydration
-    if (isClient && isLoading) {
+    if (isClient && isLoading && posts.length === 0) {
         return <PostSkeleton />;
     }
 
@@ -259,16 +365,27 @@ export default function PostsPage() {
         );
     }
 
+    // Handle community filter change
+    const handleCommunityFilterChange = (value: string) => {
+        setSelectedCommunity(value);
+        setPosts([]); // Clear current posts
+        setOffset(0); // Reset offset
+        setHasNextPage(true); // Reset hasNextPage
+
+        // Refetch with the new filter
+        utils.community.getAllRelevantPosts.invalidate();
+    };
+
     const renderPosts = () => {
         // Filter posts based on selected community
         const filteredPosts =
             selectedCommunity === 'all'
                 ? posts
                 : selectedCommunity === 'org-only'
-                  ? posts?.filter(
+                  ? posts.filter(
                         (post: PostDisplay) => post.source?.type === 'org',
                     )
-                  : posts?.filter(
+                  : posts.filter(
                         (post: PostDisplay) =>
                             post.community?.id === parseInt(selectedCommunity),
                     );
@@ -300,16 +417,99 @@ export default function PostsPage() {
                         style={{ textDecoration: 'none' }}
                     >
                         <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md dark:border-gray-700 dark:bg-gray-800">
-                            {/* Source info at top */}
-                            {post.source && (
+                            {/* Source info at top with community or org info */}
+                            {post.source ? (
                                 <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
                                     <div className="flex items-center">
+                                        {post.community ? (
+                                            <CommunityPopover
+                                                communityId={post.community.id}
+                                            >
+                                                <div className="mr-2 flex cursor-pointer items-center">
+                                                    <Avatar className="mr-1.5 h-5 w-5">
+                                                        <AvatarImage
+                                                            src={
+                                                                post.community
+                                                                    .avatar ||
+                                                                undefined
+                                                            }
+                                                        />
+                                                        <AvatarFallback className="text-xs">
+                                                            {post.community.name
+                                                                .substring(0, 2)
+                                                                .toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-xs font-medium hover:underline">
+                                                        {post.community.name}
+                                                    </span>
+                                                </div>
+                                            </CommunityPopover>
+                                        ) : post.source.type === 'org' &&
+                                          post.source.orgId ? (
+                                            <OrganizationPopover
+                                                orgId={post.source.orgId}
+                                                orgName={
+                                                    post.author?.organization
+                                                        ?.name || 'Organization'
+                                                }
+                                            >
+                                                <div className="mr-2 flex cursor-pointer items-center">
+                                                    <Avatar className="mr-1.5 h-5 w-5">
+                                                        <AvatarFallback className="bg-blue-100 text-xs text-blue-600">
+                                                            {(
+                                                                post.author
+                                                                    ?.organization
+                                                                    ?.name ||
+                                                                'Org'
+                                                            )
+                                                                .substring(0, 2)
+                                                                .toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span className="text-xs font-medium hover:underline">
+                                                        {post.author
+                                                            ?.organization
+                                                            ?.name ||
+                                                            'Organization'}
+                                                    </span>
+                                                </div>
+                                            </OrganizationPopover>
+                                        ) : null}
                                         <span className="text-xs text-gray-500 dark:text-gray-400">
-                                            {post.source.reason}
+                                            • {post.source.reason}
                                         </span>
                                     </div>
                                 </div>
-                            )}
+                            ) : post.community ? (
+                                <div className="border-b border-gray-200 px-4 pt-0.5 pb-1.5 dark:border-gray-600">
+                                    <div className="flex items-center">
+                                        <CommunityPopover
+                                            communityId={post.community.id}
+                                        >
+                                            <div className="flex cursor-pointer items-center">
+                                                <Avatar className="mr-1.5 h-5 w-5">
+                                                    <AvatarImage
+                                                        src={
+                                                            post.community
+                                                                .avatar ||
+                                                            undefined
+                                                        }
+                                                    />
+                                                    <AvatarFallback className="text-xs">
+                                                        {post.community.name
+                                                            .substring(0, 2)
+                                                            .toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-xs font-medium hover:underline">
+                                                    {post.community.name}
+                                                </span>
+                                            </div>
+                                        </CommunityPopover>
+                                    </div>
+                                </div>
+                            ) : null}
 
                             {/* Post content */}
                             <div className="px-4 py-0">
@@ -347,22 +547,6 @@ export default function PostsPage() {
                                 {/* Post metadata */}
                                 <div className="mt-3 flex items-center justify-between">
                                     <div className="flex items-center">
-                                        {post.community && (
-                                            <span
-                                                className="mr-2 inline-flex cursor-pointer items-center rounded-full bg-blue-50 px-2 py-0 text-xs font-medium text-blue-700 hover:underline dark:bg-blue-900/30 dark:text-blue-300"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    if (post.community?.slug) {
-                                                        router.push(
-                                                            `/communities/${post.community.slug}`,
-                                                        );
-                                                    }
-                                                }}
-                                            >
-                                                {post.community?.name}
-                                            </span>
-                                        )}
                                         <span className="text-xs text-gray-500 dark:text-gray-400">
                                             Posted by{' '}
                                             {post.author?.id ? (
@@ -417,10 +601,9 @@ export default function PostsPage() {
                                                             `/posts/${post.id}/edit`,
                                                         );
                                                     }}
-                                                    className="rounded-full p-1 hover:bg-gray-100 focus:ring-2 focus:ring-blue-500 focus:outline-none dark:hover:bg-gray-700"
-                                                    title="Edit post"
+                                                    className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-gray-300"
                                                 >
-                                                    <Edit className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                                                    <Edit className="h-4 w-4" />
                                                 </button>
                                                 <button
                                                     type="button"
@@ -430,29 +613,60 @@ export default function PostsPage() {
                                                             e,
                                                         )
                                                     }
-                                                    className="rounded-full p-1 hover:bg-gray-100 focus:ring-2 focus:ring-red-500 focus:outline-none dark:hover:bg-gray-700"
-                                                    title="Delete post"
-                                                    disabled={
-                                                        deletePostMutation.isPending
-                                                    }
+                                                    className="rounded-full p-1.5 text-gray-500 hover:bg-gray-100 hover:text-red-500 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-red-400"
                                                 >
-                                                    <Trash2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                                                    <Trash2 className="h-4 w-4" />
                                                 </button>
                                             </div>
                                         )}
                                 </div>
-
-                                {/* Engagement stats */}
-                                {/* <div className="mt-2 flex items-center space-x-4">
-                                    <button className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                                        <MessageSquare className="h-3 w-3 mr-1" />
-                                        {post.comments?.length || 0}
-                                    </button>
-                                </div> */}
                             </div>
                         </Card>
                     </Link>
                 ))}
+
+                {/* Loading indicator and intersection observer target */}
+                <div ref={loadMoreRef} className="py-4 text-center">
+                    {isFetchingNextPage ? (
+                        <div className="flex items-center justify-center space-x-2">
+                            <Loader2 className="h-5 w-5 animate-spin text-gray-500" />
+                            <span className="text-sm text-gray-500">
+                                Loading more posts...
+                            </span>
+                        </div>
+                    ) : hasNextPage ? (
+                        <div className="flex flex-col items-center">
+                            <span className="text-sm text-gray-500">
+                                Showing {posts.length} of {totalCount} posts
+                            </span>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="mt-2"
+                                onClick={() => fetchNextPage()}
+                            >
+                                <ChevronDown className="mr-1 h-4 w-4" />
+                                Load more
+                            </Button>
+                            {/* Debug info */}
+                            {process.env.NODE_ENV === 'development' && (
+                                <div className="mt-2 text-xs text-gray-400">
+                                    offset: {offset}, hasNextPage:{' '}
+                                    {hasNextPage.toString()}, totalCount:{' '}
+                                    {totalCount}
+                                </div>
+                            )}
+                        </div>
+                    ) : posts.length > 0 ? (
+                        <span className="text-sm text-gray-500">
+                            All posts loaded
+                        </span>
+                    ) : (
+                        <span className="text-sm text-gray-500">
+                            No posts found
+                        </span>
+                    )}
+                </div>
             </div>
         );
     };
@@ -473,7 +687,7 @@ export default function PostsPage() {
                         <Select
                             value={selectedCommunity}
                             onValueChange={(value) =>
-                                setSelectedCommunity(value)
+                                handleCommunityFilterChange(value)
                             }
                         >
                             <SelectTrigger className="w-[180px]">

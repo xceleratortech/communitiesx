@@ -99,6 +99,12 @@ export function Navbar() {
                         </div>
                     </div>
                     <div className="flex items-center space-x-4">
+                        {/* Add ChatButton here so it's visible on mobile */}
+                        {mounted && session && (
+                            <div className="flex sm:hidden">
+                                <ChatButton />
+                            </div>
+                        )}
                         <ThemeToggle />
                         {mounted ? (
                             session ? (

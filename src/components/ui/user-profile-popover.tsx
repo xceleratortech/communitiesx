@@ -82,10 +82,19 @@ export function UserProfilePopover({
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
-        setIsOpen(true);
+        timeoutRef.current = setTimeout(() => {
+            setIsOpen(true);
+        }, 1000);
     };
 
     const handleMouseLeave = () => {
+        // Clear the open timeout if the mouse leaves before the popover opens
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+
+        // Add a small delay before closing to prevent flickering
         timeoutRef.current = setTimeout(() => {
             setIsOpen(false);
         }, 300); // Small delay to prevent closing when moving to popover content
