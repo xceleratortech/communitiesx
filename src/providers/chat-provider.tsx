@@ -101,6 +101,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
     }, [isOpen]);
 
+    // Close chat when user signs out
+    useEffect(() => {
+        if (!session && isOpen) {
+            setIsOpen(false);
+            setIsMinimized(false);
+            setActiveThreadId(null);
+            setIsNewChatOpen(false);
+        }
+    }, [session, isOpen]);
+
     // Provide the chat context
     return (
         <ChatContext.Provider
