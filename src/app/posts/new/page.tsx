@@ -116,7 +116,7 @@ function NewPostForm() {
 
         await createPost.mutate({
             title: title.trim(),
-            content: content.trim(),
+            content: content,
             communityId: communityId,
         });
     };

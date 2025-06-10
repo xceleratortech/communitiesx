@@ -84,7 +84,7 @@ export default function EditPostPage() {
         editPost.mutate({
             postId,
             title: title.trim(),
-            content: content.trim(),
+            content: content,
         });
     };
 

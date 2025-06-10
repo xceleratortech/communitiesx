@@ -58,6 +58,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                         class: 'list-decimal ml-4',
                     },
                 },
+                paragraph: {
+                    HTMLAttributes: {
+                        class: 'whitespace-pre-wrap',
+                    },
+                },
             }),
             Link.configure({
                 openOnClick: false,
@@ -67,6 +72,8 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             }),
             Placeholder.configure({
                 placeholder,
+                showOnlyWhenEditable: true,
+                showOnlyCurrent: false,
             }),
             Image.configure({
                 HTMLAttributes: {
@@ -79,6 +86,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             onChange(editor.getHTML());
         },
         editorProps: {
+            attributes: {
+                class: 'whitespace-pre-wrap outline-none w-full',
+                spellcheck: 'true',
+            },
             handleKeyDown: (view, event) => {
                 // Fix for space bar issue
                 if (event.key === ' ') {
@@ -86,6 +97,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     return true;
                 }
                 return false;
+            },
+            handleClick: () => {
+                // This helps ensure the editor is focused when clicked anywhere
+                if (editor && !editor.isFocused) {
+                    editor.commands.focus('end');
+                }
+                return false; // Don't prevent default behavior
             },
         },
     });
@@ -110,6 +128,63 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             }
         }
     }, [content, editor]);
+
+    // Add custom CSS to improve the editor experience
+    useEffect(() => {
+        if (editor) {
+            // Add a custom class to the editor to style it
+            const editorElement = document.querySelector('.ProseMirror');
+            if (editorElement) {
+                editorElement.classList.add('tiptap-editor-content');
+
+                // Add custom styles
+                const style = document.createElement('style');
+                style.textContent = `
+                    .tiptap-editor-content {
+                        min-height: ${variant === 'compact' ? '80px' : '180px'};
+                        width: 100%;
+                        cursor: text;
+                        transition: background-color 0.2s;
+                        padding: 0.5rem;
+                        margin: -0.5rem;
+                        border-radius: 0.25rem;
+                    }
+                    .tiptap-editor-content:focus, .tiptap-editor-content:focus-within {
+                        outline: none;
+                        background-color: rgba(0, 0, 0, 0.02);
+                    }
+                    .tiptap-editor-content p {
+                        margin-bottom: 0.5em;
+                    }
+                    .tiptap-editor-content p:last-child {
+                        margin-bottom: 0;
+                    }
+                    .dark .tiptap-editor-content:focus, .dark .tiptap-editor-content:focus-within {
+                        background-color: rgba(255, 255, 255, 0.02);
+                    }
+                    /* Improve selection appearance */
+                    .tiptap-editor-content ::selection {
+                        background-color: rgba(59, 130, 246, 0.3);
+                    }
+                    .dark .tiptap-editor-content ::selection {
+                        background-color: rgba(96, 165, 250, 0.3);
+                    }
+                    /* Make the editor feel more like a text area */
+                    .tiptap-editor-content:hover {
+                        background-color: rgba(0, 0, 0, 0.01);
+                    }
+                    .dark .tiptap-editor-content:hover {
+                        background-color: rgba(255, 255, 255, 0.01);
+                    }
+                `;
+                document.head.appendChild(style);
+
+                return () => {
+                    document.head.removeChild(style);
+                };
+            }
+        }
+    }, [editor, variant]);
 
     if (!editor) {
         return null;
@@ -162,7 +237,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     const contentClasses = cn(
         'p-3 focus:outline-none dark:bg-gray-800 dark:text-gray-100',
         variant === 'compact' ? 'max-h-[150px]' : 'max-h-[300px]',
-        'overflow-y-auto',
+        'overflow-y-auto whitespace-pre-wrap',
     );
 
     // Create a class string for the toolbar buttons
@@ -178,10 +253,23 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     );
 
     return (
-        <div className={editorClasses}>
-            <div className={toolbarClasses}>
+        <div
+            className={editorClasses}
+            onClick={() => {
+                if (editor && !editor.isFocused) {
+                    editor.commands.focus();
+                }
+            }}
+        >
+            <div
+                className={toolbarClasses}
+                onClick={(e) => e.stopPropagation()}
+            >
                 <button
-                    onClick={() => editor.chain().focus().toggleBold().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleBold().run();
+                    }}
                     className={
                         editor.isActive('bold')
                             ? activeButtonClasses
@@ -193,7 +281,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Bold className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() => editor.chain().focus().toggleItalic().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleItalic().run();
+                    }}
                     className={
                         editor.isActive('italic')
                             ? activeButtonClasses
@@ -205,7 +296,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Italic className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() => editor.chain().focus().toggleStrike().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleStrike().run();
+                    }}
                     className={
                         editor.isActive('strike')
                             ? activeButtonClasses
@@ -217,9 +311,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Strikethrough className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleHeading({ level: 1 }).run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor
+                            .chain()
+                            .focus()
+                            .toggleHeading({ level: 1 })
+                            .run();
+                    }}
                     className={
                         editor.isActive('heading', { level: 1 })
                             ? activeButtonClasses
@@ -231,9 +330,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Heading1 className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleHeading({ level: 2 }).run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor
+                            .chain()
+                            .focus()
+                            .toggleHeading({ level: 2 })
+                            .run();
+                    }}
                     className={
                         editor.isActive('heading', { level: 2 })
                             ? activeButtonClasses
@@ -245,9 +349,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Heading2 className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleBulletList().run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleBulletList().run();
+                    }}
                     className={
                         editor.isActive('bulletList')
                             ? activeButtonClasses
@@ -259,9 +364,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <List className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleOrderedList().run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleOrderedList().run();
+                    }}
                     className={
                         editor.isActive('orderedList')
                             ? activeButtonClasses
@@ -273,9 +379,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <ListOrdered className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleBlockquote().run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleBlockquote().run();
+                    }}
                     className={
                         editor.isActive('blockquote')
                             ? activeButtonClasses
@@ -287,9 +394,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Quote className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() =>
-                        editor.chain().focus().toggleCodeBlock().run()
-                    }
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().toggleCodeBlock().run();
+                    }}
                     className={
                         editor.isActive('codeBlock')
                             ? activeButtonClasses
@@ -301,7 +409,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Code className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={setLink}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setLink();
+                    }}
                     className={
                         editor.isActive('link')
                             ? activeButtonClasses
@@ -313,7 +424,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <LinkIcon className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={addImage}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        addImage();
+                    }}
                     className={buttonClasses}
                     type="button"
                     title="Image"
@@ -321,7 +435,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <ImageIcon className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() => editor.chain().focus().setParagraph().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().setParagraph().run();
+                    }}
                     className={
                         editor.isActive('paragraph')
                             ? activeButtonClasses
@@ -333,7 +450,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Pilcrow className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() => editor.chain().focus().undo().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().undo().run();
+                    }}
                     className={buttonClasses}
                     type="button"
                     title="Undo"
@@ -342,7 +462,10 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     <Undo className="h-4 w-4" />
                 </button>
                 <button
-                    onClick={() => editor.chain().focus().redo().run()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        editor.chain().focus().redo().run();
+                    }}
                     className={buttonClasses}
                     type="button"
                     title="Redo"

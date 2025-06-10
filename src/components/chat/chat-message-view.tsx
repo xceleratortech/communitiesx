@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Send } from 'lucide-react';
+import { Send, ArrowDown } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
@@ -20,7 +20,9 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
     const { data: session } = useSession();
     const [message, setMessage] = useState('');
     const [lastPolled, setLastPolled] = useState<Date>(new Date());
+    const [showScrollButton, setShowScrollButton] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
     // Get thread details to identify participants
@@ -47,11 +49,26 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
         { refetchInterval: 2000 }, // Poll every 2 seconds
     );
 
+    // Check if user is at the bottom of the chat
+    const isAtBottom = () => {
+        if (messagesContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } =
+                messagesContainerRef.current;
+            return scrollHeight - scrollTop - clientHeight < 50; // Within 50px of bottom
+        }
+        return true;
+    };
+
     // Handle new messages
     useEffect(() => {
         if (newMessages && newMessages.length > 0) {
             setLastPolled(new Date());
             refetch();
+
+            // Only auto-scroll if user is already at the bottom
+            if (isAtBottom()) {
+                setTimeout(() => scrollToBottom(true), 50);
+            }
         }
     }, [newMessages, refetch]);
 
@@ -62,7 +79,7 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
             refetch();
             setLastPolled(new Date());
             setTimeout(() => {
-                scrollToBottom();
+                scrollToBottom(true);
                 if (textareaRef.current) {
                     textareaRef.current.focus();
                 }
@@ -149,24 +166,45 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
         }
     };
 
-    // Scroll to bottom of messages
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    // Scroll to bottom of messages (which is now the newest messages)
+    const scrollToBottom = (immediate = false) => {
+        if (messagesContainerRef.current) {
+            const scrollHeight = messagesContainerRef.current.scrollHeight;
+
+            if (immediate) {
+                messagesContainerRef.current.style.scrollBehavior = 'auto';
+                messagesContainerRef.current.scrollTop = scrollHeight;
+                messagesContainerRef.current.style.scrollBehavior = 'smooth';
+            } else {
+                messagesContainerRef.current.scrollTop = scrollHeight;
+            }
+        }
     };
 
-    // Scroll to bottom on initial load and when new messages arrive
+    // Scroll to bottom on initial load
     useEffect(() => {
         if (messagesData && !isLoading) {
-            scrollToBottom();
+            // Use a small timeout to ensure DOM is fully rendered
+            setTimeout(() => scrollToBottom(true), 50);
         }
     }, [messagesData, isLoading]);
 
-    // Also scroll when new messages arrive via polling
+    // Make sure we scroll to bottom on component mount and after resize
     useEffect(() => {
-        if (newMessages && newMessages.length > 0) {
-            scrollToBottom();
-        }
-    }, [newMessages]);
+        scrollToBottom(true);
+
+        // Add a slight delay to ensure everything is rendered and positioned correctly
+        const timer = setTimeout(() => scrollToBottom(true), 300);
+
+        // Also handle window resize events
+        const handleResize = () => scrollToBottom(true);
+        window.addEventListener('resize', handleResize);
+
+        return () => {
+            clearTimeout(timer);
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []);
 
     // Auto-resize textarea
     useEffect(() => {
@@ -185,6 +223,27 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
 
     // Get the other user in the conversation
     const otherUser = getOtherUserData();
+
+    // Check if user has scrolled away from bottom
+    const handleScroll = () => {
+        if (messagesContainerRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } =
+                messagesContainerRef.current;
+            const isScrolledUp = scrollHeight - scrollTop - clientHeight > 100;
+            setShowScrollButton(isScrolledUp);
+        }
+    };
+
+    // Add scroll event listener
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (container) {
+            container.addEventListener('scroll', handleScroll);
+            return () => {
+                container.removeEventListener('scroll', handleScroll);
+            };
+        }
+    }, []);
 
     return (
         <div className="flex h-full w-full flex-col">
@@ -220,9 +279,24 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
             </div>
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4">
+            <div
+                ref={messagesContainerRef}
+                className="relative flex-1 overflow-y-auto scroll-smooth p-4"
+                style={{ scrollbarGutter: 'stable' }}
+            >
+                {/* Scroll to bottom button */}
+                {showScrollButton && (
+                    <Button
+                        size="icon"
+                        className="absolute right-4 bottom-4 z-10 rounded-full shadow-md"
+                        onClick={() => scrollToBottom(true)}
+                    >
+                        <ArrowDown className="h-4 w-4" />
+                    </Button>
+                )}
+
                 {isLoading ? (
-                    <div className="space-y-4">
+                    <div className="flex flex-col space-y-4">
                         {Array(5)
                             .fill(0)
                             .map((_, i) => (
@@ -252,7 +326,7 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
                     </div>
                 ) : messagesData?.messages &&
                   messagesData.messages.length > 0 ? (
-                    <div className="space-y-4">
+                    <div className="flex min-h-full flex-col space-y-4">
                         {messagesData.messages.map((msg) => {
                             const isCurrentUser =
                                 msg.senderId === session?.user?.id;

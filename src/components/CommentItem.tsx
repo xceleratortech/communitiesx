@@ -186,7 +186,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                         </p>
                                     ) : (
                                         <div
-                                            className="prose prose-sm dark:prose-invert dark:prose-headings:text-gray-100 dark:prose-a:text-blue-400 mb-2 max-w-none break-words dark:text-gray-100"
+                                            className="prose prose-sm dark:prose-invert dark:prose-headings:text-gray-100 dark:prose-a:text-blue-400 mb-2 max-w-none break-words whitespace-pre-wrap dark:text-gray-100"
                                             dangerouslySetInnerHTML={{
                                                 __html: comment.content,
                                             }}

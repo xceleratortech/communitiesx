@@ -1145,10 +1145,11 @@ export const communitiesRouter = router({
                 },
             });
 
-            // Extract just the communities from the memberships
-            const userCommunities = userMemberships.map(
-                (membership) => membership.community,
-            );
+            // Return communities with role information
+            const userCommunities = userMemberships.map((membership) => ({
+                ...membership.community,
+                userRole: membership.role,
+            }));
 
             return userCommunities;
         } catch (error) {

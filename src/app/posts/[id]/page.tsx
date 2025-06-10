@@ -164,7 +164,7 @@ export default function PostPage() {
         if (!editedCommentContent.trim()) return;
         updateCommentMutation.mutate({
             commentId,
-            content: editedCommentContent.trim(),
+            content: editedCommentContent,
         });
     };
 
@@ -175,7 +175,7 @@ export default function PostPage() {
         try {
             await createComment.mutate({
                 postId,
-                content: comment.trim(),
+                content: comment,
             });
 
             // Explicitly clear the comment state after submission
@@ -201,7 +201,7 @@ export default function PostPage() {
 
         await createComment.mutate({
             postId,
-            content: replyContent.trim(),
+            content: replyContent,
             parentId, // Include parentId when creating a reply
         });
     };
@@ -293,6 +293,7 @@ export default function PostPage() {
                         </div>
                     ) : (
                         <div
+                            className="whitespace-pre-wrap"
                             dangerouslySetInnerHTML={{
                                 __html: postData.content,
                             }}
