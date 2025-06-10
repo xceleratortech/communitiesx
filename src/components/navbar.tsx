@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Globe, Menu, X } from 'lucide-react';
 import { ChatButton } from '@/components/chat-button';
+import { useChat } from '@/providers/chat-provider';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -15,6 +16,7 @@ export function Navbar() {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const { closeChat } = useChat();
 
     // Set mounted state to true after hydration
     useEffect(() => {
@@ -22,6 +24,8 @@ export function Navbar() {
     }, []);
 
     const handleSignOut = async () => {
+        // Close chat drawer before signing out
+        closeChat();
         await signOut();
         router.push('/');
     };
@@ -208,6 +212,7 @@ export function Navbar() {
                                     </p>
                                     <button
                                         onClick={() => {
+                                            closeChat();
                                             handleSignOut();
                                             setMobileMenuOpen(false);
                                         }}
