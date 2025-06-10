@@ -869,10 +869,12 @@ export const communityRouter = router({
 
             const totalPosts = postsResult[0]?.count || 0;
 
-            // Count total communities (orgs) in the database
-            const orgsResult = await db.select({ count: count() }).from(orgs);
+            // Count total communities in the database
+            const communitiesResult = await db
+                .select({ count: count() })
+                .from(communities);
 
-            const totalCommunities = orgsResult[0]?.count || 0;
+            const totalCommunities = communitiesResult[0]?.count || 0;
 
             return {
                 totalUsers,

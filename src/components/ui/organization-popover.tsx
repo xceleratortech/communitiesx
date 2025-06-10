@@ -8,7 +8,13 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, FileText, MessageSquare } from 'lucide-react';
+import {
+    Users,
+    FileText,
+    MessageSquare,
+    Mail,
+    ShieldCheck,
+} from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface OrganizationPopoverProps {
@@ -148,6 +154,29 @@ export function OrganizationPopover({
                                 </span>
                             </div>
                         </div>
+
+                        {/* Admin section */}
+                        {orgDetails.admins && orgDetails.admins.length > 0 && (
+                            <div className="border-t px-4 py-3">
+                                <h4 className="mb-2 flex items-center text-sm font-medium">
+                                    <ShieldCheck className="mr-1.5 h-4 w-4" />
+                                    Organization Admins
+                                </h4>
+                                <div className="space-y-2">
+                                    {orgDetails.admins.map((admin) => (
+                                        <div
+                                            key={admin.id}
+                                            className="flex items-center text-sm"
+                                        >
+                                            <Mail className="text-muted-foreground mr-2 h-3.5 w-3.5" />
+                                            <span className="text-muted-foreground text-xs">
+                                                {admin.email}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ) : (
                     <div className="p-4 text-center">

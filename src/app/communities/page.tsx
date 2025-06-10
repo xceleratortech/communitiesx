@@ -14,7 +14,17 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Globe, Lock, Users, Eye, MessageSquare } from 'lucide-react';
+import {
+    Globe,
+    Lock,
+    Users,
+    Eye,
+    MessageSquare,
+    Building,
+    Mail,
+    CalendarDays,
+    ShieldCheck,
+} from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +68,28 @@ export default function CommunitiesPage() {
             enabled: !!session,
         },
     );
+
+    // Get organization details for the sidebar
+    const { data: userProfile, isLoading: isLoadingProfile } =
+        trpc.users.getUserProfile.useQuery(
+            { userId: session?.user?.id || '' },
+            {
+                enabled: !!session?.user?.id,
+            },
+        );
+
+    // Get organization stats
+    const { data: orgStats, isLoading: isLoadingStats } =
+        trpc.community.getStats.useQuery(undefined, {
+            enabled: !!session,
+        });
+
+    // Get organization admins
+    const { data: orgAdmins, isLoading: isLoadingAdmins } =
+        trpc.community.getAdmins.useQuery(undefined, {
+            enabled: !!session,
+        });
+
     const [activeTab, setActiveTab] = useState('all');
 
     // Use client-side flag to avoid hydration mismatch
@@ -100,127 +132,280 @@ export default function CommunitiesPage() {
         <div className="py-8">
             <div className="mb-0 flex items-center justify-between">
                 <div>
-                    {/* <h1 className="text-3xl font-bold tracking-tight">
-                        Communities
-                    </h1> */}
                     <p className="text-muted-foreground mt-0 mb-2">
                         Discover and join communities based on your interests
                     </p>
                 </div>
             </div>
 
-            <Tabs
-                defaultValue="all"
-                className="w-full"
-                onValueChange={setActiveTab}
-            >
-                <div className="mb-6 flex items-center justify-between">
-                    <TabsList>
-                        <TabsTrigger value="all">All Communities</TabsTrigger>
-                        <TabsTrigger value="my">My Communities</TabsTrigger>
-                        <TabsTrigger value="popular">Popular</TabsTrigger>
-                    </TabsList>
-                    <Button asChild>
-                        <Link href="/communities/new">Create Community</Link>
-                    </Button>
+            <div className="flex flex-col gap-6 lg:flex-row">
+                {/* Main content area - 70% on desktop, full width on mobile */}
+                <div className="w-full lg:w-[70%]">
+                    <Tabs
+                        defaultValue="all"
+                        className="w-full"
+                        onValueChange={setActiveTab}
+                    >
+                        <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center sm:gap-0">
+                            <TabsList className="w-full sm:w-auto">
+                                <TabsTrigger value="all">
+                                    All Communities
+                                </TabsTrigger>
+                                <TabsTrigger value="my">
+                                    My Communities
+                                </TabsTrigger>
+                                <TabsTrigger value="popular">
+                                    Popular
+                                </TabsTrigger>
+                            </TabsList>
+                            <Button asChild className="w-full sm:w-auto">
+                                <Link href="/communities/new">
+                                    Create Community
+                                </Link>
+                            </Button>
+                        </div>
+
+                        <TabsContent value="all" className="space-y-4">
+                            {isLoading ? (
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {Array(3)
+                                        .fill(0)
+                                        .map((_, i) => (
+                                            <CommunityCardSkeleton key={i} />
+                                        ))}
+                                </div>
+                            ) : communities?.length ? (
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {communities.map((community: any) => (
+                                        <CommunityCard
+                                            key={community.id}
+                                            community={community as Community}
+                                        />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="py-12 text-center">
+                                    <h3 className="text-lg font-medium">
+                                        No communities found
+                                    </h3>
+                                    <p className="text-muted-foreground mt-2">
+                                        Be the first to create a community!
+                                    </p>
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="my">
+                            {isLoading ? (
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {Array(2)
+                                        .fill(0)
+                                        .map((_, i) => (
+                                            <CommunityCardSkeleton key={i} />
+                                        ))}
+                                </div>
+                            ) : communities?.filter((c: any) =>
+                                  c.members?.some(
+                                      (m: any) => m.userId === session.user.id,
+                                  ),
+                              )?.length ? (
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {communities
+                                        .filter((c: any) =>
+                                            c.members?.some(
+                                                (m: any) =>
+                                                    m.userId ===
+                                                    session.user.id,
+                                            ),
+                                        )
+                                        .map((community: any) => (
+                                            <CommunityCard
+                                                key={community.id}
+                                                community={
+                                                    community as Community
+                                                }
+                                            />
+                                        ))}
+                                </div>
+                            ) : (
+                                <div className="py-12 text-center">
+                                    <h3 className="text-lg font-medium">
+                                        You haven't joined any communities yet
+                                    </h3>
+                                    <p className="text-muted-foreground mt-2">
+                                        Browse the communities and join ones
+                                        that interest you
+                                    </p>
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        <TabsContent value="popular">
+                            {isLoading ? (
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {Array(3)
+                                        .fill(0)
+                                        .map((_, i) => (
+                                            <CommunityCardSkeleton key={i} />
+                                        ))}
+                                </div>
+                            ) : communities?.length ? (
+                                // Sort by member count and slice to top 5
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    {[...communities]
+                                        .sort(
+                                            (a: any, b: any) =>
+                                                (b.members?.length || 0) -
+                                                (a.members?.length || 0),
+                                        )
+                                        .slice(0, 6)
+                                        .map((community: any) => (
+                                            <CommunityCard
+                                                key={community.id}
+                                                community={
+                                                    community as Community
+                                                }
+                                            />
+                                        ))}
+                                </div>
+                            ) : (
+                                <div className="py-12 text-center">
+                                    <h3 className="text-lg font-medium">
+                                        No communities found
+                                    </h3>
+                                    <p className="text-muted-foreground mt-2">
+                                        Be the first to create a community!
+                                    </p>
+                                </div>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
-                <TabsContent value="all" className="space-y-4">
-                    {isLoading ? (
-                        Array(3)
-                            .fill(0)
-                            .map((_, i) => <CommunityCardSkeleton key={i} />)
-                    ) : communities?.length ? (
-                        communities.map((community: any) => (
-                            <CommunityCard
-                                key={community.id}
-                                community={community as Community}
-                            />
-                        ))
-                    ) : (
-                        <div className="py-12 text-center">
-                            <h3 className="text-lg font-medium">
-                                No communities found
-                            </h3>
-                            <p className="text-muted-foreground mt-2">
-                                Be the first to create a community!
-                            </p>
-                        </div>
-                    )}
-                </TabsContent>
+                {/* Organization sidebar - 30% on desktop, full width on mobile */}
+                <div className="mt-6 w-full lg:mt-0 lg:w-[30%]">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Building className="h-5 w-5" />
+                                Organization
+                            </CardTitle>
+                            <CardDescription>
+                                Your organization information
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {isLoadingProfile ? (
+                                <div className="space-y-3">
+                                    <Skeleton className="h-6 w-40" />
+                                    <Skeleton className="h-5 w-32" />
+                                    <Skeleton className="h-5 w-36" />
+                                </div>
+                            ) : userProfile ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3">
+                                        <Avatar className="h-12 w-12">
+                                            <AvatarFallback className="bg-primary/10">
+                                                {userProfile.orgName
+                                                    ?.substring(0, 2)
+                                                    .toUpperCase() || 'OR'}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div>
+                                            <h3 className="font-medium">
+                                                {userProfile.orgName}
+                                            </h3>
+                                            <p className="text-muted-foreground text-sm">
+                                                Organization
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="pt-2">
+                                        <p className="text-muted-foreground flex items-center gap-2 text-sm">
+                                            <Mail className="h-4 w-4" />
+                                            {userProfile.email}
+                                        </p>
+                                        <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
+                                            <CalendarDays className="h-4 w-4" />
+                                            Joined as member
+                                        </p>
+                                    </div>
 
-                <TabsContent value="my">
-                    <div className="space-y-4">
-                        {isLoading ? (
-                            Array(2)
-                                .fill(0)
-                                .map((_, i) => (
-                                    <CommunityCardSkeleton key={i} />
-                                ))
-                        ) : communities?.filter((c: any) =>
-                              c.members?.some(
-                                  (m: any) => m.userId === session.user.id,
-                              ),
-                          )?.length ? (
-                            communities
-                                .filter((c: any) =>
-                                    c.members?.some(
-                                        (m: any) =>
-                                            m.userId === session.user.id,
-                                    ),
-                                )
-                                .map((community: any) => (
-                                    <CommunityCard
-                                        key={community.id}
-                                        community={community as Community}
-                                    />
-                                ))
-                        ) : (
-                            <div className="py-12 text-center">
-                                <h3 className="text-lg font-medium">
-                                    You haven't joined any communities yet
-                                </h3>
-                                <p className="text-muted-foreground mt-2">
-                                    Browse the communities and join ones that
-                                    interest you
+                                    {/* Admin emails section */}
+                                    {orgAdmins && orgAdmins.length > 0 && (
+                                        <div className="mt-3 border-t pt-2">
+                                            <h4 className="mb-2 flex items-center text-sm font-medium">
+                                                <ShieldCheck className="mr-1.5 h-4 w-4" />
+                                                Admin Contacts
+                                            </h4>
+                                            <div className="space-y-1">
+                                                {orgAdmins.map((admin) => (
+                                                    <p
+                                                        key={admin.id}
+                                                        className="text-muted-foreground flex items-center gap-2 text-xs"
+                                                    >
+                                                        <Mail className="h-3 w-3" />
+                                                        {admin.email}
+                                                    </p>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">
+                                    Unable to load organization details
                                 </p>
-                            </div>
-                        )}
-                    </div>
-                </TabsContent>
-
-                <TabsContent value="popular">
-                    {isLoading ? (
-                        Array(3)
-                            .fill(0)
-                            .map((_, i) => <CommunityCardSkeleton key={i} />)
-                    ) : communities?.length ? (
-                        // Sort by member count and slice to top 5
-                        [...communities]
-                            .sort(
-                                (a: any, b: any) =>
-                                    (b.members?.length || 0) -
-                                    (a.members?.length || 0),
-                            )
-                            .slice(0, 5)
-                            .map((community: any) => (
-                                <CommunityCard
-                                    key={community.id}
-                                    community={community as Community}
-                                />
-                            ))
-                    ) : (
-                        <div className="py-12 text-center">
-                            <h3 className="text-lg font-medium">
-                                No communities found
-                            </h3>
-                            <p className="text-muted-foreground mt-2">
-                                Be the first to create a community!
-                            </p>
-                        </div>
-                    )}
-                </TabsContent>
-            </Tabs>
+                            )}
+                        </CardContent>
+                        <CardHeader className="border-t pt-4">
+                            <CardTitle className="text-lg">
+                                Statistics
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {isLoadingStats ? (
+                                <div className="space-y-2">
+                                    <Skeleton className="h-5 w-28" />
+                                    <Skeleton className="h-5 w-24" />
+                                    <Skeleton className="h-5 w-32" />
+                                </div>
+                            ) : orgStats ? (
+                                <div className="space-y-2">
+                                    <p className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">
+                                            Members:
+                                        </span>
+                                        <span className="font-medium">
+                                            {orgStats.totalUsers}
+                                        </span>
+                                    </p>
+                                    <p className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">
+                                            Posts:
+                                        </span>
+                                        <span className="font-medium">
+                                            {orgStats.totalPosts}
+                                        </span>
+                                    </p>
+                                    <p className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">
+                                            Communities:
+                                        </span>
+                                        <span className="font-medium">
+                                            {orgStats.totalCommunities}
+                                        </span>
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-muted-foreground">
+                                    Unable to load statistics
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </div>
     );
 }
@@ -231,8 +416,8 @@ interface CommunityCardProps {
 
 function CommunityCard({ community }: CommunityCardProps) {
     return (
-        <Card className="overflow-hidden transition-all hover:shadow-md">
-            <div className="relative h-24 w-full bg-gradient-to-r from-blue-400 to-blue-600">
+        <Card className="flex h-full flex-col overflow-hidden transition-all hover:shadow-md">
+            <div className="relative h-24 w-full bg-gray-400">
                 {community.banner && (
                     <img
                         src={community.banner}
@@ -264,7 +449,7 @@ function CommunityCard({ community }: CommunityCardProps) {
                                 <Globe className="text-muted-foreground h-4 w-4" />
                             )}
                         </CardTitle>
-                        <CardDescription className="mt-2">
+                        <CardDescription className="mt-2 line-clamp-2">
                             {community.description}
                         </CardDescription>
                     </div>
@@ -302,7 +487,7 @@ function CommunityCard({ community }: CommunityCardProps) {
                 </div>
             </CardContent>
 
-            <CardFooter className="text-muted-foreground pt-2 pb-4 text-xs">
+            <CardFooter className="text-muted-foreground mt-auto pt-2 pb-4 text-xs">
                 Created {new Date(community.createdAt).toLocaleDateString()}
             </CardFooter>
         </Card>
@@ -311,7 +496,7 @@ function CommunityCard({ community }: CommunityCardProps) {
 
 function CommunityCardSkeleton() {
     return (
-        <Card className="overflow-hidden">
+        <Card className="flex h-full flex-col overflow-hidden">
             <div className="bg-muted h-24 w-full" />
             <div className="absolute -mt-10 ml-4">
                 <Skeleton className="h-20 w-20 rounded-full" />
@@ -335,7 +520,7 @@ function CommunityCardSkeleton() {
                 </div>
             </CardContent>
 
-            <CardFooter className="pt-2 pb-4">
+            <CardFooter className="mt-auto pt-2 pb-4">
                 <Skeleton className="h-4 w-32" />
             </CardFooter>
         </Card>
@@ -354,14 +539,43 @@ function CommunitiesPageSkeleton() {
                 <Skeleton className="h-10 w-36" />
             </div>
 
-            <Skeleton className="mb-6 h-10 w-80" />
+            <Skeleton className="mb-6 h-10 w-full sm:w-80" />
 
-            <div className="space-y-4">
-                {Array(3)
-                    .fill(0)
-                    .map((_, i) => (
-                        <CommunityCardSkeleton key={i} />
-                    ))}
+            <div className="flex flex-col gap-6 lg:flex-row">
+                <div className="w-full lg:w-[70%]">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        {Array(6)
+                            .fill(0)
+                            .map((_, i) => (
+                                <CommunityCardSkeleton key={i} />
+                            ))}
+                    </div>
+                </div>
+                <div className="mt-6 w-full lg:mt-0 lg:w-[30%]">
+                    <Card>
+                        <CardHeader>
+                            <Skeleton className="h-6 w-40" />
+                            <Skeleton className="h-4 w-60" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-3">
+                                <Skeleton className="h-12 w-12 rounded-full" />
+                                <Skeleton className="h-5 w-32" />
+                                <Skeleton className="h-5 w-36" />
+                            </div>
+                        </CardContent>
+                        <CardHeader className="border-t">
+                            <Skeleton className="h-6 w-24" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-2">
+                                <Skeleton className="h-5 w-full" />
+                                <Skeleton className="h-5 w-full" />
+                                <Skeleton className="h-5 w-full" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
         </div>
     );
