@@ -137,7 +137,7 @@ export const communityRouter = router({
                     const [post] = await db
                         .insert(posts)
                         .values({
-                            title: input.title,
+                            title: input.title.trim(),
                             content: input.content,
                             authorId: ctx.session.user.id,
                             orgId: orgId,
