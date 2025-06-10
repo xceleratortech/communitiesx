@@ -51,6 +51,11 @@ type UserFromDb = typeof users.$inferSelect;
 type CommunityFromDb = typeof communities.$inferSelect;
 type CommentFromDb = typeof comments.$inferSelect;
 
+// Extended community type that includes user role
+type UserCommunity = typeof communities.$inferSelect & {
+    userRole?: 'admin' | 'moderator' | 'member' | 'follower';
+};
+
 type PostDisplay = PostFromDb & {
     author:
         | (UserFromDb & {
@@ -308,7 +313,8 @@ export default function PostsPage() {
         activeToday: 0,
     };
     const admins = adminsQuery.data || [];
-    const userCommunities = userCommunitiesQuery.data || [];
+    const userCommunities =
+        userCommunitiesQuery.data || ([] as UserCommunity[]);
 
     // Helper function to get initials from name
     const getInitials = (name: string) => {
@@ -831,9 +837,31 @@ export default function PostsPage() {
                                                             .toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <span className="text-sm font-medium dark:text-white">
-                                                    {community.name}
-                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-sm font-medium dark:text-white">
+                                                        {community.name}
+                                                    </span>
+                                                    {(community.userRole ===
+                                                        'admin' ||
+                                                        community.userRole ===
+                                                            'moderator') && (
+                                                        <div
+                                                            className={`flex items-center rounded-full px-1.5 py-0.5 text-xs ${
+                                                                community.userRole ===
+                                                                'admin'
+                                                                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                                                                    : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                                            }`}
+                                                            title={`You are a ${community.userRole}`}
+                                                        >
+                                                            <ShieldCheck className="mr-0.5 h-3 w-3" />
+                                                            {community.userRole ===
+                                                            'admin'
+                                                                ? 'Admin'
+                                                                : 'Mod'}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </Link>
                                         ))}
                                         <div className="mt-2 px-2">
