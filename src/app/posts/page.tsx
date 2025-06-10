@@ -21,6 +21,10 @@ import {
     PlusCircleIcon,
     MessageSquare,
     Loader2,
+    Building,
+    Mail,
+    CalendarDays,
+    ShieldCheck,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { posts, users, communities, comments } from '@/server/db/schema';
@@ -38,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { CardDescription } from '@/components/ui/card';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -256,6 +261,14 @@ export default function PostsPage() {
         },
     );
 
+    // Get user profile with organization info
+    const userProfileQuery = trpc.users.getUserProfile.useQuery(
+        { userId: session?.user?.id || '' },
+        {
+            enabled: !!session?.user?.id,
+        },
+    );
+
     const deletePostMutation = trpc.community.deletePost.useMutation({
         onSuccess: () => {
             // Reset pagination and refetch
@@ -334,6 +347,13 @@ export default function PostsPage() {
     useEffect(() => {
         setIsClient(true);
     }, []);
+
+    // Separate effect for stats invalidation
+    useEffect(() => {
+        if (isClient) {
+            utils.community.getStats.invalidate();
+        }
+    }, [isClient, utils.community.getStats]);
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
@@ -678,12 +698,6 @@ export default function PostsPage() {
                 <div className="mb-4 flex flex-col items-center justify-between sm:flex-row">
                     {/* Filter dropdown - replaced with shadcn Select */}
                     <div className="flex items-center">
-                        <label
-                            htmlFor="community-filter"
-                            className="mr-2 text-sm text-gray-600 dark:text-gray-300"
-                        >
-                            Filter:
-                        </label>
                         <Select
                             value={selectedCommunity}
                             onValueChange={(value) =>
@@ -772,241 +786,201 @@ export default function PostsPage() {
                 {/* Right sidebar */}
                 <div className="w-full shrink-0 md:w-80 lg:w-96">
                     <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
-                        {/* Site info section */}
-                        <div className="flex flex-col space-y-4 pb-6">
-                            {/* Community name and logo */}
-                            <div className="mb-2 flex items-center space-x-3">
-                                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800">
-                                    <span className="text-xl font-bold dark:text-white">
-                                        C
-                                    </span>
-                                </div>
-                                <div>
-                                    <h3 className="font-semibold dark:text-white">
-                                        communities
-                                    </h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                                        communities.app
-                                    </p>
-                                </div>
-                            </div>
-
-                            {/* About Section - Collapsible */}
+                        {/* Your Communities Section */}
+                        {userCommunities.length > 0 ? (
                             <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
-                                <button
-                                    onClick={() => setAboutOpen(!aboutOpen)}
-                                    className="flex w-full items-center justify-between bg-gray-50 px-4 py-3 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-                                >
+                                <div className="bg-gray-50 px-4 py-3 dark:bg-gray-800">
                                     <span className="font-medium dark:text-white">
-                                        About
+                                        Your Community
                                     </span>
-                                    {aboutOpen ? (
-                                        <ChevronUp
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    ) : (
-                                        <ChevronDown
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    )}
-                                </button>
+                                </div>
 
-                                {aboutOpen && (
-                                    <div className="space-y-4 p-4 dark:bg-gray-900">
-                                        <div>
-                                            <h4 className="mb-2 font-medium dark:text-white">
-                                                About this site
-                                            </h4>
-                                            <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                                                General-purpose Community
-                                                instance. New users and
-                                                communities welcome!
-                                            </p>
-
-                                            <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-gray-400">
-                                                <li>
-                                                    Sign-ups are via invite only
-                                                </li>
-                                                <li>
-                                                    E-mail verification is
-                                                    required
-                                                </li>
-                                                <li>
-                                                    User community creation is
-                                                    enabled
-                                                </li>
-                                                <li>
-                                                    For now Image/Video upload
-                                                    is disabled
-                                                </li>
-                                                <li>
-                                                    We have a{' '}
-                                                    <Link
-                                                        href="/"
-                                                        className="text-blue-600 hover:underline dark:text-blue-400"
-                                                    >
-                                                        policy for
-                                                        administration,
-                                                        moderation, and
-                                                        federation
-                                                    </Link>
-                                                </li>
-                                            </ul>
+                                {userCommunitiesQuery.isLoading ? (
+                                    <div className="p-4 dark:bg-gray-900">
+                                        <div className="space-y-3">
+                                            {[1, 2, 3].map((i) => (
+                                                <div
+                                                    key={i}
+                                                    className="flex items-center space-x-3"
+                                                >
+                                                    <Skeleton className="h-8 w-8 rounded-full" />
+                                                    <Skeleton className="h-4 w-40" />
+                                                </div>
+                                            ))}
                                         </div>
-
-                                        <div>
-                                            <h4 className="mb-2 font-medium dark:text-white">
-                                                Rules are simple:
-                                            </h4>
-                                            <ul className="list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-gray-400">
-                                                <li>No abusive language</li>
-                                                <li>
-                                                    Be respectful to other
-                                                    members
-                                                </li>
-                                                <li>
-                                                    No spam or self-promotion
-                                                </li>
-                                                <li>
-                                                    Follow community-specific
-                                                    guidelines
-                                                </li>
-                                            </ul>
+                                    </div>
+                                ) : (
+                                    <div className="p-2 dark:bg-gray-900">
+                                        {userCommunities.map((community) => (
+                                            <Link
+                                                key={community.id}
+                                                href={`/communities/${community.slug}`}
+                                                className="flex items-center space-x-3 rounded-md p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                                            >
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage
+                                                        src={
+                                                            community.avatar ||
+                                                            undefined
+                                                        }
+                                                        alt={community.name}
+                                                    />
+                                                    <AvatarFallback className="bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                                        {community.name
+                                                            .substring(0, 2)
+                                                            .toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span className="text-sm font-medium dark:text-white">
+                                                    {community.name}
+                                                </span>
+                                            </Link>
+                                        ))}
+                                        <div className="mt-2 px-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full"
+                                                asChild
+                                            >
+                                                <Link href="/communities">
+                                                    Browse Communities
+                                                </Link>
+                                            </Button>
                                         </div>
                                     </div>
                                 )}
                             </div>
-
-                            {/* Statistics Section - Collapsible */}
-                            <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
-                                <button
-                                    onClick={() => setStatsOpen(!statsOpen)}
-                                    className="flex w-full items-center justify-between bg-gray-50 px-4 py-3 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-                                >
-                                    <span className="font-medium dark:text-white">
-                                        Statistics
-                                    </span>
-                                    {statsOpen ? (
-                                        <ChevronUp
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    ) : (
-                                        <ChevronDown
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    )}
-                                </button>
-
-                                {statsOpen && (
-                                    <div className="p-4 dark:bg-gray-900">
-                                        <ul className="space-y-2 text-sm">
-                                            <li className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">
-                                                    Total users:
-                                                </span>
-                                                <span className="font-medium dark:text-white">
-                                                    {statsQuery.isLoading
-                                                        ? '...'
-                                                        : stats.totalUsers}
-                                                </span>
-                                            </li>
-                                            <li className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">
-                                                    Total posts:
-                                                </span>
-                                                <span className="font-medium dark:text-white">
-                                                    {statsQuery.isLoading
-                                                        ? '...'
-                                                        : stats.totalPosts}
-                                                </span>
-                                            </li>
-                                            <li className="flex justify-between">
-                                                <span className="text-gray-600 dark:text-gray-400">
-                                                    Total communities:
-                                                </span>
-                                                <span className="font-medium dark:text-white">
-                                                    {statsQuery.isLoading
-                                                        ? '...'
-                                                        : stats.totalCommunities}
-                                                </span>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Admins Section - Collapsible */}
-                            <div className="overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
-                                <button
-                                    onClick={() => setAdminsOpen(!adminsOpen)}
-                                    className="flex w-full items-center justify-between bg-gray-50 px-4 py-3 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-                                >
-                                    <span className="font-medium dark:text-white">
-                                        Admins
-                                    </span>
-                                    {adminsOpen ? (
-                                        <ChevronUp
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    ) : (
-                                        <ChevronDown
-                                            size={18}
-                                            className="dark:text-gray-400"
-                                        />
-                                    )}
-                                </button>
-
-                                {adminsOpen && (
-                                    <div className="p-4 dark:bg-gray-900">
-                                        {adminsQuery.isLoading ? (
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                Loading admins...
-                                            </p>
-                                        ) : admins.length === 0 ? (
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                No admins found
-                                            </p>
-                                        ) : (
-                                            <div className="space-y-3">
-                                                {admins.map((admin) => {
-                                                    const color = getUserColor(
-                                                        admin.id,
-                                                    );
-                                                    const initials =
-                                                        getInitials(admin.name);
-
-                                                    // For demo purposes, add version number to first admin
-                                                    const showVersion =
-                                                        admin.id ===
-                                                        admins[0].id;
-
-                                                    return (
-                                                        <div
-                                                            key={admin.id}
-                                                            className="flex items-center space-x-2"
-                                                        >
-                                                            <div
-                                                                className={`h-8 w-8 ${color.bg} flex items-center justify-center rounded-full ${color.text}`}
-                                                            >
-                                                                {initials}
-                                                            </div>
-                                                            <span className="text-sm dark:text-gray-300">
-                                                                {admin.name}
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                })}
+                        ) : (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Building className="h-5 w-5" />
+                                        Organization
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Your organization information
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {userProfileQuery.isLoading ? (
+                                        <div className="space-y-3">
+                                            <Skeleton className="h-6 w-40" />
+                                            <Skeleton className="h-5 w-32" />
+                                            <Skeleton className="h-5 w-36" />
+                                        </div>
+                                    ) : userProfileQuery.data ? (
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-12 w-12">
+                                                    <AvatarFallback className="bg-primary/10">
+                                                        {getInitials(
+                                                            userProfileQuery
+                                                                .data
+                                                                ?.orgName ||
+                                                                'OR',
+                                                        )}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <h3 className="font-medium">
+                                                        {userProfileQuery.data
+                                                            ?.orgName ||
+                                                            'Organization'}
+                                                    </h3>
+                                                    <p className="text-muted-foreground text-sm">
+                                                        Organization
+                                                    </p>
+                                                </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                                            <div className="pt-2">
+                                                <p className="text-muted-foreground flex items-center gap-2 text-sm">
+                                                    <Mail className="h-4 w-4" />
+                                                    {
+                                                        userProfileQuery.data
+                                                            ?.email
+                                                    }
+                                                </p>
+                                                <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
+                                                    <CalendarDays className="h-4 w-4" />
+                                                    Joined as member
+                                                </p>
+                                            </div>
+
+                                            {/* Admin emails section */}
+                                            {admins && admins.length > 0 && (
+                                                <div className="mt-3 border-t pt-2">
+                                                    <h4 className="mb-2 flex items-center text-sm font-medium">
+                                                        <ShieldCheck className="mr-1.5 h-4 w-4" />
+                                                        Admin Contacts
+                                                    </h4>
+                                                    <div className="space-y-1">
+                                                        {admins.map((admin) => (
+                                                            <p
+                                                                key={admin.id}
+                                                                className="text-muted-foreground flex items-center gap-2 text-xs"
+                                                            >
+                                                                <Mail className="h-3 w-3" />
+                                                                {admin.email}
+                                                            </p>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted-foreground">
+                                            Unable to load organization details
+                                        </p>
+                                    )}
+                                </CardContent>
+                                <CardHeader className="border-t pt-4">
+                                    <CardTitle className="text-lg">
+                                        Statistics
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {statsQuery.isLoading ? (
+                                        <div className="space-y-2">
+                                            <Skeleton className="h-5 w-28" />
+                                            <Skeleton className="h-5 w-24" />
+                                            <Skeleton className="h-5 w-32" />
+                                        </div>
+                                    ) : stats ? (
+                                        <div className="space-y-2">
+                                            <p className="flex items-center justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Members:
+                                                </span>
+                                                <span className="font-medium">
+                                                    {stats.totalUsers}
+                                                </span>
+                                            </p>
+                                            <p className="flex items-center justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Posts:
+                                                </span>
+                                                <span className="font-medium">
+                                                    {stats.totalPosts}
+                                                </span>
+                                            </p>
+                                            <p className="flex items-center justify-between">
+                                                <span className="text-muted-foreground">
+                                                    Communities:
+                                                </span>
+                                                <span className="font-medium">
+                                                    {stats.totalCommunities}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted-foreground">
+                                            Unable to load statistics
+                                        </p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                 </div>
             </div>
