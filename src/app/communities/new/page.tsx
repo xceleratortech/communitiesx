@@ -30,7 +30,7 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form';
-import { ArrowLeft, Globe, Lock } from 'lucide-react';
+import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -71,6 +71,16 @@ const formSchema = z.object({
             message: 'Rules must not exceed 2000 characters.',
         })
         .optional(),
+    avatar: z
+        .string()
+        .url({ message: 'Please enter a valid URL' })
+        .optional()
+        .nullable(),
+    banner: z
+        .string()
+        .url({ message: 'Please enter a valid URL' })
+        .optional()
+        .nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -108,6 +118,8 @@ export default function NewCommunityPage() {
             description: '',
             type: 'public',
             rules: '',
+            avatar: '',
+            banner: '',
         },
     });
 
@@ -125,6 +137,8 @@ export default function NewCommunityPage() {
             description: values.description || null,
             type: values.type,
             rules: values.rules || null,
+            avatar: values.avatar || null,
+            banner: values.banner || null,
         });
     };
 
@@ -367,6 +381,60 @@ export default function NewCommunityPage() {
                                 )}
                             />
 
+                            <FormField
+                                control={form.control}
+                                name="avatar"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>
+                                            Community Avatar URL (Optional)
+                                        </FormLabel>
+                                        <FormControl>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    placeholder="https://example.com/avatar.png"
+                                                    {...field}
+                                                    value={field.value || ''}
+                                                />
+                                                <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                            </div>
+                                        </FormControl>
+                                        <FormDescription>
+                                            URL to an image for your community
+                                            avatar
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
+                            <FormField
+                                control={form.control}
+                                name="banner"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>
+                                            Community Banner URL (Optional)
+                                        </FormLabel>
+                                        <FormControl>
+                                            <div className="flex items-center gap-2">
+                                                <Input
+                                                    placeholder="https://example.com/banner.png"
+                                                    {...field}
+                                                    value={field.value || ''}
+                                                />
+                                                <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                            </div>
+                                        </FormControl>
+                                        <FormDescription>
+                                            URL to an image for your community
+                                            banner
+                                        </FormDescription>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+
                             <div className="pt-4">
                                 <Button
                                     type="submit"
@@ -432,6 +500,18 @@ function NewCommunityPageSkeleton() {
                         <div className="space-y-2">
                             <Skeleton className="h-5 w-40" />
                             <Skeleton className="h-32 w-full" />
+                            <Skeleton className="h-4 w-56" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Skeleton className="h-5 w-40" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-4 w-56" />
+                        </div>
+
+                        <div className="space-y-2">
+                            <Skeleton className="h-5 w-40" />
+                            <Skeleton className="h-10 w-full" />
                             <Skeleton className="h-4 w-56" />
                         </div>
 

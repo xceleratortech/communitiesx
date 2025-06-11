@@ -942,6 +942,8 @@ export const communityRouter = router({
                 description: z.string().max(500).nullable(),
                 type: z.enum(['public', 'private']),
                 rules: z.string().max(2000).nullable(),
+                avatar: z.string().nullable(),
+                banner: z.string().nullable(),
             }),
         )
         .mutation(
@@ -955,6 +957,8 @@ export const communityRouter = router({
                     description: string | null;
                     type: 'public' | 'private';
                     rules: string | null;
+                    avatar: string | null;
+                    banner: string | null;
                 };
                 ctx: Context;
             }) => {
@@ -966,7 +970,6 @@ export const communityRouter = router({
                 }
 
                 try {
-                    // Check if slug is already taken
                     const existingCommunity =
                         await db.query.communities.findFirst({
                             where: eq(communities.slug, input.slug),
@@ -988,6 +991,8 @@ export const communityRouter = router({
                             description: input.description,
                             type: input.type,
                             rules: input.rules,
+                            avatar: input.avatar,
+                            banner: input.banner,
                             createdBy: ctx.session.user.id,
                             createdAt: new Date(),
                             updatedAt: new Date(),

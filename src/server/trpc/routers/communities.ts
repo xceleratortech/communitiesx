@@ -7,32 +7,89 @@ import {
     posts,
     communityMemberRequests,
 } from '@/server/db/schema';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, lt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 
 export const communitiesRouter = router({
-    getAll: publicProcedure.query(async ({ ctx }) => {
-        try {
-            const allCommunities = await db.query.communities.findMany({
-                with: {
-                    members: true,
-                    posts: true,
-                    creator: {
-                        columns: {
-                            id: true,
-                            name: true,
-                            email: true,
-                        },
-                    },
-                },
-            });
+    getAll: publicProcedure
+        .input(
+            z
+                .object({
+                    limit: z.number().min(1).max(100).default(6),
+                    cursor: z.number().optional(), // ID of the last item
+                })
+                .optional(),
+        )
+        .query(async ({ ctx, input }) => {
+            const limit = input?.limit ?? 6;
+            const cursor = input?.cursor;
 
-            return allCommunities;
-        } catch (error) {
-            console.error('Error fetching communities:', error);
-            return [];
-        }
-    }),
+            try {
+                let query = db.query.communities;
+
+                // If cursor is provided, fetch items after the cursor
+                if (cursor) {
+                    const allCommunities = await query.findMany({
+                        where: lt(communities.id, cursor),
+                        with: {
+                            members: true,
+                            posts: true,
+                            creator: {
+                                columns: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: desc(communities.id),
+                        limit,
+                    });
+
+                    // Get the next cursor
+                    const nextCursor =
+                        allCommunities.length === limit
+                            ? allCommunities[allCommunities.length - 1]?.id
+                            : undefined;
+
+                    return {
+                        items: allCommunities,
+                        nextCursor,
+                    };
+                } else {
+                    // First page
+                    const allCommunities = await query.findMany({
+                        with: {
+                            members: true,
+                            posts: true,
+                            creator: {
+                                columns: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: desc(communities.id),
+                        limit,
+                    });
+
+                    // Get the next cursor
+                    const nextCursor =
+                        allCommunities.length === limit
+                            ? allCommunities[allCommunities.length - 1]?.id
+                            : undefined;
+
+                    return {
+                        items: allCommunities,
+                        nextCursor,
+                    };
+                }
+            } catch (error) {
+                console.error('Error fetching communities:', error);
+                return { items: [], nextCursor: undefined };
+            }
+        }),
 
     getById: publicProcedure
         .input(z.object({ id: z.number() }))
