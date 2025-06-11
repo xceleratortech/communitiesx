@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
@@ -24,6 +24,7 @@ import {
     Mail,
     CalendarDays,
     ShieldCheck,
+    Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -62,12 +63,28 @@ export default function CommunitiesPage() {
     const sessionData = useSession();
     const session = sessionData.data;
     const router = useRouter();
-    const { data: communities, isLoading } = trpc.communities.getAll.useQuery(
-        undefined,
+    const [activeTab, setActiveTab] = useState('all');
+
+    // Infinite query for communities
+    const {
+        data: communitiesData,
+        fetchNextPage,
+        hasNextPage,
+        isFetchingNextPage,
+        isLoading: isLoadingCommunities,
+    } = trpc.communities.getAll.useInfiniteQuery(
+        {
+            limit: 6,
+        },
         {
             enabled: !!session,
+            getNextPageParam: (lastPage) => lastPage.nextCursor,
         },
     );
+
+    // Flatten the pages into a single array of communities
+    const communities =
+        communitiesData?.pages.flatMap((page) => page.items) || [];
 
     // Get organization details for the sidebar
     const { data: userProfile, isLoading: isLoadingProfile } =
@@ -90,13 +107,39 @@ export default function CommunitiesPage() {
             enabled: !!session,
         });
 
-    const [activeTab, setActiveTab] = useState('all');
-
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
     useEffect(() => {
         setIsClient(true);
     }, []);
+
+    // Intersection observer for infinite scrolling
+    const observerTarget = useRef<HTMLDivElement>(null);
+
+    const handleObserver = useCallback(
+        (entries: IntersectionObserverEntry[]) => {
+            const [entry] = entries;
+            if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+                fetchNextPage();
+            }
+        },
+        [fetchNextPage, hasNextPage, isFetchingNextPage],
+    );
+
+    useEffect(() => {
+        const element = observerTarget.current;
+        if (!element) return;
+
+        const observer = new IntersectionObserver(handleObserver, {
+            rootMargin: '0px 0px 300px 0px',
+        });
+
+        observer.observe(element);
+
+        return () => {
+            observer.unobserve(element);
+        };
+    }, [handleObserver]);
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
@@ -124,9 +167,22 @@ export default function CommunitiesPage() {
     }
 
     // Only show loading state on client after hydration
-    if (isClient && isLoading) {
+    if (isClient && isLoadingCommunities && communities.length === 0) {
         return <CommunitiesPageSkeleton />;
     }
+
+    // Filter communities for "My Communities" tab
+    const myCommunities = communities.filter((c: any) =>
+        c.members?.some((m: any) => m.userId === session.user.id),
+    );
+
+    // Sort communities by member count for "Popular" tab
+    const popularCommunities = [...communities]
+        .sort(
+            (a: any, b: any) =>
+                (b.members?.length || 0) - (a.members?.length || 0),
+        )
+        .slice(0, 6);
 
     return (
         <div className="py-8">
@@ -166,7 +222,8 @@ export default function CommunitiesPage() {
                         </div>
 
                         <TabsContent value="all" className="space-y-4">
-                            {isLoading ? (
+                            {isLoadingCommunities &&
+                            communities.length === 0 ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {Array(3)
                                         .fill(0)
@@ -174,15 +231,32 @@ export default function CommunitiesPage() {
                                             <CommunityCardSkeleton key={i} />
                                         ))}
                                 </div>
-                            ) : communities?.length ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {communities.map((community: any) => (
-                                        <CommunityCard
-                                            key={community.id}
-                                            community={community as Community}
-                                        />
-                                    ))}
-                                </div>
+                            ) : communities.length ? (
+                                <>
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                        {communities.map((community: any) => (
+                                            <CommunityCard
+                                                key={community.id}
+                                                community={
+                                                    community as Community
+                                                }
+                                            />
+                                        ))}
+                                    </div>
+
+                                    {/* Loading indicator and observer target */}
+                                    <div
+                                        ref={observerTarget}
+                                        className="mt-8 flex justify-center"
+                                    >
+                                        {isFetchingNextPage && (
+                                            <div className="flex items-center space-x-2">
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                                <span>Loading more...</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
                             ) : (
                                 <div className="py-12 text-center">
                                     <h3 className="text-lg font-medium">
@@ -196,7 +270,8 @@ export default function CommunitiesPage() {
                         </TabsContent>
 
                         <TabsContent value="my">
-                            {isLoading ? (
+                            {isLoadingCommunities &&
+                            communities.length === 0 ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {Array(2)
                                         .fill(0)
@@ -204,28 +279,14 @@ export default function CommunitiesPage() {
                                             <CommunityCardSkeleton key={i} />
                                         ))}
                                 </div>
-                            ) : communities?.filter((c: any) =>
-                                  c.members?.some(
-                                      (m: any) => m.userId === session.user.id,
-                                  ),
-                              )?.length ? (
+                            ) : myCommunities.length ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {communities
-                                        .filter((c: any) =>
-                                            c.members?.some(
-                                                (m: any) =>
-                                                    m.userId ===
-                                                    session.user.id,
-                                            ),
-                                        )
-                                        .map((community: any) => (
-                                            <CommunityCard
-                                                key={community.id}
-                                                community={
-                                                    community as Community
-                                                }
-                                            />
-                                        ))}
+                                    {myCommunities.map((community: any) => (
+                                        <CommunityCard
+                                            key={community.id}
+                                            community={community as Community}
+                                        />
+                                    ))}
                                 </div>
                             ) : (
                                 <div className="py-12 text-center">
@@ -241,7 +302,8 @@ export default function CommunitiesPage() {
                         </TabsContent>
 
                         <TabsContent value="popular">
-                            {isLoading ? (
+                            {isLoadingCommunities &&
+                            communities.length === 0 ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {Array(3)
                                         .fill(0)
@@ -249,24 +311,18 @@ export default function CommunitiesPage() {
                                             <CommunityCardSkeleton key={i} />
                                         ))}
                                 </div>
-                            ) : communities?.length ? (
-                                // Sort by member count and slice to top 5
+                            ) : popularCommunities.length ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {[...communities]
-                                        .sort(
-                                            (a: any, b: any) =>
-                                                (b.members?.length || 0) -
-                                                (a.members?.length || 0),
-                                        )
-                                        .slice(0, 6)
-                                        .map((community: any) => (
+                                    {popularCommunities.map(
+                                        (community: any) => (
                                             <CommunityCard
                                                 key={community.id}
                                                 community={
                                                     community as Community
                                                 }
                                             />
-                                        ))}
+                                        ),
+                                    )}
                                 </div>
                             ) : (
                                 <div className="py-12 text-center">
@@ -416,7 +472,7 @@ interface CommunityCardProps {
 
 function CommunityCard({ community }: CommunityCardProps) {
     return (
-        <Card className="flex h-full flex-col overflow-hidden transition-all hover:shadow-md">
+        <Card className="flex h-[380px] flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
             <div className="relative h-24 w-full bg-gray-400">
                 {community.banner && (
                     <img
