@@ -410,4 +410,5 @@ export const notifications = pgTable('notifications', {
     isRead: boolean('is_read').notNull().default(false),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

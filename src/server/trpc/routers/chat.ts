@@ -9,7 +9,18 @@ import {
     notifications,
 } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, and, or, desc, gt, sql, asc } from 'drizzle-orm';
+import {
+    eq,
+    and,
+    or,
+    desc,
+    gt,
+    sql,
+    asc,
+    lt,
+    count,
+    inArray,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import webpush from 'web-push';
@@ -825,4 +836,174 @@ export const chatRouter = router({
             return { isSubscribed: false };
         }
     }),
+
+    // Get notifications for the current user with pagination
+    getNotifications: publicProcedure
+        .input(
+            z.object({
+                limit: z.number().default(5),
+                cursor: z.number().optional(), // notification ID for cursor-based pagination
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to view notifications',
+                });
+            }
+
+            const whereConditions = [
+                eq(notifications.recipientId, ctx.session.user.id),
+            ];
+
+            // Add cursor condition if provided
+            if (input.cursor) {
+                whereConditions.push(lt(notifications.id, input.cursor));
+            }
+
+            const notificationsList = await db
+                .select({
+                    id: notifications.id,
+                    title: notifications.title,
+                    body: notifications.body,
+                    type: notifications.type,
+                    data: notifications.data,
+                    isRead: notifications.isRead,
+                    createdAt: notifications.createdAt,
+                })
+                .from(notifications)
+                .where(and(...whereConditions))
+                .orderBy(desc(notifications.createdAt), desc(notifications.id))
+                .limit(input.limit + 1); // Get one extra to check if there are more
+
+            let nextCursor: number | undefined = undefined;
+            if (notificationsList.length > input.limit) {
+                const nextItem = notificationsList.pop(); // Remove the extra item
+                nextCursor = nextItem!.id;
+            }
+
+            return {
+                notifications: notificationsList,
+                nextCursor,
+            };
+        }),
+
+    // Get unread notifications count
+    getUnreadNotificationsCount: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view notifications',
+            });
+        }
+
+        const [result] = await db
+            .select({ count: count() })
+            .from(notifications)
+            .where(
+                and(
+                    eq(notifications.recipientId, ctx.session.user.id),
+                    eq(notifications.isRead, false),
+                ),
+            );
+
+        return result?.count || 0;
+    }),
+
+    // Mark notifications as read
+    markNotificationsAsRead: publicProcedure
+        .input(
+            z.object({
+                notificationIds: z.array(z.number()).optional(), // If not provided, mark all as read
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to mark notifications as read',
+                });
+            }
+
+            const whereConditions = [
+                eq(notifications.recipientId, ctx.session.user.id),
+            ];
+
+            if (input.notificationIds && input.notificationIds.length > 0) {
+                whereConditions.push(
+                    inArray(notifications.id, input.notificationIds),
+                );
+            }
+
+            await db
+                .update(notifications)
+                .set({
+                    isRead: true,
+                    updatedAt: new Date(),
+                })
+                .where(and(...whereConditions));
+
+            return { success: true };
+        }),
+
+    // Mark single notification as read
+    markNotificationAsRead: publicProcedure
+        .input(
+            z.object({
+                notificationId: z.number(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to mark notification as read',
+                });
+            }
+
+            await db
+                .update(notifications)
+                .set({
+                    isRead: true,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(notifications.id, input.notificationId),
+                        eq(notifications.recipientId, ctx.session.user.id),
+                    ),
+                );
+
+            return { success: true };
+        }),
+
+    // Delete notification
+    deleteNotification: publicProcedure
+        .input(
+            z.object({
+                notificationId: z.number(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to delete notifications',
+                });
+            }
+
+            await db
+                .delete(notifications)
+                .where(
+                    and(
+                        eq(notifications.id, input.notificationId),
+                        eq(notifications.recipientId, ctx.session.user.id),
+                    ),
+                );
+
+            return { success: true };
+        }),
 });
