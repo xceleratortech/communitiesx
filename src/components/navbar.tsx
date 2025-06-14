@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { Globe, Menu, X } from 'lucide-react';
 import { ChatButton } from '@/components/chat-button';
 import { useChat } from '@/providers/chat-provider';
+import { NotificationButton } from './NotificationButton';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -17,6 +18,8 @@ export function Navbar() {
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const { closeChat } = useChat();
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [isPushSupported, setIsPushSupported] = useState(false);
 
     // Set mounted state to true after hydration
     useEffect(() => {
@@ -105,15 +108,21 @@ export function Navbar() {
                     <div className="flex items-center space-x-4">
                         {/* Add ChatButton here so it's visible on mobile */}
                         {mounted && session && (
-                            <div className="flex sm:hidden">
-                                <ChatButton />
-                            </div>
+                            <>
+                                <div className="flex sm:hidden">
+                                    <ChatButton />
+                                </div>
+                                <div className="flex sm:hidden">
+                                    <NotificationButton />
+                                </div>
+                            </>
                         )}
                         <ThemeToggle />
                         {mounted ? (
                             session ? (
                                 <div className="hidden items-center space-x-4 sm:flex">
                                     <ChatButton />
+                                    <NotificationButton />
                                     <span className="text-sm text-gray-700 dark:text-gray-300">
                                         {session.user.email}
                                     </span>

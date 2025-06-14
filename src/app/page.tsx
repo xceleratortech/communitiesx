@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
 import { useSession } from '@/server/auth/client';
 import { useEffect, useState } from 'react';
+import { urlBase64ToUint8Array } from '@/lib/web-push';
 
 export default function Home() {
     const { data: session } = useSession();

@@ -291,6 +291,9 @@ export const extendedUsersRelations = relations(users, ({ many }) => ({
     usedInvites: many(communityInvites, { relationName: 'inviteUser' }),
     posts: many(posts),
     comments: many(comments),
+    // Push & Notifications
+    pushSubscriptions: many(pushSubscriptions),
+    notifications: many(notifications),
 }));
 
 export const extendedOrgsRelations = relations(orgs, ({ many }) => ({
@@ -378,3 +381,33 @@ export const userChatRelations = relations(users, ({ many }) => ({
         relationName: 'receivedMessages',
     }),
 }));
+
+export const pushSubscriptions = pgTable('push_subscriptions', {
+    id: serial('id').primaryKey(),
+    userId: text('user_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+
+    endpoint: text('endpoint').notNull().unique(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const notifications = pgTable('notifications', {
+    id: serial('id').primaryKey(),
+    recipientId: text('recipient_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+
+    type: text('type').notNull(), // e.g., 'dm', 'mention', 'comment'
+    data: text('data'), // e.g., threadId/messageId in JSON format
+    isRead: boolean('is_read').notNull().default(false),
+
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
