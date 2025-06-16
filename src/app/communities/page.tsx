@@ -473,13 +473,15 @@ interface CommunityCardProps {
 function CommunityCard({ community }: CommunityCardProps) {
     return (
         <Card className="flex h-[380px] flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
-            <div className="relative h-24 w-full bg-gray-400">
-                {community.banner && (
+            <div className="relative h-24 w-full">
+                {community.banner ? (
                     <img
                         src={community.banner}
                         alt={`${community.name} banner`}
-                        className="h-full w-full object-cover"
+                        className="h-20 w-full object-cover"
                     />
+                ) : (
+                    <div className="h-20 w-full bg-gray-200" />
                 )}
                 <div className="absolute -bottom-10 left-4">
                     <Avatar className="border-background h-20 w-20 border-4">
@@ -494,8 +496,8 @@ function CommunityCard({ community }: CommunityCardProps) {
                 </div>
             </div>
 
-            <CardHeader className="pt-12 pb-4">
-                <div className="flex items-start justify-between">
+            <CardHeader className="pt-8 pb-2">
+                <div className="flex flex-col items-start justify-between">
                     <div>
                         <CardTitle className="flex items-center gap-2">
                             {community.name}
@@ -505,20 +507,22 @@ function CommunityCard({ community }: CommunityCardProps) {
                                 <Globe className="text-muted-foreground h-4 w-4" />
                             )}
                         </CardTitle>
-                        <CardDescription className="mt-2 line-clamp-2">
+                        <CardDescription className="mt-2 line-clamp-1">
                             {community.description}
                         </CardDescription>
                     </div>
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={`/communities/${community.slug}`}>
-                            Visit
-                        </Link>
-                    </Button>
+                    <div className="mt-2">
+                        <Button variant="outline" size="sm" asChild>
+                            <Link href={`/communities/${community.slug}`}>
+                                Visit
+                            </Link>
+                        </Button>
+                    </div>
                 </div>
             </CardHeader>
 
-            <CardContent className="pb-2">
-                <div className="flex flex-wrap gap-2">
+            <CardContent className="pb-1">
+                <div className="flex flex-wrap gap-1">
                     <Badge
                         variant="secondary"
                         className="flex items-center gap-1"
@@ -543,7 +547,7 @@ function CommunityCard({ community }: CommunityCardProps) {
                 </div>
             </CardContent>
 
-            <CardFooter className="text-muted-foreground mt-auto pt-2 pb-4 text-xs">
+            <CardFooter className="text-muted-foreground mt-auto pt-2 pb-6 text-xs">
                 Created {new Date(community.createdAt).toLocaleDateString()}
             </CardFooter>
         </Card>
