@@ -16,8 +16,8 @@ export default function Home() {
     }, []);
 
     return (
-        <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden px-4 text-center">
-            <div className="absolute inset-0 h-full w-full bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
+        <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden text-center">
+            <div className="fixed inset-0 top-16 h-[calc(100vh-4rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
@@ -29,7 +29,7 @@ export default function Home() {
                     className="h-full w-full"
                 />
             </div>
-            <div className="relative z-10">
+            <div className="relative z-10 px-4">
                 <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl dark:text-gray-100">
                     Let&apos;s Build a{' '}
                     <span className="text-blue-600 dark:text-blue-400">
