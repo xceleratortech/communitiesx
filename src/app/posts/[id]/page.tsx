@@ -39,6 +39,9 @@ export default function PostPage() {
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
     const editorRef = useRef<{ reset: () => void } | null>(null);
+    const [autoExpandedComments, setAutoExpandedComments] = useState<
+        Set<number>
+    >(new Set());
 
     // State for inline comment editing
     const [editingCommentId, setEditingCommentId] = useState<number | null>(
@@ -72,7 +75,7 @@ export default function PostPage() {
     }, []);
 
     const createComment = trpc.community.createComment.useMutation({
-        onSuccess: () => {
+        onSuccess: (newComment, variables) => {
             // Reset the editor content to empty string
             setComment('');
 
@@ -82,6 +85,13 @@ export default function PostPage() {
                 setTimeout(() => {
                     setComment('');
                 }, 0);
+            }
+
+            // If this was a reply, add the parent comment to auto-expanded set
+            if (variables.parentId && replyingToCommentId) {
+                setAutoExpandedComments(
+                    (prev) => new Set([...prev, replyingToCommentId]),
+                );
             }
 
             setReplyContent(''); // Clear reply content on success
@@ -116,7 +126,6 @@ export default function PostPage() {
         },
     });
 
-    // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
         return <div className="p-4">Loading...</div>;
     }
@@ -137,7 +146,6 @@ export default function PostPage() {
         );
     }
 
-    // Only show loading state on client after hydration
     if (isClient && isLoading) {
         return <div className="p-4 dark:text-gray-300">Loading post...</div>;
     }
@@ -146,8 +154,6 @@ export default function PostPage() {
         return <div className="p-4 dark:text-gray-300">Post not found</div>;
     }
 
-    // Since we've checked for post existence above, we can safely assert it's defined
-    // Add this type guard to make TypeScript happy
     const postData = post!;
 
     const handleStartEdit = (commentToEdit: CommentWithReplies) => {
@@ -226,6 +232,21 @@ export default function PostPage() {
         } catch (error) {
             console.error('Error deleting post:', error);
             alert('Failed to delete post');
+        }
+    };
+
+    // Handler to manage comment expansion state
+    const handleCommentExpansionChange = (
+        commentId: number,
+        isExpanded: boolean,
+    ) => {
+        if (!isExpanded) {
+            // If comment is being collapsed, remove it from auto-expanded set
+            setAutoExpandedComments((prev) => {
+                const newSet = new Set(prev);
+                newSet.delete(commentId);
+                return newSet;
+            });
         }
     };
 
@@ -361,6 +382,8 @@ export default function PostPage() {
                             deleteCommentPending={
                                 deleteCommentMutation.isPending
                             }
+                            autoExpandedComments={autoExpandedComments}
+                            onExpansionChange={handleCommentExpansionChange}
                         />
                     ))}
                 </div>
