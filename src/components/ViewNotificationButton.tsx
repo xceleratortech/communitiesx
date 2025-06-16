@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     Bell,
+    BellRing,
     X,
     Trash2,
     MessageCircle,
@@ -64,10 +65,8 @@ export function ViewNotificationButton() {
     useEffect(() => {
         if (notificationsData) {
             if (cursor === undefined) {
-                // Initial load
                 setNotifications(notificationsData.notifications);
             } else {
-                // Load more
                 setNotifications((prev) => [
                     ...prev,
                     ...notificationsData.notifications,
@@ -112,16 +111,13 @@ export function ViewNotificationButton() {
         },
     );
 
-    // Load more notifications
     const loadMore = useCallback(() => {
         if (!hasNextPage || isLoadingMore || !cursor) return;
 
         setIsLoadingMore(true);
-        // Trigger refetch with new cursor
         refetchNotifications();
     }, [hasNextPage, isLoadingMore, cursor, refetchNotifications]);
 
-    // Infinite scroll observer
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
@@ -153,18 +149,15 @@ export function ViewNotificationButton() {
         setIsOpen(!isOpen);
     };
 
-    // Handle notification click
     const handleNotificationClick = (notification: Notification) => {
         if (!notification.isRead) {
             markAsReadMutation.mutate({ notificationId: notification.id });
         }
 
-        // Handle navigation based on notification type
         if (notification.data) {
             try {
                 const data: NotificationData = JSON.parse(notification.data);
                 if (notification.type === 'dm' && data.threadId) {
-                    // Navigate to chat thread or open chat with specific thread
                     window.location.href = `/chat?thread=${data.threadId}`;
                 }
             } catch (error) {
@@ -173,12 +166,10 @@ export function ViewNotificationButton() {
         }
     };
 
-    // Format notification time
     const formatTime = (date: Date) => {
         return formatDistanceToNow(new Date(date), { addSuffix: true });
     };
 
-    // Get notification icon
     const getNotificationIcon = (type: string) => {
         switch (type) {
             case 'dm':
@@ -190,15 +181,20 @@ export function ViewNotificationButton() {
 
     return (
         <div className="relative">
-            {/* Notification Button */}
             <Button
                 variant="outline"
                 size="sm"
                 className="relative p-2"
                 onClick={handleToggle}
             >
-                {/* <Bell className="h-5 w-5" /> */}
-                Notifications <Bell className="h-5 w-5" />
+                <span className="block sm:hidden">
+                    <BellRing className="h-5 w-5" />
+                </span>
+
+                <span className="hidden sm:flex sm:items-center sm:gap-2">
+                    Notifications <Bell className="h-5 w-5" />
+                </span>
+
                 {unreadCount > 0 && (
                     <Badge
                         variant="destructive"
@@ -209,18 +205,14 @@ export function ViewNotificationButton() {
                 )}
             </Button>
 
-            {/* Notifications Dropdown */}
             {isOpen && (
                 <>
-                    {/* Backdrop */}
                     <div
                         className="fixed inset-0 z-40"
                         onClick={() => setIsOpen(false)}
                     />
 
-                    {/* Dropdown Panel */}
                     <div className="absolute right-0 z-50 mt-2 w-80 rounded-lg border bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                        {/* Header */}
                         <div className="flex items-center justify-between border-b p-4 dark:border-gray-700">
                             <h3 className="text-lg font-semibold dark:text-white">
                                 Notifications
@@ -263,7 +255,6 @@ export function ViewNotificationButton() {
                                 ) : notifications.length === 0 ? (
                                     <div className="py-8 text-center text-gray-500 dark:text-gray-400">
                                         <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                                        ss
                                         <p className="text-sm">
                                             No notifications yet
                                         </p>
@@ -374,14 +365,12 @@ export function ViewNotificationButton() {
                                             ),
                                         )}
 
-                                        {/* Loading indicator for infinite scroll */}
                                         {isLoadingMore && (
                                             <div className="flex items-center justify-center py-4">
                                                 <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-blue-600"></div>
                                             </div>
                                         )}
 
-                                        {/* Intersection observer target */}
                                         {hasNextPage && (
                                             <div
                                                 ref={observerTarget}
@@ -389,7 +378,6 @@ export function ViewNotificationButton() {
                                             />
                                         )}
 
-                                        {/* End of notifications message */}
                                         {!hasNextPage &&
                                             notifications.length > 5 && (
                                                 <div className="py-4 text-center text-xs text-gray-400 dark:text-gray-500">
