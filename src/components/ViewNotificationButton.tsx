@@ -40,6 +40,7 @@ export function ViewNotificationButton() {
     const [hasNextPage, setHasNextPage] = useState(true);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
     const [cursor, setCursor] = useState<number | undefined>(undefined);
+    const [initialLoad, setInitialLoad] = useState(true);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const observerTarget = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,7 @@ export function ViewNotificationButton() {
             refetchInterval: 30000, // Refetch every 30 seconds
         });
 
-    // Get notifications query
+    // Get notifications query - only enabled when open
     const {
         data: notificationsData,
         isLoading: isInitialLoading,
@@ -57,32 +58,49 @@ export function ViewNotificationButton() {
     } = trpc.chat.getNotifications.useQuery(
         { limit: 10, cursor },
         {
-            enabled: isOpen,
+            enabled: isOpen && (initialLoad || isLoadingMore),
+            refetchOnWindowFocus: false,
+            refetchOnMount: false,
         },
     );
 
-    // Handle notifications data changes
+    // Handle notifications data changes - fixed dependency array
     useEffect(() => {
-        if (notificationsData) {
-            if (cursor === undefined) {
+        if (notificationsData && isOpen) {
+            if (initialLoad) {
+                // First load - replace all notifications
                 setNotifications(notificationsData.notifications);
-            } else {
+                setInitialLoad(false);
+            } else if (isLoadingMore) {
+                // Loading more - append to existing notifications
                 setNotifications((prev) => [
                     ...prev,
                     ...notificationsData.notifications,
                 ]);
             }
+
             setHasNextPage(!!notificationsData.nextCursor);
-            setCursor(notificationsData.nextCursor);
             setIsLoadingMore(false);
+
+            // Only update cursor if we have a next cursor
+            if (notificationsData.nextCursor) {
+                setCursor(notificationsData.nextCursor);
+            }
         }
-    }, [notificationsData, cursor]);
+    }, [notificationsData, isOpen, initialLoad, isLoadingMore]);
 
     // Mark notification as read mutation
     const markAsReadMutation = trpc.chat.markNotificationAsRead.useMutation({
         onSuccess: () => {
             refetchUnreadCount();
-            refetchNotifications();
+            // Update local state instead of refetching
+            setNotifications((prev) =>
+                prev.map((n) =>
+                    n.id === markAsReadMutation.variables?.notificationId
+                        ? { ...n, isRead: true }
+                        : n,
+                ),
+            );
         },
     });
 
@@ -91,7 +109,6 @@ export function ViewNotificationButton() {
         {
             onSuccess: () => {
                 refetchUnreadCount();
-                refetchNotifications();
                 setNotifications((prev) =>
                     prev.map((n) => ({ ...n, isRead: true })),
                 );
@@ -112,19 +129,19 @@ export function ViewNotificationButton() {
     );
 
     const loadMore = useCallback(() => {
-        if (!hasNextPage || isLoadingMore || !cursor) return;
-
+        if (!hasNextPage || isLoadingMore || !cursor || !isOpen) return;
         setIsLoadingMore(true);
-        refetchNotifications();
-    }, [hasNextPage, isLoadingMore, cursor, refetchNotifications]);
+    }, [hasNextPage, isLoadingMore, cursor, isOpen]);
 
+    // Intersection observer for infinite scroll
     useEffect(() => {
         const observer = new IntersectionObserver(
             (entries) => {
                 if (
                     entries[0]?.isIntersecting &&
                     hasNextPage &&
-                    !isLoadingMore
+                    !isLoadingMore &&
+                    !initialLoad
                 ) {
                     loadMore();
                 }
@@ -132,19 +149,22 @@ export function ViewNotificationButton() {
             { threshold: 0.1 },
         );
 
-        if (observerTarget.current) {
+        if (observerTarget.current && isOpen) {
             observer.observe(observerTarget.current);
         }
 
         return () => observer.disconnect();
-    }, [loadMore, hasNextPage, isLoadingMore]);
+    }, [loadMore, hasNextPage, isLoadingMore, initialLoad, isOpen]);
 
-    // Reset state when opening
+    // Reset state when opening/closing
     const handleToggle = () => {
         if (!isOpen) {
+            // Opening - reset all state
             setNotifications([]);
             setCursor(undefined);
             setHasNextPage(true);
+            setIsLoadingMore(false);
+            setInitialLoad(true);
         }
         setIsOpen(!isOpen);
     };
@@ -246,13 +266,14 @@ export function ViewNotificationButton() {
                         </div>
 
                         {/* Notifications List */}
-                        <ScrollArea className="h-96" ref={scrollAreaRef}>
+                        <ScrollArea className="h-96">
                             <div className="p-2">
-                                {isInitialLoading ? (
+                                {isInitialLoading && initialLoad ? (
                                     <div className="flex items-center justify-center py-8">
                                         <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-blue-600"></div>
                                     </div>
-                                ) : notifications.length === 0 ? (
+                                ) : notifications.length === 0 &&
+                                  !isLoadingMore ? (
                                     <div className="py-8 text-center text-gray-500 dark:text-gray-400">
                                         <Bell className="mx-auto mb-2 h-8 w-8 opacity-50" />
                                         <p className="text-sm">
@@ -371,7 +392,7 @@ export function ViewNotificationButton() {
                                             </div>
                                         )}
 
-                                        {hasNextPage && (
+                                        {hasNextPage && !isLoadingMore && (
                                             <div
                                                 ref={observerTarget}
                                                 className="h-1"
