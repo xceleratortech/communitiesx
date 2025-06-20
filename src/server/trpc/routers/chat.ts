@@ -1,10 +1,36 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
-import { chatThreads, directMessages, users } from '@/server/db/schema';
+import {
+    chatThreads,
+    directMessages,
+    users,
+    pushSubscriptions,
+    notifications,
+} from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, and, or, desc, gt, sql, asc } from 'drizzle-orm';
+import {
+    eq,
+    and,
+    or,
+    desc,
+    gt,
+    sql,
+    asc,
+    lt,
+    count,
+    inArray,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
+
+import webpush from 'web-push';
+import { sendChatNotification } from '@/lib/push-notifications';
+
+webpush.setVapidDetails(
+    'mailto:reachmrniranjan@gmail.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!,
+);
 
 export const chatRouter = router({
     // Get all chat threads for the current user
@@ -192,7 +218,6 @@ export const chatRouter = router({
             }
         }),
 
-    // Send a new message
     sendMessage: publicProcedure
         .input(
             z.object({
@@ -308,6 +333,41 @@ export const chatRouter = router({
                     })
                     .where(eq(chatThreads.id, threadId));
 
+                // Get recipient's push subscription
+                const recipientSubscription = await db
+                    .select()
+                    .from(pushSubscriptions)
+                    .where(eq(pushSubscriptions.userId, input.recipientId))
+                    .limit(1);
+
+                // Send push notification if recipient is subscribed
+                if (recipientSubscription.length > 0) {
+                    const senderName = sender?.name || 'Someone';
+
+                    await sendChatNotification(
+                        recipientSubscription,
+                        senderName,
+                        input.content,
+                        threadId.toString(),
+                    );
+
+                    // Save notification to database
+                    await db.insert(notifications).values({
+                        recipientId: input.recipientId,
+                        title: `New message from ${senderName}`,
+                        body:
+                            input.content.length > 100
+                                ? input.content.substring(0, 100) + '...'
+                                : input.content,
+                        type: 'dm',
+                        data: JSON.stringify({
+                            threadId: threadId,
+                            messageId: message.id,
+                            senderId: senderId,
+                        }),
+                    });
+                }
+
                 // Get the message with sender info
                 const messageWithSender =
                     await db.query.directMessages.findFirst({
@@ -327,6 +387,7 @@ export const chatRouter = router({
                 return {
                     message: messageWithSender,
                     threadId,
+                    notificationsSent: recipientSubscription.length, // Added to match Claude's version
                 };
             } catch (error) {
                 console.error('Error sending message:', error);
@@ -663,5 +724,286 @@ export const chatRouter = router({
                     message: 'Failed to fetch thread details',
                 });
             }
+        }),
+
+    // Subscribe to push notifications
+    subscribeToPush: publicProcedure
+        .input(
+            z.object({
+                endpoint: z.string(),
+                p256dh: z.string(),
+                auth: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to subscribe to notifications',
+                });
+            }
+
+            try {
+                // Check if subscription already exists
+                const existingSubscription =
+                    await db.query.pushSubscriptions.findFirst({
+                        where: eq(
+                            pushSubscriptions.userId,
+                            ctx.session.user.id,
+                        ),
+                    });
+
+                if (existingSubscription) {
+                    // Update existing subscription
+                    await db
+                        .update(pushSubscriptions)
+                        .set({
+                            endpoint: input.endpoint,
+                            p256dh: input.p256dh,
+                            auth: input.auth,
+                            updatedAt: new Date(),
+                        })
+                        .where(
+                            eq(pushSubscriptions.userId, ctx.session.user.id),
+                        );
+                } else {
+                    // Create new subscription
+                    await db.insert(pushSubscriptions).values({
+                        userId: ctx.session.user.id,
+                        endpoint: input.endpoint,
+                        p256dh: input.p256dh,
+                        auth: input.auth,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+                }
+
+                return { success: true };
+            } catch (error) {
+                console.error(
+                    'Error subscribing to push notifications:',
+                    error,
+                );
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to subscribe to notifications',
+                });
+            }
+        }),
+
+    // Unsubscribe from push notifications
+    unsubscribeFromPush: publicProcedure.mutation(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in',
+            });
+        }
+
+        try {
+            await db
+                .delete(pushSubscriptions)
+                .where(eq(pushSubscriptions.userId, ctx.session.user.id));
+
+            return { success: true };
+        } catch (error) {
+            console.error(
+                'Error unsubscribing from push notifications:',
+                error,
+            );
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to unsubscribe from notifications',
+            });
+        }
+    }),
+
+    // Check subscription status
+    getSubscriptionStatus: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            return { isSubscribed: false };
+        }
+
+        try {
+            const subscription = await db.query.pushSubscriptions.findFirst({
+                where: eq(pushSubscriptions.userId, ctx.session.user.id),
+            });
+
+            return { isSubscribed: !!subscription };
+        } catch (error) {
+            console.error('Error checking subscription status:', error);
+            return { isSubscribed: false };
+        }
+    }),
+
+    // Get notifications for the current user with pagination
+    getNotifications: publicProcedure
+        .input(
+            z.object({
+                limit: z.number().default(5),
+                cursor: z.number().optional(), // notification ID for cursor-based pagination
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to view notifications',
+                });
+            }
+
+            const whereConditions = [
+                eq(notifications.recipientId, ctx.session.user.id),
+            ];
+
+            // Add cursor condition if provided
+            if (input.cursor) {
+                whereConditions.push(lt(notifications.id, input.cursor));
+            }
+
+            const notificationsList = await db
+                .select({
+                    id: notifications.id,
+                    title: notifications.title,
+                    body: notifications.body,
+                    type: notifications.type,
+                    data: notifications.data,
+                    isRead: notifications.isRead,
+                    createdAt: notifications.createdAt,
+                })
+                .from(notifications)
+                .where(and(...whereConditions))
+                .orderBy(desc(notifications.createdAt), desc(notifications.id))
+                .limit(input.limit + 1); // Get one extra to check if there are more
+
+            let nextCursor: number | undefined = undefined;
+            if (notificationsList.length > input.limit) {
+                const nextItem = notificationsList.pop(); // Remove the extra item
+                nextCursor = nextItem!.id;
+            }
+
+            return {
+                notifications: notificationsList,
+                nextCursor,
+            };
+        }),
+
+    // Get unread notifications count
+    getUnreadNotificationsCount: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view notifications',
+            });
+        }
+
+        const [result] = await db
+            .select({ count: count() })
+            .from(notifications)
+            .where(
+                and(
+                    eq(notifications.recipientId, ctx.session.user.id),
+                    eq(notifications.isRead, false),
+                ),
+            );
+
+        return result?.count || 0;
+    }),
+
+    // Mark notifications as read
+    markNotificationsAsRead: publicProcedure
+        .input(
+            z.object({
+                notificationIds: z.array(z.number()).optional(), // If not provided, mark all as read
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to mark notifications as read',
+                });
+            }
+
+            const whereConditions = [
+                eq(notifications.recipientId, ctx.session.user.id),
+            ];
+
+            if (input.notificationIds && input.notificationIds.length > 0) {
+                whereConditions.push(
+                    inArray(notifications.id, input.notificationIds),
+                );
+            }
+
+            await db
+                .update(notifications)
+                .set({
+                    isRead: true,
+                    updatedAt: new Date(),
+                })
+                .where(and(...whereConditions));
+
+            return { success: true };
+        }),
+
+    // Mark single notification as read
+    markNotificationAsRead: publicProcedure
+        .input(
+            z.object({
+                notificationId: z.number(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to mark notification as read',
+                });
+            }
+
+            await db
+                .update(notifications)
+                .set({
+                    isRead: true,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(notifications.id, input.notificationId),
+                        eq(notifications.recipientId, ctx.session.user.id),
+                    ),
+                );
+
+            return { success: true };
+        }),
+
+    // Delete notification
+    deleteNotification: publicProcedure
+        .input(
+            z.object({
+                notificationId: z.number(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to delete notifications',
+                });
+            }
+
+            await db
+                .delete(notifications)
+                .where(
+                    and(
+                        eq(notifications.id, input.notificationId),
+                        eq(notifications.recipientId, ctx.session.user.id),
+                    ),
+                );
+
+            return { success: true };
         }),
 });

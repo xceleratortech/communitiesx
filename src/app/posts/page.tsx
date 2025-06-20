@@ -560,11 +560,9 @@ export default function PostsPage() {
                                 ) : (
                                     <div className="text-sm text-gray-600 dark:text-gray-300">
                                         <div
+                                            className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
                                             dangerouslySetInnerHTML={{
-                                                __html:
-                                                    post.content.length > 200
-                                                        ? `${post.content.slice(0, 200)}...`
-                                                        : post.content,
+                                                __html: post.content,
                                             }}
                                         />
                                     </div>

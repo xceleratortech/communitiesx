@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Edit, Trash2, Plus, Minus, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,11 +9,8 @@ import { useSession } from '@/server/auth/client'; // Import useSession to infer
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 
-// Infer Session type from useSession hook
 type SessionData = ReturnType<typeof useSession>['data'];
 
-// Define the Comment type, including replies, matching the backend structure
-// This should align with the types used in your PostPage
 type UserFromDb = typeof users.$inferSelect;
 
 export type CommentWithReplies = {
@@ -49,6 +46,8 @@ interface CommentItemProps {
     onDeleteComment: (commentId: number) => void;
     deleteCommentPending: boolean;
     depth?: number;
+    autoExpandedComments: Set<number>;
+    onExpansionChange: (commentId: number, isExpanded: boolean) => void;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -71,8 +70,12 @@ const CommentItem: React.FC<CommentItemProps> = ({
     onDeleteComment,
     deleteCommentPending,
     depth = 0,
+    autoExpandedComments,
+    onExpansionChange,
 }) => {
-    const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
+    const shouldAutoExpand = autoExpandedComments.has(comment.id);
+    const [isExpanded, setIsExpanded] = useState(shouldAutoExpand);
+    // const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
     const isEditingThisComment = editingCommentId === comment.id;
     const isReplyingToThisComment = replyingToCommentId === comment.id;
     const canEdit =
@@ -82,6 +85,13 @@ const CommentItem: React.FC<CommentItemProps> = ({
     const canReply = !!session?.user;
     const replies = comment.replies || [];
     const hasReplies = replies.length > 0;
+
+    // Update expansion state when autoExpandedComments changes
+    useEffect(() => {
+        if (autoExpandedComments.has(comment.id) && !isExpanded) {
+            setIsExpanded(true);
+        }
+    }, [autoExpandedComments, comment.id, isExpanded]);
 
     // Function to get background color based on depth
     const getBackgroundColor = (depth: number) => {
@@ -103,7 +113,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
     // Function to handle expand/collapse
     const toggleExpanded = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent event bubbling
+        const newExpandedState = !isExpanded;
         setIsExpanded(!isExpanded);
+        onExpansionChange(comment.id, newExpandedState);
     };
 
     // Calculate indentation with a smaller step size
@@ -344,6 +356,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 onDeleteComment={onDeleteComment}
                                 deleteCommentPending={deleteCommentPending}
                                 depth={depth + 1}
+                                autoExpandedComments={autoExpandedComments}
+                                onExpansionChange={onExpansionChange}
                             />
                         ))}
                     </div>
