@@ -32,6 +32,7 @@ export const auth = betterAuth({
             'https://communities-three.vercel.app',
             'https://communities-three.vercel.app/',
             'https://communities-git-pwa-fix-ranjan-bhats-projects.vercel.app/',
+            'https://communities-git-pwa-fix-ranjan-bhats-projects.vercel.app',
             '*',
             'https://communities-git-dev-ranjan-bhats-projects.vercel.app',
             'https://communities-git-dev-ranjan-bhats-projects.vercel.app/',
