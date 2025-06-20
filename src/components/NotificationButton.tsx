@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { trpc } from '@/providers/trpc-provider';
-import { toast } from 'sonner'; // or whatever toast library you're using
+import { toast } from 'sonner';
 
 export function NotificationButton() {
     const [isSupported, setIsSupported] = useState(false);
 
-    // Check subscription status
     const { data: subscriptionStatus, refetch: refetchStatus } =
         trpc.chat.getSubscriptionStatus.useQuery();
 
@@ -43,40 +42,88 @@ export function NotificationButton() {
         }
 
         try {
-            // Request permission
-            const permission = await Notification.requestPermission();
+            let permission = Notification.permission;
+            if (permission === 'default') {
+                permission = await Notification.requestPermission();
+            }
+
             if (permission !== 'granted') {
                 toast.error('Permission denied for notifications');
                 return;
             }
 
-            // Get service worker registration
-            const registration = await navigator.serviceWorker.ready;
+            if (!('serviceWorker' in navigator)) {
+                throw new Error('Service Worker not supported');
+            }
 
-            // Subscribe to push notifications
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-            });
+            let registration: ServiceWorkerRegistration;
+            const existingRegistration =
+                await navigator.serviceWorker.getRegistration();
 
-            // Convert subscription to the format expected by your API
+            if (existingRegistration) {
+                registration = existingRegistration;
+            } else {
+                registration = await navigator.serviceWorker.register('/sw.js');
+            }
+
+            const readyPromise = navigator.serviceWorker.ready;
+            const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(
+                    () => reject(new Error('Service worker ready timeout')),
+                    10000,
+                ),
+            );
+
+            registration = await Promise.race([readyPromise, timeoutPromise]);
+
+            if (!registration.pushManager) {
+                throw new Error('Push manager unavailable');
+            }
+
+            const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+            if (!vapidKey) {
+                throw new Error('VAPID key not configured');
+            }
+
+            const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+
+            let subscription = await registration.pushManager.getSubscription();
+
+            if (!subscription) {
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: applicationServerKey,
+                });
+            }
+
             const subscriptionData = {
                 endpoint: subscription.endpoint,
                 p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
                 auth: arrayBufferToBase64(subscription.getKey('auth')!),
             };
 
-            // Send subscription to server
             await subscribeMutation.mutateAsync(subscriptionData);
         } catch (error) {
-            console.error('Error subscribing to push notifications:', error);
-            toast.error('Failed to enable notifications');
+            if (error instanceof Error) {
+                if (error.name === 'NotSupportedError') {
+                    toast.error('Push messaging is not supported');
+                } else if (error.name === 'NotAllowedError') {
+                    toast.error('Permission not granted for notifications');
+                } else if (error.name === 'AbortError') {
+                    toast.error('Subscription was aborted');
+                } else {
+                    toast.error(
+                        `Failed to enable notifications: ${error.message}`,
+                    );
+                }
+            } else {
+                toast.error('Failed to enable notifications');
+            }
         }
     };
 
     const handleUnsubscribe = async () => {
         try {
-            // Unsubscribe from browser
             const registration = await navigator.serviceWorker.ready;
             const subscription =
                 await registration.pushManager.getSubscription();
@@ -85,13 +132,8 @@ export function NotificationButton() {
                 await subscription.unsubscribe();
             }
 
-            // Remove from server
             await unsubscribeMutation.mutateAsync();
         } catch (error) {
-            console.error(
-                'Error unsubscribing from push notifications:',
-                error,
-            );
             toast.error('Failed to disable notifications');
         }
     };
@@ -105,7 +147,7 @@ export function NotificationButton() {
     };
 
     if (!isSupported) {
-        return null; // Don't show the button if not supported
+        return null;
     }
 
     const isLoading =
@@ -131,7 +173,6 @@ export function NotificationButton() {
     );
 }
 
-// Helper function to convert ArrayBuffer to base64
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
     const bytes = new Uint8Array(buffer);
     let binary = '';
@@ -139,4 +180,28 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
         binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
+}
+
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+    try {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding)
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    } catch (error) {
+        const rawData = window.atob(base64String);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) {
+            outputArray[i] = rawData.charCodeAt(i);
+        }
+        return outputArray;
+    }
 }
