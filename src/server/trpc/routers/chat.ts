@@ -334,38 +334,57 @@ export const chatRouter = router({
                     .where(eq(chatThreads.id, threadId));
 
                 // Get recipient's push subscription
-                const recipientSubscription = await db
-                    .select()
+                // const recipientSubscription = await db
+                //     .select()
+                //     .from(pushSubscriptions)
+                //     .where(eq(pushSubscriptions.userId, input.recipientId))
+                //     .limit(1);
+                const recipientSubscriptions = await db
+                    .select({
+                        endpoint: pushSubscriptions.endpoint,
+                        p256dh: pushSubscriptions.p256dh,
+                        auth: pushSubscriptions.auth,
+                    })
                     .from(pushSubscriptions)
-                    .where(eq(pushSubscriptions.userId, input.recipientId))
-                    .limit(1);
+                    .where(eq(pushSubscriptions.userId, input.recipientId));
 
                 // Send push notification if recipient is subscribed
-                if (recipientSubscription.length > 0) {
+                if (recipientSubscriptions.length > 0) {
                     const senderName = sender?.name || 'Someone';
 
-                    await sendChatNotification(
-                        recipientSubscription,
-                        senderName,
-                        input.content,
-                        threadId.toString(),
-                    );
+                    try {
+                        await sendChatNotification(
+                            recipientSubscriptions,
+                            senderName,
+                            input.content,
+                            threadId.toString(),
+                        );
 
-                    // Save notification to database
-                    await db.insert(notifications).values({
-                        recipientId: input.recipientId,
-                        title: `New message from ${senderName}`,
-                        body:
-                            input.content.length > 100
-                                ? input.content.substring(0, 100) + '...'
-                                : input.content,
-                        type: 'dm',
-                        data: JSON.stringify({
-                            threadId: threadId,
-                            messageId: message.id,
-                            senderId: senderId,
-                        }),
-                    });
+                        // Save notification to database
+                        await db.insert(notifications).values({
+                            recipientId: input.recipientId,
+                            title: `New message from ${senderName}`,
+                            body:
+                                input.content.length > 100
+                                    ? input.content.substring(0, 100) + '...'
+                                    : input.content,
+                            type: 'dm',
+                            data: JSON.stringify({
+                                threadId: threadId,
+                                messageId: message.id,
+                                senderId: senderId,
+                            }),
+                        });
+                    } catch (error) {
+                        console.error(
+                            'Error sending push notification:',
+                            error,
+                        );
+                        throw new TRPCError({
+                            code: 'INTERNAL_SERVER_ERROR',
+                            message: 'Failed to send push notification',
+                        });
+                    }
                 }
 
                 // Get the message with sender info
@@ -387,7 +406,7 @@ export const chatRouter = router({
                 return {
                     message: messageWithSender,
                     threadId,
-                    notificationsSent: recipientSubscription.length, // Added to match Claude's version
+                    notificationsSent: recipientSubscriptions.length, // Added to match Claude's version
                 };
             } catch (error) {
                 console.error('Error sending message:', error);
