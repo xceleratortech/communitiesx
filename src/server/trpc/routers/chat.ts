@@ -348,11 +348,6 @@ export const chatRouter = router({
                     .from(pushSubscriptions)
                     .where(eq(pushSubscriptions.userId, input.recipientId));
 
-                console.log(
-                    '🔍 Found push subscriptions:',
-                    recipientSubscriptions.length,
-                );
-
                 // Send push notification if recipient is subscribed
                 if (recipientSubscriptions.length > 0) {
                     const senderName = sender?.name || 'Someone';
@@ -380,7 +375,6 @@ export const chatRouter = router({
                                 senderId: senderId,
                             }),
                         });
-                        console.log('✅ Push notifications sent successfully');
                     } catch (error) {
                         console.error(
                             'Error sending push notification:',
