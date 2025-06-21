@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-    title: 'Community App',
-    description: 'A place to share and discuss with the community',
+    title: 'AU NEP',
+    description: 'Namma Educators Parishad | Atria University',
 };
 
 export default function RootLayout({

@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'Communities-X',
-        short_name: 'Comms-X',
-        description: 'A Progressive Web App built with Next.js',
+        name: 'AU NEP',
+        short_name: 'AU NEP',
+        description: 'Namma Educators Parishad | Atria University',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
