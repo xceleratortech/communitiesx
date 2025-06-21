@@ -13,33 +13,24 @@
  * @returns {boolean} True if data is valid
  */
 function isValidNotificationData(data) {
-    if (!data || typeof data !== 'object') return false;
-    if (typeof data.title !== 'string' || !data.title) return false;
-    if (typeof data.body !== 'string' || !data.body) return false;
-    // URL is optional, but if provided must be a string
-    if (data.url !== undefined && typeof data.url !== 'string') return false;
+    if (!data || typeof data !== 'object') {
+        console.error('❌ Invalid data: not an object');
+        return false;
+    }
+    if (typeof data.title !== 'string' || !data.title) {
+        console.error('❌ Invalid title:', data.title);
+        return false;
+    }
+    if (typeof data.body !== 'string' || !data.body) {
+        console.error('❌ Invalid body:', data.body);
+        return false;
+    }
+    if (data.url !== undefined && typeof data.url !== 'string') {
+        console.error('❌ Invalid URL:', data.url);
+        return false;
+    }
+
     return true;
-}
-
-/**
- * Validates the update service worker payload
- * @param {any} payload - The payload to validate
- * @returns {boolean} True if payload is valid
- */
-function isValidUpdateSWData(payload) {
-    // Minimal validation since this command doesn't require additional parameters
-    // But we still check if the payload exists and is an object
-    return payload && typeof payload === 'object';
-}
-
-/**
- * Handles service worker update
- * @returns {Promise<void>}
- */
-function handleUpdateSW() {
-    console.log('Updating service worker...');
-    self.skipWaiting();
-    return self.clients.claim();
 }
 
 /**
@@ -48,94 +39,163 @@ function handleUpdateSW() {
  * @returns {Promise<void>}
  */
 function handleNotify(notificationData) {
+    if (!self.registration) {
+        console.error('❌ No service worker registration found');
+        return Promise.reject(new Error('No service worker registration'));
+    }
+
     const options = {
         body: notificationData.body,
         icon: notificationData.icon || '/icon.png',
         badge: '/badge.png',
         vibrate: [100, 50, 100],
+        requireInteraction: false,
+        silent: false,
+        tag: 'chat-message-' + Date.now(),
+        renotify: true,
         data: {
-            url: notificationData.url || '/', // Store the URL to open in the notification data
+            url: notificationData.url || '/',
             dateOfArrival: Date.now(),
-            primaryKey: '2',
+            primaryKey: Date.now().toString(),
         },
     };
-    return self.registration.showNotification(notificationData.title, options);
+
+    return self.registration
+        .showNotification(notificationData.title, options)
+        .then(() => {
+            return true;
+        })
+        .catch((err) => {
+            console.error('❌ Failed to show notification:', err);
+            console.error('🔍 Error details:', {
+                name: err.name,
+                message: err.message,
+                stack: err.stack,
+            });
+            console.log('=== 🔔 HANDLE NOTIFY END (ERROR) ===');
+            throw err;
+        });
 }
 
 /**
- * @param {PushEvent} event
+ * Handles service worker update
+ * @returns {Promise<void>}
  */
-self.addEventListener('push', function (event) {
-    console.log('Push event data: ', event.data.text());
-    try {
-        if (event.data) {
-            const payload = event.data.json();
+function handleUpdateSW() {
+    console.log('🔄 Updating service worker...');
+    self.skipWaiting();
+    return self.clients.claim();
+}
 
-            if (payload.command === 'notify') {
-                if (!isValidNotificationData(payload.data)) {
-                    console.error('Invalid notification data schema');
-                    return;
-                }
-                event.waitUntil(handleNotify(payload.data));
-            } else if (payload.command === 'update-sw') {
-                if (!isValidUpdateSWData(payload)) {
-                    console.error('Invalid update-sw data schema');
-                    return;
-                }
-                event.waitUntil(handleUpdateSW());
-            } else {
-                // Fallback to existing notification logic for backward compatibility
-                if (!isValidNotificationData(payload)) {
-                    console.error('Invalid payload schema');
-                    return;
-                }
-                const options = {
-                    body: payload.body,
-                    icon: payload.icon || '/icon.png',
-                    badge: '/badge.png',
-                    vibrate: [100, 50, 100],
-                    data: {
-                        dateOfArrival: Date.now(),
-                        primaryKey: '2',
-                    },
-                };
-                event.waitUntil(
-                    self.registration.showNotification(payload.title, options),
+// Push event listener with detailed logging
+self.addEventListener('push', function (event) {
+    if (!event.data) {
+        console.log('❌ No data in push event');
+        return;
+    }
+
+    try {
+        const payload = event.data.json();
+
+        if (payload.command === 'notify') {
+            if (!isValidNotificationData(payload.data)) {
+                console.error(
+                    '❌ Invalid notification data schema:',
+                    payload.data,
                 );
+                return;
             }
+
+            const notifyPromise = handleNotify(payload.data)
+                .then(() => {
+                    console.log(
+                        '✅ Push notification process completed successfully',
+                    );
+                })
+                .catch((err) => {
+                    console.error('❌ Push notification process failed:', err);
+                    throw err;
+                });
+
+            event.waitUntil(notifyPromise);
+        } else if (payload.command === 'update-sw') {
+            event.waitUntil(handleUpdateSW());
+        } else {
+            console.log(
+                '❓ Unknown command, using fallback notification logic',
+            );
+
+            // Fallback for backward compatibility
+            if (!isValidNotificationData(payload)) {
+                console.error('❌ Invalid fallback payload schema:', payload);
+                return;
+            }
+
+            const options = {
+                body: payload.body,
+                icon: payload.icon || '/icon.png',
+                badge: '/badge.png',
+                vibrate: [100, 50, 100],
+                data: {
+                    url: payload.url || '/',
+                    dateOfArrival: Date.now(),
+                    primaryKey: Date.now().toString(),
+                },
+            };
+
+            event.waitUntil(
+                self.registration
+                    .showNotification(payload.title, options)
+                    .then(() => console.log('✅ Fallback notification shown'))
+                    .catch((err) =>
+                        console.error('❌ Fallback notification failed:', err),
+                    ),
+            );
         }
     } catch (e) {
-        console.log('data is not json parsable', e);
+        console.error('❌ Failed to parse push data as JSON:', e);
     }
 });
 
-/**
- * @param {NotificationEvent} event
- */
+// Notification click handler
 self.addEventListener('notificationclick', function (event) {
-    console.log('Notification click received.');
     event.notification.close();
 
     // Extract the URL from the notification data
-    const url =
-        event.notification.data && event.notification.data.url
-            ? event.notification.data.url
-            : '/';
+    const url = event.notification.data?.url || '/';
 
     // Open the specified URL
     event.waitUntil(
-        clients.matchAll({ type: 'window' }).then(function (clientList) {
-            // If we have a client already open, focus it
-            for (let i = 0; i < clientList.length; i++) {
-                const client = clientList[i];
-                if (client.url === url && 'focus' in client) {
-                    return client.focus();
+        clients
+            .matchAll({ type: 'window', includeUncontrolled: true })
+            .then(function (clientList) {
+                // If we have a client already open to the target URL, focus it
+                for (let i = 0; i < clientList.length; i++) {
+                    const client = clientList[i];
+
+                    if (client.url.includes(url) && 'focus' in client) {
+                        return client.focus();
+                    }
                 }
-            }
-            // Otherwise open a new window
-            if (clients.openWindow) {
-                return clients.openWindow(url);
-            }
-        }),
+
+                if (clients.openWindow) {
+                    return clients.openWindow(url);
+                } else {
+                    console.error('❌ Cannot open new window - not supported');
+                }
+            })
+            .catch((err) => {
+                console.error('❌ Error handling notification click:', err);
+            }),
     );
+});
+
+// Service worker activation
+self.addEventListener('activate', function (event) {
+    event.waitUntil(self.clients.claim());
+});
+
+// Service worker installation
+self.addEventListener('install', function (event) {
+    self.skipWaiting();
 });
