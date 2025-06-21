@@ -68,6 +68,7 @@ export function Navbar() {
         return `${baseClass} ${isActive(path) ? activeClass : inactiveClass}`;
     };
 
+
     const getUserInitials = (email: string) => {
         return email.substring(0, 2).toUpperCase();
     };
