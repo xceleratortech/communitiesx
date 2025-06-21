@@ -739,52 +739,27 @@ export default function PostsPage() {
                     )}
                 </div>
 
-                {/* Simplified info banner for mobile */}
-                <div className="mb-4 rounded-md bg-gray-50 p-3 md:overflow-hidden dark:bg-gray-800">
-                    <div className="md:scrolling-container relative w-full md:overflow-hidden">
-                        <p className="md:scrolling-text text-sm text-gray-600 md:whitespace-nowrap dark:text-gray-300">
-                            <span className="md:hidden">
-                                Viewing posts from your organization and
+                {/* Feed info banner */}
+                <div className="border-border/40 bg-muted/30 mb-4 flex items-center justify-between rounded-lg border px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                        <div className="bg-primary/10 flex h-6 w-6 items-center justify-center rounded-full">
+                            <Building className="text-primary h-3 w-3" />
+                        </div>
+                        <p className="text-muted-foreground text-sm font-medium">
+                            <span className="hidden sm:inline">
+                                Showing posts from your organization and
                                 communities
                             </span>
-                            <span className="hidden md:inline">
-                                You are seeing posts from your organization and
-                                communities you're following or are a member of.
-                                &nbsp;&nbsp;&nbsp;&nbsp; You are seeing posts
-                                from your organization and communities you're
-                                following or are a member of.
-                                &nbsp;&nbsp;&nbsp;&nbsp; You are seeing posts
-                                from your organization and communities you're
-                                following or are a member of.
-                                &nbsp;&nbsp;&nbsp;&nbsp;
-                            </span>
+                            <span className="sm:hidden">Your feed</span>
                         </p>
                     </div>
-                    <style jsx global>{`
-                        @keyframes scrollText {
-                            0% {
-                                transform: translateX(-33.33%);
-                            }
-                            100% {
-                                transform: translateX(0%);
-                            }
-                        }
-                        .scrolling-container {
-                            mask-image: linear-gradient(
-                                to right,
-                                transparent,
-                                black 5%,
-                                black 95%,
-                                transparent
-                            );
-                            overflow: hidden;
-                        }
-                        .scrolling-text {
-                            display: inline-block;
-                            animation: scrollText 20s linear infinite;
-                            padding-right: 50px;
-                        }
-                    `}</style>
+                    <div className="text-muted-foreground flex items-center gap-1 text-xs">
+                        <span className="hidden md:inline">
+                            {totalCount} posts
+                        </span>
+                        <div className="bg-muted-foreground/50 hidden h-1 w-1 rounded-full md:block"></div>
+                        <span className="hidden md:inline">Live feed</span>
+                    </div>
                 </div>
             </div>
 
