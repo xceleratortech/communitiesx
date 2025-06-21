@@ -221,36 +221,34 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             .run();
     };
 
-    // Create a class string based on the variant
+    /* -------------------------------------------------------------------------------------------------
+     * shadcn-inspired styles
+     * ------------------------------------------------------------------------------------------------*/
+
     const editorClasses = cn(
-        'border border-input rounded-md focus-within:ring-1 focus-within:ring-ring overflow-hidden',
-        'prose prose-sm max-w-none dark:prose-invert dark:prose-headings:text-white',
+        'border border-input rounded-md overflow-hidden',
+        'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
         variant === 'compact' ? 'min-h-[100px]' : 'min-h-[200px]',
     );
 
-    // Create a class string for the toolbar
     const toolbarClasses = cn(
-        'border-b border-input flex flex-wrap items-center gap-1 p-1 bg-muted/50 dark:bg-gray-800 dark:border-gray-700',
+        'flex flex-wrap items-center gap-1 border-b border-input bg-muted px-2 py-1',
     );
 
-    // Create a class string for the content
     const contentClasses = cn(
-        'p-3 focus:outline-none dark:bg-gray-800 dark:text-gray-100',
+        'p-3 prose prose-sm max-w-none dark:prose-invert',
+        'focus:outline-none',
         variant === 'compact' ? 'max-h-[150px]' : 'max-h-[300px]',
         'overflow-y-auto whitespace-pre-wrap',
     );
 
-    // Create a class string for the toolbar buttons
     const buttonClasses = cn(
-        'p-1 rounded hover:bg-muted dark:hover:bg-gray-700 transition-colors',
-        'text-gray-700 dark:text-gray-300',
+        'inline-flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground',
+        'hover:bg-accent hover:text-foreground',
+        'transition-colors',
     );
 
-    // Create a class string for active toolbar buttons
-    const activeButtonClasses = cn(
-        'p-1 rounded transition-colors',
-        'bg-gray-200 text-gray-900 dark:bg-gray-600 dark:text-white',
-    );
+    const activeButtonClasses = cn('bg-accent text-foreground');
 
     return (
         <div

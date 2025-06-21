@@ -696,11 +696,11 @@ export default function PostsPage() {
     };
 
     return (
-        <div className="py-4">
+        <div className="px-4 py-2 md:px-0 md:py-4">
             <div className="mb-4">
-                {/* Simplified header with cleaner styling */}
-                <div className="mb-4 flex flex-col items-center justify-between sm:flex-row">
-                    {/* Filter dropdown - replaced with shadcn Select */}
+                {/* Mobile-optimized header */}
+                <div className="mb-4 space-y-3 sm:flex sm:items-center sm:justify-between sm:space-y-0">
+                    {/* Filter dropdown */}
                     <div className="flex items-center">
                         <Select
                             value={selectedCommunity}
@@ -708,7 +708,7 @@ export default function PostsPage() {
                                 handleCommunityFilterChange(value)
                             }
                         >
-                            <SelectTrigger className="w-[180px]">
+                            <SelectTrigger className="w-full sm:w-[180px]">
                                 <SelectValue placeholder="Select filter" />
                             </SelectTrigger>
                             <SelectContent>
@@ -728,31 +728,36 @@ export default function PostsPage() {
                         </Select>
                     </div>
 
-                    <div className="flex items-center space-x-4">
-                        {/* Create Post button */}
-                        {session && (
-                            <Button size="sm" asChild className="mr-2">
-                                <Link href="/posts/new">
-                                    <PlusCircleIcon className="mr-1 h-4 w-4" />{' '}
-                                    New Post
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
+                    {/* Create Post button */}
+                    {session && (
+                        <Button size="sm" asChild className="w-full sm:w-auto">
+                            <Link href="/posts/new">
+                                <PlusCircleIcon className="mr-2 h-4 w-4" />
+                                New Post
+                            </Link>
+                        </Button>
+                    )}
                 </div>
 
-                {/* Info banner with horizontal scrolling animation */}
-                <div className="mb-4 overflow-hidden rounded-md bg-gray-50 p-3 dark:bg-gray-800">
-                    <div className="scrolling-container relative w-full overflow-hidden">
-                        <p className="scrolling-text text-sm whitespace-nowrap text-gray-600 dark:text-gray-300">
-                            You are seeing posts from your organization and
-                            communities you're following or are a member of.
-                            &nbsp;&nbsp;&nbsp;&nbsp; You are seeing posts from
-                            your organization and communities you're following
-                            or are a member of. &nbsp;&nbsp;&nbsp;&nbsp; You are
-                            seeing posts from your organization and communities
-                            you're following or are a member of.
-                            &nbsp;&nbsp;&nbsp;&nbsp;
+                {/* Simplified info banner for mobile */}
+                <div className="mb-4 rounded-md bg-gray-50 p-3 md:overflow-hidden dark:bg-gray-800">
+                    <div className="md:scrolling-container relative w-full md:overflow-hidden">
+                        <p className="md:scrolling-text text-sm text-gray-600 md:whitespace-nowrap dark:text-gray-300">
+                            <span className="md:hidden">
+                                Viewing posts from your organization and
+                                communities
+                            </span>
+                            <span className="hidden md:inline">
+                                You are seeing posts from your organization and
+                                communities you're following or are a member of.
+                                &nbsp;&nbsp;&nbsp;&nbsp; You are seeing posts
+                                from your organization and communities you're
+                                following or are a member of.
+                                &nbsp;&nbsp;&nbsp;&nbsp; You are seeing posts
+                                from your organization and communities you're
+                                following or are a member of.
+                                &nbsp;&nbsp;&nbsp;&nbsp;
+                            </span>
                         </p>
                     </div>
                     <style jsx global>{`
@@ -783,12 +788,12 @@ export default function PostsPage() {
                 </div>
             </div>
 
-            <div className="flex flex-col gap-4 md:flex-row">
+            <div className="flex flex-col gap-4 lg:flex-row">
                 {/* Main content area */}
-                <div className="flex-1">{renderPosts()}</div>
+                <div className="w-full lg:flex-1">{renderPosts()}</div>
 
-                {/* Right sidebar */}
-                <div className="w-full shrink-0 md:w-80 lg:w-96">
+                {/* Right sidebar - hidden on mobile, shown on large screens */}
+                <div className="hidden w-80 shrink-0 lg:block xl:w-96">
                     <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
                         {/* Your Communities Section */}
                         {userCommunities.length > 0 ? (
@@ -1008,6 +1013,62 @@ export default function PostsPage() {
                             </Card>
                         )}
                     </div>
+                </div>
+
+                {/* Mobile community access - show at bottom on small screens */}
+                <div className="lg:hidden">
+                    {userCommunities.length > 0 && (
+                        <div className="mt-6 overflow-hidden rounded-md border border-gray-200 dark:border-gray-700">
+                            <div className="bg-gray-50 px-4 py-3 dark:bg-gray-800">
+                                <span className="font-medium dark:text-white">
+                                    Your Communities
+                                </span>
+                            </div>
+                            <div className="p-2 dark:bg-gray-900">
+                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                    {userCommunities
+                                        .slice(0, 6)
+                                        .map((community) => (
+                                            <Link
+                                                key={community.id}
+                                                href={`/communities/${community.slug}`}
+                                                className="flex items-center space-x-2 rounded-md p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+                                            >
+                                                <Avatar className="h-6 w-6">
+                                                    <AvatarImage
+                                                        src={
+                                                            community.avatar ||
+                                                            undefined
+                                                        }
+                                                        alt={community.name}
+                                                    />
+                                                    <AvatarFallback className="bg-gray-200 text-xs text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+                                                        {community.name
+                                                            .substring(0, 2)
+                                                            .toUpperCase()}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <span className="truncate text-xs font-medium dark:text-white">
+                                                    {community.name}
+                                                </span>
+                                            </Link>
+                                        ))}
+                                </div>
+                                <div className="mt-3 px-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full"
+                                        asChild
+                                    >
+                                        <Link href="/communities">
+                                            Browse All Communities
+                                        </Link>
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

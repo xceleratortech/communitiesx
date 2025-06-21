@@ -6,14 +6,23 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
 import { useSession } from '@/server/auth/client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
     const { data: session } = useSession();
+    const router = useRouter();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
+
+    // Redirect logged-in users away from the landing page
+    useEffect(() => {
+        if (session) {
+            router.replace('/posts');
+        }
+    }, [session, router]);
 
     return (
         <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden text-center">
