@@ -12,9 +12,9 @@
         "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
         "db:push": "drizzle-kit push --config=drizzle.config.ts",
         "db:auth:generate": "pnpm dlx @better-auth/cli generate --output src/server/db/auth-schema.ts -y",
-        "db:seed": "pnpm dlx tsx src/server/db/seed.ts --env-file .env",
-        "update:community-roles": "pnpm dlx tsx scripts/update-community-roles.ts --env-file .env",
-        "import:users": "pnpm dlx tsx scripts/import-users.ts --env-file .env"
+        "db:seed": "pnpm dlx tsx --env-file .env.local src/server/db/seed.ts",
+        "update:community-roles": "pnpm dlx tsx --env-file .env.local scripts/update-community-roles.ts",
+        "import:users": "pnpm dlx tsx --env-file .env.local scripts/import-users.ts"
     },
     "dependencies": {
         "@hookform/resolvers": "^5.0.1",
