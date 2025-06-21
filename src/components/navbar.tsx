@@ -110,7 +110,7 @@ export function Navbar() {
                         {/* Add ChatButton here so it's visible on mobile */}
                         {mounted && session && (
                             <>
-                                <div className="flex sm:hidden">
+                                {/* <div className="flex sm:hidden">
                                     <ChatButton />
                                 </div>
                                 <div className="flex sm:hidden">
@@ -118,16 +118,16 @@ export function Navbar() {
                                 </div>
                                 <div className="flex sm:hidden">
                                     <ViewNotificationButton />
-                                </div>
+                                </div> */}
                             </>
                         )}
                         <ThemeToggle />
                         {mounted ? (
                             session ? (
                                 <div className="hidden items-center space-x-4 sm:flex">
-                                    <ChatButton />
+                                    {/* <ChatButton />
                                     <NotificationButton />
-                                    <ViewNotificationButton />
+                                    <ViewNotificationButton /> */}
                                     <span className="text-sm text-gray-700 dark:text-gray-300">
                                         {session.user.email}
                                     </span>

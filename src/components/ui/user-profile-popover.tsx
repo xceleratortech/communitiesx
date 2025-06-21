@@ -211,7 +211,7 @@ export function UserProfilePopover({
                         </div>
 
                         {/* Actions */}
-                        <div className="flex justify-end border-t p-4">
+                        {/* <div className="flex justify-end border-t p-4">
                             <Button
                                 size="sm"
                                 onClick={startChat}
@@ -225,7 +225,7 @@ export function UserProfilePopover({
                                     ? 'Opening...'
                                     : 'Message'}
                             </Button>
-                        </div>
+                        </div> */}
                     </div>
                 ) : (
                     <div className="p-4 text-center">
