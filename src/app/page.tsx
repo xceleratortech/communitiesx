@@ -29,7 +29,7 @@ export default function Home() {
                     className="h-full w-full"
                 />
             </div>
-            <div className="relative z-10 px-4">
+            <div className="relative z-10 mt-10 px-4 sm:mt-0">
                 <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl dark:text-gray-100">
                     Let&apos;s Build a{' '}
                     <span className="text-blue-600 dark:text-blue-400">
@@ -44,7 +44,7 @@ export default function Home() {
                 <div className="flex flex-col justify-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
                     <Button asChild size="lg">
                         <a
-                            href="/posts"
+                            href={mounted && session ? '/posts' : '/auth/login'}
                             className="rounded-lg px-8 py-3 text-lg font-semibold shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                             Explore Posts

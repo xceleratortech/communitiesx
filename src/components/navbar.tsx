@@ -63,7 +63,7 @@ export function Navbar() {
     };
 
     return (
-        <nav className="bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
+        <nav className="relative z-50 bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex h-16 justify-between">
                     <div className="flex">
@@ -181,7 +181,9 @@ export function Navbar() {
             </div>
 
             {/* Mobile menu, show/hide based on menu state */}
-            <div className={`sm:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
+            <div
+                className={`relative z-50 sm:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}
+            >
                 <div className="space-y-1 px-2 pt-2 pb-3">
                     {mounted && session?.user?.role === 'admin' && (
                         <Link
