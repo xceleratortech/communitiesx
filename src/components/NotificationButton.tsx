@@ -92,7 +92,8 @@ export function NotificationButton() {
             if (!subscription) {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey: applicationServerKey,
+                    applicationServerKey:
+                        applicationServerKey.buffer as ArrayBuffer,
                 });
             }
 
@@ -157,7 +158,7 @@ export function NotificationButton() {
         <button
             onClick={handleClick}
             disabled={isLoading}
-            className="rounded-md p-2 transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-gray-800"
+            className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             title={
                 subscriptionStatus?.isSubscribed
                     ? 'Disable notifications'
@@ -165,9 +166,9 @@ export function NotificationButton() {
             }
         >
             {subscriptionStatus?.isSubscribed ? (
-                <BellOff className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <BellOff className="text-muted-foreground h-4 w-4" />
             ) : (
-                <Bell className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                <Bell className="text-muted-foreground h-4 w-4" />
             )}
         </button>
     );
