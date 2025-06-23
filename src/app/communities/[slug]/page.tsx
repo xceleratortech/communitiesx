@@ -447,10 +447,11 @@ export default function CommunityDetailPage() {
     const isAdmin = !!userMembership && userMembership.role === 'admin';
 
     return (
-        <div className="py-8">
-            {/* Banner and Community Info */}
-            <div className="relative mb-16">
-                <div className="h-48 w-full overflow-hidden rounded-t-lg bg-gradient-to-r from-blue-400 to-blue-600">
+        <div className="mx-auto max-w-5xl px-4 py-8">
+            {/* Reddit-style header */}
+            <div className="mb-8">
+                {/* Banner */}
+                <div className="h-32 w-full overflow-hidden bg-gradient-to-r from-blue-500 to-blue-700 sm:h-40">
                     {community.banner && (
                         <img
                             src={community.banner}
@@ -460,285 +461,339 @@ export default function CommunityDetailPage() {
                     )}
                 </div>
 
-                <div className="absolute -bottom-12 left-8 flex items-end">
-                    <Avatar className="border-background h-24 w-24 border-4">
-                        <AvatarImage
-                            src={community.avatar || undefined}
-                            alt={community.name}
-                        />
-                        <AvatarFallback className="bg-primary text-2xl">
-                            {community.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div className="mb-2 ml-4">
-                        <div className="flex items-center gap-2">
-                            <h1 className="text-3xl font-bold">
-                                {community.name}
-                            </h1>
-                            {community.type === 'private' ? (
-                                <Lock className="text-muted-foreground h-5 w-5" />
-                            ) : (
-                                <Globe className="text-muted-foreground h-5 w-5" />
-                            )}
+                {/* Community info bar - clean, no card */}
+                <div className="bg-background border-b py-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        {/* Left side: Avatar + info */}
+                        <div className="flex items-center gap-4">
+                            <Avatar className="border-background -mt-8 h-16 w-16 border-4 sm:-mt-10 sm:h-20 sm:w-20">
+                                <AvatarImage
+                                    src={community.avatar || undefined}
+                                    alt={community.name}
+                                />
+                                <AvatarFallback className="bg-primary text-lg sm:text-xl">
+                                    {community.name
+                                        .substring(0, 2)
+                                        .toUpperCase()}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="pt-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h1 className="text-xl font-bold sm:text-2xl">
+                                        r/{community.name}
+                                    </h1>
+                                    {community.type === 'private' ? (
+                                        <Lock className="text-muted-foreground h-4 w-4" />
+                                    ) : (
+                                        <Globe className="text-muted-foreground h-4 w-4" />
+                                    )}
+                                </div>
+                                <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-4 text-sm">
+                                    <div className="flex items-center gap-1">
+                                        <Users className="h-4 w-4" />
+                                        <span className="font-medium">
+                                            {community.members?.length || 0}
+                                        </span>{' '}
+                                        members
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <Calendar className="h-4 w-4" />
+                                        Created{' '}
+                                        {new Date(
+                                            community.createdAt,
+                                        ).toLocaleDateString()}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div className="text-muted-foreground mt-1 flex items-center gap-3 text-sm">
-                            <div className="flex items-center gap-1">
-                                <Users className="h-4 w-4" />
-                                {community.members?.length || 0} members
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Calendar className="h-4 w-4" />
-                                Created{' '}
-                                {new Date(
-                                    community.createdAt,
-                                ).toLocaleDateString()}
-                            </div>
+
+                        {/* Right side: Action buttons */}
+                        <div className="flex flex-wrap gap-2 sm:pt-2">
+                            {isMember ? (
+                                <Button
+                                    variant="outline"
+                                    onClick={handleLeaveCommunity}
+                                    disabled={isActionInProgress || isAdmin}
+                                >
+                                    {/* {isAdmin ? "Admin can't leave" : "Leave Community"} */}
+                                    {isAdmin ? 'Admin' : 'Leave Community'}
+                                </Button>
+                            ) : isFollower ? (
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleUnfollowCommunity}
+                                        disabled={isActionInProgress}
+                                    >
+                                        {isActionInProgress
+                                            ? 'Processing...'
+                                            : 'Unfollow'}
+                                    </Button>
+                                    {hasPendingJoinRequest ? (
+                                        <Button disabled variant="secondary">
+                                            Join Request Pending
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={handleJoinCommunity}
+                                            disabled={isActionInProgress}
+                                        >
+                                            {isActionInProgress
+                                                ? 'Processing...'
+                                                : 'Join Community'}
+                                        </Button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex gap-2">
+                                    {hasPendingFollowRequest ? (
+                                        <Button disabled variant="secondary">
+                                            Follow Request Pending
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleFollowCommunity}
+                                            disabled={isActionInProgress}
+                                        >
+                                            {isActionInProgress
+                                                ? 'Processing...'
+                                                : 'Follow'}
+                                        </Button>
+                                    )}
+
+                                    {hasPendingJoinRequest ? (
+                                        <Button disabled variant="secondary">
+                                            Join Request Pending
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            onClick={handleJoinCommunity}
+                                            disabled={isActionInProgress}
+                                        >
+                                            {isActionInProgress
+                                                ? 'Processing...'
+                                                : 'Join Community'}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <div className="absolute right-8 bottom-0 flex gap-3">
-                    {isMember ? (
-                        <Button
-                            variant="outline"
-                            onClick={handleLeaveCommunity}
-                            disabled={isActionInProgress || isAdmin}
-                        >
-                            {/* {isAdmin ? "Admin can't leave" : "Leave Community"} */}
-                            {isAdmin ? 'Admin' : 'Leave Community'}
-                        </Button>
-                    ) : isFollower ? (
-                        <div className="flex gap-2">
-                            <Button
-                                variant="outline"
-                                onClick={handleUnfollowCommunity}
-                                disabled={isActionInProgress}
-                            >
-                                {isActionInProgress
-                                    ? 'Processing...'
-                                    : 'Unfollow'}
-                            </Button>
-                            {hasPendingJoinRequest ? (
-                                <Button disabled variant="secondary">
-                                    Join Request Pending
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={handleJoinCommunity}
-                                    disabled={isActionInProgress}
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Join Community'}
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex gap-2">
-                            {hasPendingFollowRequest ? (
-                                <Button disabled variant="secondary">
-                                    Follow Request Pending
-                                </Button>
-                            ) : (
-                                <Button
-                                    variant="outline"
-                                    onClick={handleFollowCommunity}
-                                    disabled={isActionInProgress}
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Follow'}
-                                </Button>
-                            )}
-
-                            {hasPendingJoinRequest ? (
-                                <Button disabled variant="secondary">
-                                    Join Request Pending
-                                </Button>
-                            ) : (
-                                <Button
-                                    onClick={handleJoinCommunity}
-                                    disabled={isActionInProgress}
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Join Community'}
-                                </Button>
-                            )}
-                        </div>
-                    )}
+            {/* Description */}
+            {community.description && (
+                <div className="mb-6">
+                    <p className="text-muted-foreground text-sm leading-relaxed">
+                        {community.description}
+                    </p>
                 </div>
-            </div>
+            )}
 
-            {/* Community Description */}
-            <div className="mb-8">
-                <Card>
-                    <CardContent className="pt-6">
-                        <p className="text-muted-foreground">
-                            {community.description ||
-                                'No description provided.'}
-                        </p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Tabs for Posts, About, Members */}
-            <Tabs
-                defaultValue="posts"
-                className="w-full"
-                onValueChange={handleTabChange}
-            >
-                <TabsList className="mb-6">
-                    <TabsTrigger value="posts">Posts</TabsTrigger>
-                    <TabsTrigger value="about">About</TabsTrigger>
-                    <TabsTrigger value="members">Members</TabsTrigger>
+            {/* Reddit-style navigation tabs */}
+            <div className="border-border mb-6 border-b">
+                <nav className="flex space-x-8 overflow-x-auto">
+                    <button
+                        onClick={() => handleTabChange('posts')}
+                        className={`border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap ${
+                            activeTab === 'posts'
+                                ? 'border-primary text-primary'
+                                : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground border-transparent'
+                        }`}
+                    >
+                        Posts
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('about')}
+                        className={`border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap ${
+                            activeTab === 'about'
+                                ? 'border-primary text-primary'
+                                : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground border-transparent'
+                        }`}
+                    >
+                        About
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('members')}
+                        className={`border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap ${
+                            activeTab === 'members'
+                                ? 'border-primary text-primary'
+                                : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground border-transparent'
+                        }`}
+                    >
+                        Members
+                    </button>
                     {(isModerator || isAdmin) && (
-                        <TabsTrigger value="manage" className="relative">
+                        <button
+                            onClick={() => handleTabChange('manage')}
+                            className={`relative border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap ${
+                                activeTab === 'manage'
+                                    ? 'border-primary text-primary'
+                                    : 'text-muted-foreground hover:text-foreground hover:border-muted-foreground border-transparent'
+                            }`}
+                        >
                             Manage
                             {pendingRequests && pendingRequests.length > 0 && (
                                 <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
                                     {pendingRequests.length}
                                 </span>
                             )}
-                        </TabsTrigger>
+                        </button>
                     )}
-                </TabsList>
+                </nav>
+            </div>
 
-                <TabsContent value="posts" className="space-y-4">
-                    {isMember && (
-                        <div className="mb-6">
-                            <Button asChild className="w-full">
-                                <Link
-                                    href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
-                                >
-                                    Create Post
-                                </Link>
-                            </Button>
-                        </div>
-                    )}
-
-                    {!isMember && isFollower && (
-                        <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
-                            <p className="text-muted-foreground mb-2">
-                                You need to be a member to create posts
-                            </p>
-                            <Button
-                                onClick={handleJoinCommunity}
-                                disabled={isActionInProgress}
-                            >
-                                {isActionInProgress
-                                    ? 'Processing...'
-                                    : 'Join Community'}
-                            </Button>
-                        </div>
-                    )}
-
-                    {!isMember &&
-                        !isFollower &&
-                        community.type === 'private' && (
-                            <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
-                                <p className="text-muted-foreground mb-2">
-                                    You need to follow or join this community to
-                                    view posts
-                                </p>
-                                <div className="mt-4 flex justify-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleFollowCommunity}
-                                        disabled={isActionInProgress}
+            {/* Tab content */}
+            <div className="space-y-4">
+                {activeTab === 'posts' && (
+                    <div className="space-y-4">
+                        {isMember && (
+                            <div className="mb-6">
+                                <Button asChild className="w-full">
+                                    <Link
+                                        href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
                                     >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Follow Community'}
-                                    </Button>
-                                    <Button
-                                        onClick={handleJoinCommunity}
-                                        disabled={isActionInProgress}
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Join Community'}
-                                    </Button>
-                                </div>
+                                        Create Post
+                                    </Link>
+                                </Button>
                             </div>
                         )}
 
-                    {community.posts && community.posts.length > 0 ? (
-                        <div className="space-y-4">
-                            {community.posts.map((post: any) => (
-                                <Card key={post.id}>
-                                    <CardHeader>
-                                        <CardTitle>
-                                            <Link
-                                                href={`/posts/${post.id}`}
-                                                className="hover:underline"
-                                            >
-                                                {post.title}
-                                            </Link>
-                                        </CardTitle>
-                                        <CardDescription>
-                                            Posted by{' '}
-                                            {post.author?.name || 'Unknown'} •{' '}
-                                            {new Date(
-                                                post.createdAt,
-                                            ).toLocaleDateString()}
-                                        </CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div
-                                            className="prose prose-sm line-clamp-3 max-w-none"
-                                            dangerouslySetInnerHTML={{
-                                                __html: post.content,
-                                            }}
-                                        />
-                                    </CardContent>
-                                    <CardFooter className="flex justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                                                <MessageSquare className="h-4 w-4" />
-                                                {post.comments?.length || 0}{' '}
-                                                comments
-                                            </span>
-                                        </div>
+                        {!isMember && isFollower && (
+                            <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
+                                <p className="text-muted-foreground mb-2">
+                                    You need to be a member to create posts
+                                </p>
+                                <Button
+                                    onClick={handleJoinCommunity}
+                                    disabled={isActionInProgress}
+                                >
+                                    {isActionInProgress
+                                        ? 'Processing...'
+                                        : 'Join Community'}
+                                </Button>
+                            </div>
+                        )}
+
+                        {!isMember &&
+                            !isFollower &&
+                            community.type === 'private' && (
+                                <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
+                                    <p className="text-muted-foreground mb-2">
+                                        You need to follow or join this
+                                        community to view posts
+                                    </p>
+                                    <div className="mt-4 flex justify-center gap-2">
                                         <Button
                                             variant="outline"
-                                            size="sm"
-                                            asChild
+                                            onClick={handleFollowCommunity}
+                                            disabled={isActionInProgress}
                                         >
-                                            <Link href={`/posts/${post.id}`}>
-                                                Read More
-                                            </Link>
+                                            {isActionInProgress
+                                                ? 'Processing...'
+                                                : 'Follow Community'}
                                         </Button>
-                                    </CardFooter>
-                                </Card>
-                            ))}
-                        </div>
-                    ) : community.type === 'private' &&
-                      !isMember &&
-                      !isFollower ? (
-                        <div className="py-12 text-center">
-                            <h3 className="text-lg font-medium">
-                                Private Community
-                            </h3>
-                            <p className="text-muted-foreground mt-2">
-                                Follow or join this community to view posts.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="py-12 text-center">
-                            <h3 className="text-lg font-medium">
-                                No posts yet
-                            </h3>
-                            <p className="text-muted-foreground mt-2">
-                                {isMember
-                                    ? 'Be the first to create a post in this community!'
-                                    : 'No posts have been created yet.'}
-                            </p>
-                        </div>
-                    )}
-                </TabsContent>
+                                        <Button
+                                            onClick={handleJoinCommunity}
+                                            disabled={isActionInProgress}
+                                        >
+                                            {isActionInProgress
+                                                ? 'Processing...'
+                                                : 'Join Community'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
 
-                <TabsContent value="about">
+                        {community.posts && community.posts.length > 0 ? (
+                            <div className="space-y-2">
+                                {community.posts.map((post: any) => (
+                                    <Link
+                                        key={post.id}
+                                        href={`/posts/${post.id}`}
+                                        className="block"
+                                    >
+                                        <div className="bg-card border-border hover:bg-accent/50 cursor-pointer rounded-md border p-4 transition-colors">
+                                            {/* Post header */}
+                                            <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs">
+                                                <span>r/{community.name}</span>
+                                                <span>•</span>
+                                                <span>
+                                                    Posted by u/
+                                                    {post.author?.name ||
+                                                        'Unknown'}
+                                                </span>
+                                                <span>•</span>
+                                                <span>
+                                                    {getRelativeTime(
+                                                        new Date(
+                                                            post.createdAt,
+                                                        ),
+                                                    )}
+                                                </span>
+                                            </div>
+
+                                            {/* Post title */}
+                                            <h3 className="text-foreground hover:text-primary mb-2 text-base font-medium">
+                                                {post.title}
+                                            </h3>
+
+                                            {/* Post content preview */}
+                                            <div
+                                                className="text-muted-foreground mb-3 line-clamp-3 text-sm"
+                                                dangerouslySetInnerHTML={{
+                                                    __html: post.content,
+                                                }}
+                                            />
+
+                                            {/* Post footer */}
+                                            <div className="text-muted-foreground flex items-center gap-4 text-xs">
+                                                <div className="hover:text-foreground flex items-center gap-1">
+                                                    <MessageSquare className="h-4 w-4" />
+                                                    <span>
+                                                        {post.comments
+                                                            ?.length || 0}{' '}
+                                                        comments
+                                                    </span>
+                                                </div>
+                                                <div className="hover:text-foreground flex items-center gap-1">
+                                                    <Eye className="h-4 w-4" />
+                                                    <span>Share</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : community.type === 'private' &&
+                          !isMember &&
+                          !isFollower ? (
+                            <div className="py-12 text-center">
+                                <h3 className="text-lg font-medium">
+                                    Private Community
+                                </h3>
+                                <p className="text-muted-foreground mt-2">
+                                    Follow or join this community to view posts.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="py-12 text-center">
+                                <h3 className="text-lg font-medium">
+                                    No posts yet
+                                </h3>
+                                <p className="text-muted-foreground mt-2">
+                                    {isMember
+                                        ? 'Be the first to create a post in this community!'
+                                        : 'No posts have been created yet.'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'about' && (
                     <Card>
                         <CardHeader>
                             <CardTitle>Community Rules</CardTitle>
@@ -755,9 +810,9 @@ export default function CommunityDetailPage() {
                             )}
                         </CardContent>
                     </Card>
-                </TabsContent>
+                )}
 
-                <TabsContent value="members">
+                {activeTab === 'members' && (
                     <Card>
                         <CardHeader>
                             <CardTitle>Members</CardTitle>
@@ -1168,10 +1223,10 @@ export default function CommunityDetailPage() {
                             )}
                         </CardContent>
                     </Card>
-                </TabsContent>
+                )}
 
-                {(isModerator || isAdmin) && (
-                    <TabsContent value="manage">
+                {(isModerator || isAdmin) && activeTab === 'manage' && (
+                    <div className="space-y-6">
                         <Card className="mb-6">
                             <CardHeader>
                                 <CardTitle>Pending Requests</CardTitle>
@@ -1349,9 +1404,9 @@ export default function CommunityDetailPage() {
                                 />
                             </CardContent>
                         </Card>
-                    </TabsContent>
+                    </div>
                 )}
-            </Tabs>
+            </div>
 
             {/* Leave Community Alert Dialog */}
             <AlertDialog
@@ -1437,20 +1492,30 @@ export default function CommunityDetailPage() {
 function CommunityDetailSkeleton() {
     return (
         <div className="container mx-auto px-4 py-8 md:px-6">
-            {/* Banner and Community Info Skeleton */}
-            <div className="relative mb-16">
-                <Skeleton className="h-48 w-full rounded-t-lg" />
-
-                <div className="absolute -bottom-12 left-8 flex items-end">
-                    <Skeleton className="h-24 w-24 rounded-full" />
-                    <div className="mb-2 ml-4">
-                        <Skeleton className="mb-2 h-8 w-64" />
-                        <Skeleton className="h-4 w-40" />
-                    </div>
+            {/* Reddit-style header */}
+            <div className="mb-8">
+                {/* Banner */}
+                <div className="h-20 w-full overflow-hidden rounded-t-lg bg-gradient-to-r from-blue-500 to-blue-700 sm:h-24">
+                    <Skeleton className="h-full w-full" />
                 </div>
 
-                <div className="absolute right-8 bottom-0">
-                    <Skeleton className="h-10 w-32" />
+                {/* Community info bar */}
+                <div className="bg-card rounded-b-lg border border-t-0 p-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        {/* Left side: Avatar + info */}
+                        <div className="flex items-center gap-3">
+                            <Skeleton className="h-16 w-16 rounded-full sm:h-20 sm:w-20" />
+                            <div>
+                                <Skeleton className="h-8 w-64" />
+                                <Skeleton className="h-4 w-40" />
+                            </div>
+                        </div>
+
+                        {/* Right side: Action buttons */}
+                        <div className="flex flex-wrap gap-2">
+                            <Skeleton className="h-10 w-24" />
+                        </div>
+                    </div>
                 </div>
             </div>
 
