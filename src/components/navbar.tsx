@@ -79,10 +79,10 @@ export function Navbar() {
                 <div className="mr-6 flex items-center space-x-2">
                     <Link href="/" className="flex items-center space-x-2">
                         <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold">
-                            AU
+                            {process.env.NEXT_PUBLIC_LOGO_INITIALS}
                         </div>
                         <span className="text-foreground hidden font-bold sm:inline-block">
-                            AU NEP
+                            {process.env.NEXT_PUBLIC_LOGO_NAME}
                         </span>
                     </Link>
                 </div>
@@ -119,12 +119,16 @@ export function Navbar() {
 
                 {/* Right side actions */}
                 <div className="flex flex-1 items-center justify-end space-x-2">
+                    {mounted && session && <NotificationButton />}
                     {/* Theme Toggle */}
                     <ThemeToggle />
 
                     {mounted ? (
                         session ? (
                             <>
+                                <div>
+                                    <ChatButton />
+                                </div>
                                 {/* Desktop Actions */}
                                 <div className="hidden items-center space-x-2 md:flex">
                                     <ViewNotificationButton />
