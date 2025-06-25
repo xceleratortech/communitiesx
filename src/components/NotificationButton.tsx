@@ -4,12 +4,22 @@ import { useState, useEffect } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { trpc } from '@/providers/trpc-provider';
 import { toast } from 'sonner';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 export function NotificationButton() {
     const [isSupported, setIsSupported] = useState(false);
     const [isLocallySubscribed, setIsLocallySubscribed] = useState(false);
     const [localPermission, setLocalPermission] =
         useState<NotificationPermission>('default');
+    const [showPrompt, setShowPrompt] = useState(false);
 
     const { data: subscriptionStatus, refetch: refetchStatus } =
         trpc.chat.getSubscriptionStatus.useQuery();
@@ -25,11 +35,21 @@ export function NotificationButton() {
                     if (reg) {
                         const sub = await reg.pushManager.getSubscription();
                         setIsLocallySubscribed(!!sub);
+                        // Show prompt if not subscribed and permission not granted
+                        if (!sub && Notification.permission !== 'granted') {
+                            setShowPrompt(true);
+                        }
                     } else {
                         setIsLocallySubscribed(false);
+                        if (Notification.permission !== 'granted') {
+                            setShowPrompt(true);
+                        }
                     }
                 } catch {
                     setIsLocallySubscribed(false);
+                    if (Notification.permission !== 'granted') {
+                        setShowPrompt(true);
+                    }
                 }
             }
         }
@@ -165,6 +185,11 @@ export function NotificationButton() {
         }
     };
 
+    const handlePromptSubscribe = async () => {
+        setShowPrompt(false);
+        await handleSubscribe();
+    };
+
     // Use local state to determine button UI and logic
     const isLoading =
         subscribeMutation.isPending || unsubscribeMutation.isPending;
@@ -172,22 +197,45 @@ export function NotificationButton() {
         isLocallySubscribed && localPermission === 'granted';
 
     return (
-        <button
-            onClick={shouldShowSubscribed ? handleUnsubscribe : handleSubscribe}
-            disabled={isLoading}
-            className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            title={
-                shouldShowSubscribed
-                    ? 'Disable notifications'
-                    : 'Enable notifications'
-            }
-        >
-            {shouldShowSubscribed ? (
-                <BellOff className="text-muted-foreground h-4 w-4" />
-            ) : (
-                <Bell className="text-muted-foreground h-4 w-4" />
-            )}
-        </button>
+        <>
+            <button
+                onClick={
+                    shouldShowSubscribed ? handleUnsubscribe : handleSubscribe
+                }
+                disabled={isLoading}
+                className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                title={
+                    shouldShowSubscribed
+                        ? 'Disable notifications'
+                        : 'Enable notifications'
+                }
+            >
+                {shouldShowSubscribed ? (
+                    <BellOff className="text-muted-foreground h-4 w-4" />
+                ) : (
+                    <Bell className="text-muted-foreground h-4 w-4" />
+                )}
+            </button>
+            <Dialog open={showPrompt} onOpenChange={setShowPrompt}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Enable Notifications</DialogTitle>
+                    </DialogHeader>
+                    <div className="mb-4">
+                        Would you like to enable push notifications for this
+                        device?
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={handlePromptSubscribe}>
+                            Enable Notifications
+                        </Button>
+                        <DialogClose asChild>
+                            <Button variant="outline">Not Now</Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
 
