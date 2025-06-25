@@ -339,4 +339,30 @@ export const adminRouter = router({
                 });
             }
         }),
+
+    // Get unique logins per day from login_events
+    getUniqueLoginsPerDay: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user || ctx.session.user.role !== 'admin') {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'Only admins can access login stats',
+            });
+        }
+        try {
+            const result = await db.execute(
+                `SELECT DATE("created_at") as date, COUNT(DISTINCT "user_id") as unique_logins
+                 FROM login_events
+                 GROUP BY DATE("created_at")
+                 ORDER BY date DESC
+                 LIMIT 30;`,
+            );
+            return result.rows;
+        } catch (error) {
+            console.error('Error fetching unique logins per day:', error);
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch unique logins per day',
+            });
+        }
+    }),
 });
