@@ -25,8 +25,8 @@ export default function Home() {
     }, [session, router]);
 
     return (
-        <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden text-center">
-            <div className="fixed inset-0 top-16 h-[calc(100vh-4rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
+        <div className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center overflow-hidden text-center">
+            <div className="fixed inset-0 top-10 h-[calc(100vh-3.5rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
