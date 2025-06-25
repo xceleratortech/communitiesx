@@ -7,9 +7,34 @@ import { toast } from 'sonner';
 
 export function NotificationButton() {
     const [isSupported, setIsSupported] = useState(false);
+    const [isLocallySubscribed, setIsLocallySubscribed] = useState(false);
+    const [localPermission, setLocalPermission] =
+        useState<NotificationPermission>('default');
 
     const { data: subscriptionStatus, refetch: refetchStatus } =
         trpc.chat.getSubscriptionStatus.useQuery();
+
+    // Check local browser subscription and permission
+    useEffect(() => {
+        setIsSupported('serviceWorker' in navigator && 'PushManager' in window);
+        async function checkLocalSubscription() {
+            if ('serviceWorker' in navigator && 'PushManager' in window) {
+                setLocalPermission(Notification.permission);
+                try {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    if (reg) {
+                        const sub = await reg.pushManager.getSubscription();
+                        setIsLocallySubscribed(!!sub);
+                    } else {
+                        setIsLocallySubscribed(false);
+                    }
+                } catch {
+                    setIsLocallySubscribed(false);
+                }
+            }
+        }
+        checkLocalSubscription();
+    }, []);
 
     const subscribeMutation = trpc.chat.subscribeToPush.useMutation({
         onSuccess: () => {
@@ -31,10 +56,6 @@ export function NotificationButton() {
         },
     });
 
-    useEffect(() => {
-        setIsSupported('serviceWorker' in navigator && 'PushManager' in window);
-    }, []);
-
     const handleSubscribe = async () => {
         if (!isSupported) {
             toast.error('Push notifications are not supported in this browser');
@@ -45,6 +66,7 @@ export function NotificationButton() {
             let permission = Notification.permission;
             if (permission === 'default') {
                 permission = await Notification.requestPermission();
+                setLocalPermission(permission);
             }
 
             if (permission !== 'granted') {
@@ -97,6 +119,8 @@ export function NotificationButton() {
                 });
             }
 
+            setIsLocallySubscribed(true);
+
             const subscriptionData = {
                 endpoint: subscription.endpoint,
                 p256dh: arrayBufferToBase64(subscription.getKey('p256dh')!),
@@ -105,6 +129,7 @@ export function NotificationButton() {
 
             await subscribeMutation.mutateAsync(subscriptionData);
         } catch (error) {
+            setIsLocallySubscribed(false);
             if (error instanceof Error) {
                 if (error.name === 'NotSupportedError') {
                     toast.error('Push messaging is not supported');
@@ -133,39 +158,31 @@ export function NotificationButton() {
                 await subscription.unsubscribe();
             }
 
+            setIsLocallySubscribed(false);
             await unsubscribeMutation.mutateAsync();
         } catch (error) {
             toast.error('Failed to disable notifications');
         }
     };
 
-    const handleClick = () => {
-        if (subscriptionStatus?.isSubscribed) {
-            handleUnsubscribe();
-        } else {
-            handleSubscribe();
-        }
-    };
-
-    if (!isSupported) {
-        return null;
-    }
-
+    // Use local state to determine button UI and logic
     const isLoading =
         subscribeMutation.isPending || unsubscribeMutation.isPending;
+    const shouldShowSubscribed =
+        isLocallySubscribed && localPermission === 'granted';
 
     return (
         <button
-            onClick={handleClick}
+            onClick={shouldShowSubscribed ? handleUnsubscribe : handleSubscribe}
             disabled={isLoading}
             className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             title={
-                subscriptionStatus?.isSubscribed
+                shouldShowSubscribed
                     ? 'Disable notifications'
                     : 'Enable notifications'
             }
         >
-            {subscriptionStatus?.isSubscribed ? (
+            {shouldShowSubscribed ? (
                 <BellOff className="text-muted-foreground h-4 w-4" />
             ) : (
                 <Bell className="text-muted-foreground h-4 w-4" />
