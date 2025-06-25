@@ -17,6 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { trpc } from '@/providers/trpc-provider';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { useChat } from '@/providers/chat-provider';
 
 interface NotificationData {
     threadId?: number;
@@ -43,6 +44,7 @@ export function ViewNotificationButton() {
     const [initialLoad, setInitialLoad] = useState(true);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const observerTarget = useRef<HTMLDivElement>(null);
+    const { openChat, setActiveThreadId } = useChat();
 
     // Get unread count
     const { data: unreadCount = 0, refetch: refetchUnreadCount } =
@@ -178,7 +180,10 @@ export function ViewNotificationButton() {
             try {
                 const data: NotificationData = JSON.parse(notification.data);
                 if (notification.type === 'dm' && data.threadId) {
-                    window.location.href = `/chat?thread=${data.threadId}`;
+                    openChat();
+                    setActiveThreadId(Number(data.threadId));
+                    setIsOpen(false); // Optionally close the notification panel
+                    return;
                 }
             } catch (error) {
                 console.error('Error parsing notification data:', error);
@@ -232,7 +237,7 @@ export function ViewNotificationButton() {
                         onClick={() => setIsOpen(false)}
                     />
 
-                    <div className="absolute right-0 z-50 mt-2 w-80 rounded-lg border bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                    <div className="absolute z-50 mt-2 w-80 rounded-lg border bg-white shadow-lg sm:right-0 md:right-0 dark:border-gray-700 dark:bg-gray-800">
                         <div className="flex items-center justify-between border-b p-4 dark:border-gray-700">
                             <h3 className="text-lg font-semibold dark:text-white">
                                 Notifications
