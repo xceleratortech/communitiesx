@@ -41,15 +41,7 @@ export const auth = betterAuth({
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     },
-    emailVerification: {
-        sendVerificationEmail: async ({ user, url }) => {
-            const { subject, html } = createVerificationEmail(url);
-            await sendEmail({ to: user.email, subject, html });
-        },
-        sendOnSignUp: true,
-        autoSignInAfterVerification: true,
-        expiresIn: 3600,
-    },
+    emailVerification: undefined,
     emailAndPassword: {
         enabled: true,
         disableSignUp: false,
@@ -96,6 +88,25 @@ export const auth = betterAuth({
                     }
 
                     return { data: userData };
+                },
+            },
+        },
+        session: {
+            create: {
+                after: async (session, ctx) => {
+                    // Insert a login event on successful session creation
+                    const { db } = await import('@/server/db');
+                    const { loginEvents } = await import(
+                        '@/server/db/auth-schema'
+                    );
+                    const { nanoid } = await import('nanoid');
+                    await db.insert(loginEvents).values({
+                        id: nanoid(),
+                        userId: session.userId,
+                        createdAt: new Date(),
+                        ipAddress: session.ipAddress,
+                        userAgent: session.userAgent,
+                    });
                 },
             },
         },

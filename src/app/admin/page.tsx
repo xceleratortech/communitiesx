@@ -53,6 +53,15 @@ import {
 import { Loader2, CheckCircle, UserMinus } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ResponsiveContainer,
+    CartesianGrid,
+} from 'recharts';
 
 // Define types for the data we're working with
 type User = {
@@ -110,12 +119,6 @@ export default function AdminDashboard() {
         orgId: '',
     });
 
-    // For direct email verification
-    const [verifyEmail, setVerifyEmail] = useState('');
-    const [isVerifying, setIsVerifying] = useState(false);
-    const [verifyError, setVerifyError] = useState<string | null>(null);
-    const [verifySuccess, setVerifySuccess] = useState(false);
-
     // Queries
     const { data: users, isLoading: isLoadingUsers } =
         trpc.admin.getUsers.useQuery(undefined, {
@@ -124,6 +127,12 @@ export default function AdminDashboard() {
 
     const { data: orgs, isLoading: isLoadingOrgs } =
         trpc.admin.getOrgs.useQuery(undefined, {
+            enabled: !!session && session.user.role === 'admin',
+        });
+
+    // Fetch unique logins per day
+    const { data: uniqueLogins, isLoading: isLoadingLogins } =
+        trpc.admin.getUniqueLoginsPerDay.useQuery(undefined, {
             enabled: !!session && session.user.role === 'admin',
         });
 
@@ -205,37 +214,6 @@ export default function AdminDashboard() {
             removeUserMutation.mutate({ userId: userToRemove });
             setIsRemoveUserDialogOpen(false);
             setUserToRemove(null);
-        }
-    };
-
-    // Handle direct email verification
-    const handleVerifyEmail = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setIsVerifying(true);
-        setVerifyError(null);
-        setVerifySuccess(false);
-
-        try {
-            const response = await fetch('/api/auth/verify-email-direct', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: verifyEmail }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Failed to verify email');
-            }
-
-            setVerifySuccess(true);
-            setVerifyEmail('');
-        } catch (err) {
-            setVerifyError(
-                err instanceof Error ? err.message : 'Failed to verify email',
-            );
-        } finally {
-            setIsVerifying(false);
         }
     };
 
@@ -806,67 +784,94 @@ export default function AdminDashboard() {
 
                 <TabsContent value="tools">
                     <div className="grid gap-6 md:grid-cols-2">
-                        {/* Verify Email Card */}
+                        {/* Unique Logins Card */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>Verify User Email</CardTitle>
+                                <CardTitle>Unique Logins Per Day</CardTitle>
                                 <CardDescription>
-                                    Directly verify a user's email address
+                                    Number of unique users who logged in each
+                                    day (last 30 days)
                                 </CardDescription>
                             </CardHeader>
-                            <form onSubmit={handleVerifyEmail}>
-                                <CardContent>
-                                    <div className="space-y-4">
-                                        <div className="space-y-2">
-                                            <label
-                                                htmlFor="verify-email"
-                                                className="text-sm font-medium"
-                                            >
-                                                Email Address
-                                            </label>
-                                            <Input
-                                                id="verify-email"
-                                                type="email"
-                                                placeholder="user@example.com"
-                                                value={verifyEmail}
-                                                onChange={(e) =>
-                                                    setVerifyEmail(
-                                                        e.target.value,
-                                                    )
-                                                }
-                                                required
-                                            />
-                                        </div>
-
-                                        {verifyError && (
-                                            <div className="bg-destructive/15 text-destructive rounded-md p-3 text-sm">
-                                                {verifyError}
-                                            </div>
-                                        )}
-
-                                        {verifySuccess && (
-                                            <div className="rounded-md bg-green-100 p-3 text-sm text-green-800">
-                                                Email verified successfully!
-                                            </div>
-                                        )}
+                            <CardContent>
+                                {isLoadingLogins ? (
+                                    <div className="py-4 text-center">
+                                        Loading login stats...
                                     </div>
-                                </CardContent>
-                                <CardFooter>
-                                    <Button
-                                        type="submit"
-                                        disabled={isVerifying}
-                                    >
-                                        {isVerifying ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Verifying...
-                                            </>
-                                        ) : (
-                                            'Verify Email'
-                                        )}
-                                    </Button>
-                                </CardFooter>
-                            </form>
+                                ) : uniqueLogins && uniqueLogins.length > 0 ? (
+                                    <>
+                                        <div
+                                            style={{
+                                                width: '100%',
+                                                height: 300,
+                                            }}
+                                        >
+                                            <ResponsiveContainer
+                                                width="100%"
+                                                height={300}
+                                            >
+                                                <BarChart
+                                                    data={[
+                                                        ...uniqueLogins,
+                                                    ].reverse()}
+                                                    margin={{
+                                                        top: 16,
+                                                        right: 16,
+                                                        left: 0,
+                                                        bottom: 0,
+                                                    }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" />
+                                                    <XAxis
+                                                        dataKey="date"
+                                                        tick={{ fontSize: 12 }}
+                                                    />
+                                                    <YAxis
+                                                        allowDecimals={false}
+                                                    />
+                                                    <Tooltip />
+                                                    <Bar
+                                                        dataKey="unique_logins"
+                                                        fill="#6366f1"
+                                                    />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                        <Table className="mt-6">
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>
+                                                        Unique Logins
+                                                    </TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {uniqueLogins.map(
+                                                    (row: any) => (
+                                                        <TableRow
+                                                            key={row.date}
+                                                        >
+                                                            <TableCell>
+                                                                {row.date}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {
+                                                                    row.unique_logins
+                                                                }
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ),
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </>
+                                ) : (
+                                    <div className="py-4 text-center">
+                                        No login data available.
+                                    </div>
+                                )}
+                            </CardContent>
                         </Card>
                     </div>
                 </TabsContent>
