@@ -21,7 +21,6 @@ import {
     count,
     inArray,
 } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 
 import webpush from 'web-push';
 import { sendChatNotification } from '@/lib/push-notifications';
