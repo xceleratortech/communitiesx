@@ -26,11 +26,22 @@ export function Navbar() {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
     const { closeChat } = useChat();
 
     // Set mounted state to true after hydration
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        // Simple mobile detection based on window width
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
     }, []);
 
     const handleSignOut = async () => {
