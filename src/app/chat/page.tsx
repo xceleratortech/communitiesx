@@ -9,34 +9,43 @@ import { Input } from '@/components/ui/input';
 import { useChat } from '@/providers/chat-provider';
 import { useSession } from '@/server/auth/client';
 import { trpc } from '@/providers/trpc-provider';
+import NewChatDialog from '@/components/chat/new-chat-dialog';
 
 export default function ChatPage() {
     const router = useRouter();
-    const { data: session } = useSession();
+    const sessionData = useSession();
+    const session = sessionData.data;
     const { activeThreadId, setActiveThreadId, openNewChat } = useChat();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isClient, setIsClient] = useState(false);
 
-    // Redirect to login if not authenticated
     useEffect(() => {
-        if (!session) {
-            router.push('/auth/login');
-        }
-    }, [session, router]);
+        setIsClient(true);
+    }, []);
 
-    // Redirect to home on desktop
-    useEffect(() => {
-        const handleResize = () => {
-            if (window.innerWidth >= 768) {
-                router.push('/');
-            }
-        };
-        handleResize();
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, [router]);
-
-    if (!session) {
+    // Don't render anything meaningful during SSR to avoid hydration mismatches
+    if (!isClient) {
         return null;
+    }
+    if (session === undefined) {
+        return null;
+    }
+    if (!session) {
+        return (
+            <div className="flex h-screen items-center justify-center">
+                <div className="mx-auto max-w-md p-4 text-center">
+                    <h1 className="mb-4 text-3xl font-bold dark:text-white">
+                        Access Denied
+                    </h1>
+                    <p className="mb-4 text-gray-600 dark:text-gray-400">
+                        Please sign in to view your messages.
+                    </p>
+                    <Button asChild>
+                        <a href="/auth/login">Sign In</a>
+                    </Button>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -87,6 +96,7 @@ export default function ChatPage() {
                     <ChatList searchQuery={searchQuery} />
                 )}
             </div>
+            <NewChatDialog />
         </div>
     );
 }
