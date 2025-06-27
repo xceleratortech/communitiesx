@@ -202,6 +202,12 @@ function ChatThread({ threadId }: { threadId: number }) {
     const { setActiveThreadId } = useChat();
     const [message, setMessage] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [paginatedMessages, setPaginatedMessages] = useState<any[]>([]); // For older messages
+    const [oldestMessageId, setOldestMessageId] = useState<number | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingOlder, setLoadingOlder] = useState(false);
+    const utils = trpc.useUtils();
+    const messagesContainerRef = useRef<HTMLDivElement>(null);
 
     // Fetch messages for this thread
     const { data, isLoading, error, refetch } = trpc.chat.getMessages.useQuery({
@@ -216,19 +222,82 @@ function ChatThread({ threadId }: { threadId: number }) {
     const { data: session } = useSession();
 
     // For sending messages
-    const utils = trpc.useUtils?.();
     const sendMessageMutation = trpc.chat.sendMessage.useMutation({
         onSuccess: async () => {
             setMessage('');
             await refetch();
-            utils?.chat.getThreads.invalidate();
+            utils.chat.getThreads.invalidate();
         },
     });
 
-    // Scroll to bottom on new messages
+    // Fetch older messages
+    const fetchOlderMessages = async () => {
+        if (!oldestMessageId || !hasMore) return;
+        if (!messagesContainerRef.current) return;
+        setLoadingOlder(true);
+        // Save current scroll position from the top
+        const prevScrollHeight = messagesContainerRef.current.scrollHeight;
+        const prevScrollTop = messagesContainerRef.current.scrollTop;
+        const older = await utils.chat.getMessages.fetch({
+            threadId,
+            limit: 20,
+            cursor: oldestMessageId,
+        });
+        if (older.messages && older.messages.length > 0) {
+            setPaginatedMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const newMessages = older.messages.filter(
+                    (m) => !existingIds.has(m.id),
+                );
+                return [...newMessages, ...prev];
+            });
+            setOldestMessageId(older.nextCursor); // Use backend's nextCursor
+            if (!older.nextCursor) setHasMore(false);
+            // After DOM updates, restore scroll position
+            setTimeout(() => {
+                if (messagesContainerRef.current) {
+                    const newScrollHeight =
+                        messagesContainerRef.current.scrollHeight;
+                    messagesContainerRef.current.scrollTop =
+                        newScrollHeight - prevScrollHeight + prevScrollTop;
+                }
+            }, 0);
+        } else {
+            setHasMore(false);
+        }
+        setLoadingOlder(false);
+    };
+
+    // On mount or thread change, reset paginated messages and set oldestMessageId
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [data?.messages?.length]);
+        setPaginatedMessages([]);
+        if (data?.messages && data.messages.length > 0) {
+            setOldestMessageId(data.nextCursor); // Use backend's nextCursor
+            setHasMore(!!data.nextCursor);
+        } else {
+            setOldestMessageId(null);
+            setHasMore(false);
+        }
+        setTimeout(
+            () =>
+                messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }),
+            100,
+        );
+    }, [threadId, data]);
+
+    // Always merge paginated + latest messages, filter duplicates
+    const paginatedIds = new Set(paginatedMessages.map((m) => m.id));
+    const uniqueLatest = (data?.messages || []).filter(
+        (m) => !paginatedIds.has(m.id),
+    );
+    const allMessages = [...paginatedMessages, ...uniqueLatest];
+
+    // Scroll to bottom only after sending a message or on initial load
+    useEffect(() => {
+        if (data?.messages?.length && paginatedMessages.length === 0) {
+            messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [data?.messages?.length, paginatedMessages.length]);
 
     if (isLoading || !thread) {
         return (
@@ -250,8 +319,6 @@ function ChatThread({ threadId }: { threadId: number }) {
         );
     }
 
-    const messages = data?.messages ?? [];
-
     // Compute recipientId (the other user in the thread)
     const currentUserId = session?.user?.id;
     let recipientId: string | undefined;
@@ -270,76 +337,88 @@ function ChatThread({ threadId }: { threadId: number }) {
         }
     };
 
-    // For header display
-    const otherUser =
-        currentUserId === thread.user1Id ? thread.user2 : thread.user1;
+    // Compute otherUser based on the current user and thread.user1/user2
+    let otherUser;
+    if (currentUserId && thread) {
+        otherUser =
+            thread.user1Id === currentUserId ? thread.user2 : thread.user1;
+    }
 
     return (
         <div className="flex h-full flex-col">
             {/* Thread Header */}
-            <div className="border-border border-b p-4">
-                <div className="flex items-center space-x-3">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setActiveThreadId(null)}
-                        className="h-8 w-8 p-0"
-                    >
-                        <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <div className="bg-primary text-primary-foreground flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium">
-                        {otherUser?.name
-                            ? otherUser.name
-                                  .split(' ')
-                                  .map((n: string) => n[0])
-                                  .join('')
-                                  .toUpperCase()
-                            : '??'}
-                    </div>
-                    <div>
-                        <h2 className="text-sm font-medium">
-                            {otherUser?.name}
-                        </h2>
-                        <p className="text-muted-foreground text-xs">Online</p>
+            <div className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 border-b backdrop-blur">
+                <div className="flex h-14 items-center justify-between px-4">
+                    <div className="flex items-center space-x-3">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setActiveThreadId(null)}
+                            className="h-8 w-8 p-0"
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                        <div className="flex flex-col">
+                            <span className="text-foreground text-sm font-medium">
+                                {otherUser?.name || 'Unknown'}
+                            </span>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Messages */}
-            <div className="flex-1 space-y-4 overflow-y-auto p-4">
-                {messages.map((msg) => (
+            {/* Messages List */}
+            <div
+                className="flex-1 overflow-auto p-4"
+                ref={messagesContainerRef}
+                onScroll={() => {
+                    if (
+                        messagesContainerRef.current &&
+                        messagesContainerRef.current.scrollTop === 0 &&
+                        hasMore &&
+                        !loadingOlder
+                    ) {
+                        fetchOlderMessages();
+                    }
+                }}
+            >
+                {/* Top loader or no more messages info */}
+                {loadingOlder && (
+                    <div className="text-muted-foreground mb-2 flex justify-center text-xs">
+                        Loading older messages...
+                    </div>
+                )}
+                {!hasMore && paginatedMessages.length > 0 && (
+                    <div className="text-muted-foreground mb-2 flex justify-center text-xs">
+                        No more messages
+                    </div>
+                )}
+                {/* No Load Older Messages Button, infinite scroll only */}
+                {/* Render all messages */}
+                {allMessages.length === 0 && (
+                    <div className="flex h-full items-center justify-center">
+                        <div className="text-muted-foreground text-center">
+                            No messages yet. Send the first message!
+                        </div>
+                    </div>
+                )}
+                {allMessages.map((msg) => (
                     <div
                         key={msg.id}
-                        className={`flex ${
+                        className={`my-2 flex ${
                             msg.senderId === currentUserId
                                 ? 'justify-end'
                                 : 'justify-start'
                         }`}
                     >
                         <div
-                            className={`max-w-[75%] rounded-lg p-3 ${
+                            className={`max-w-xs rounded-lg px-4 py-2 text-sm ${
                                 msg.senderId === currentUserId
                                     ? 'bg-primary text-primary-foreground'
                                     : 'bg-muted text-foreground'
                             }`}
                         >
-                            <p className="text-sm">{msg.content}</p>
-                            <p
-                                className={`mt-1 text-xs ${
-                                    msg.senderId === currentUserId
-                                        ? 'text-primary-foreground/70'
-                                        : 'text-muted-foreground'
-                                }`}
-                            >
-                                {msg.createdAt
-                                    ? new Date(
-                                          msg.createdAt,
-                                      ).toLocaleTimeString([], {
-                                          hour: '2-digit',
-                                          minute: '2-digit',
-                                      })
-                                    : ''}
-                            </p>
+                            {msg.content}
                         </div>
                     </div>
                 ))}
@@ -347,22 +426,25 @@ function ChatThread({ threadId }: { threadId: number }) {
             </div>
 
             {/* Message Input */}
-            <div className="border-border border-t p-4">
-                <div className="flex space-x-2">
+            <div className="border-border bg-background/95 border-t p-4">
+                <div className="flex items-center">
                     <Input
-                        placeholder="Type a message..."
+                        placeholder="Type your message..."
                         value={message}
                         onChange={(e) => setMessage(e.target.value)}
-                        onKeyDown={(e) =>
-                            e.key === 'Enter' && handleSendMessage()
-                        }
                         className="flex-1"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSendMessage();
+                            }
+                        }}
                     />
                     <Button
+                        variant="default"
+                        size="sm"
                         onClick={handleSendMessage}
-                        disabled={
-                            !message.trim() || sendMessageMutation.isPending
-                        }
+                        className="ml-2"
                     >
                         Send
                     </Button>
