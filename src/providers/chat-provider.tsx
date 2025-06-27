@@ -9,6 +9,7 @@ import React, {
 } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
+import { is } from 'drizzle-orm';
 
 // Define the chat context type
 type ChatContextType = {
@@ -24,6 +25,7 @@ type ChatContextType = {
     isNewChatOpen: boolean;
     openNewChat: () => void;
     closeNewChat: () => void;
+    isMobile?: boolean;
 };
 
 // Create the context with default values
@@ -40,6 +42,7 @@ const ChatContext = createContext<ChatContextType>({
     isNewChatOpen: false,
     openNewChat: () => {},
     closeNewChat: () => {},
+    isMobile: false,
 });
 
 // Hook to use the chat context
@@ -52,6 +55,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
     const [isMinimized, setIsMinimized] = useState(false);
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+        };
+        handleResize();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Get unread count
     const { data: unreadCount = 0, refetch: refetchUnreadCount } =
@@ -62,11 +75,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     // Toggle chat open/closed
     const toggleChat = useCallback(() => {
-        setIsOpen((prev) => !prev);
-        if (isMinimized) {
-            setIsMinimized(false);
+        if (!isMobile) {
+            setIsOpen((prev) => !prev);
+            if (isMinimized) {
+                setIsMinimized(false);
+            }
         }
-    }, [isMinimized]);
+    }, [isMinimized, isMobile]);
 
     // Close chat
     const closeChat = useCallback(() => {
@@ -75,9 +90,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     // Open chat
     const openChat = useCallback(() => {
-        setIsOpen(true);
-        setIsMinimized(false);
-    }, []);
+        if (!isMobile) {
+            setIsOpen(true);
+            setIsMinimized(false);
+        }
+    }, [isMobile]);
 
     // Toggle minimize
     const toggleMinimize = useCallback(() => {
@@ -111,6 +128,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
     }, [session, isOpen]);
 
+    useEffect(() => {
+        if (isMobile && isOpen) {
+            setIsOpen(false);
+            setIsMinimized(false);
+        }
+    }, [isMobile, isOpen]);
+
     // Provide the chat context
     return (
         <ChatContext.Provider
@@ -127,6 +151,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 isNewChatOpen,
                 openNewChat,
                 closeNewChat,
+                isMobile,
             }}
         >
             {children}
