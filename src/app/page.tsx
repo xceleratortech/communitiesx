@@ -6,18 +6,27 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
 import { useSession } from '@/server/auth/client';
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
     const { data: session } = useSession();
+    const router = useRouter();
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
 
+    // Redirect logged-in users away from the landing page
+    useEffect(() => {
+        if (session) {
+            router.replace('/posts');
+        }
+    }, [session, router]);
+
     return (
-        <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden text-center">
-            <div className="fixed inset-0 top-16 h-[calc(100vh-4rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
+        <div className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center overflow-hidden text-center">
+            <div className="fixed inset-0 top-10 h-[calc(100vh-3.5rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
@@ -29,7 +38,7 @@ export default function Home() {
                     className="h-full w-full"
                 />
             </div>
-            <div className="relative z-10 px-4">
+            <div className="relative z-10 mt-10 px-4 sm:mt-0">
                 <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl dark:text-gray-100">
                     Let&apos;s Build a{' '}
                     <span className="text-blue-600 dark:text-blue-400">
@@ -44,7 +53,7 @@ export default function Home() {
                 <div className="flex flex-col justify-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
                     <Button asChild size="lg">
                         <a
-                            href="/posts"
+                            href={mounted && session ? '/posts' : '/auth/login'}
                             className="rounded-lg px-8 py-3 text-lg font-semibold shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                             Explore Posts

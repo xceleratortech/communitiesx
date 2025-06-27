@@ -24,6 +24,10 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const [paginatedMessages, setPaginatedMessages] = useState<any[]>([]); // For older messages
+    const [oldestMessageId, setOldestMessageId] = useState<number | null>(null);
+    const [hasMore, setHasMore] = useState(true);
+    const [loadingOlder, setLoadingOlder] = useState(false);
 
     // Get thread details to identify participants
     const { data: threadData } = trpc.chat.getThreadById.useQuery(
@@ -245,6 +249,79 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
         }
     }, []);
 
+    const utils = trpc.useUtils();
+    // Fetch older messages
+    const fetchOlderMessages = async () => {
+        if (!oldestMessageId || !hasMore) return;
+        setLoadingOlder(true);
+        const prevScrollHeight =
+            messagesContainerRef.current?.scrollHeight || 0;
+        const prevScrollTop = messagesContainerRef.current?.scrollTop || 0;
+        const older = await utils.chat.getMessages.fetch({
+            threadId,
+            limit: 20,
+            cursor: oldestMessageId,
+        });
+        if (older.messages && older.messages.length > 0) {
+            setPaginatedMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const newMessages = older.messages.filter(
+                    (m) => !existingIds.has(m.id),
+                );
+                return [...newMessages, ...prev];
+            });
+            setOldestMessageId(older.nextCursor); // Use backend's nextCursor
+            if (!older.nextCursor) setHasMore(false);
+            setTimeout(() => {
+                if (messagesContainerRef.current) {
+                    const newScrollHeight =
+                        messagesContainerRef.current.scrollHeight;
+                    messagesContainerRef.current.scrollTop =
+                        newScrollHeight - prevScrollHeight + prevScrollTop;
+                }
+            }, 0);
+        } else {
+            setHasMore(false);
+        }
+        setLoadingOlder(false);
+    };
+
+    // On mount or thread change, reset paginated messages and set oldestMessageId
+    useEffect(() => {
+        setPaginatedMessages([]);
+        if (messagesData?.messages && messagesData.messages.length > 0) {
+            setOldestMessageId(messagesData.nextCursor); // Use backend's nextCursor
+            setHasMore(!!messagesData.nextCursor);
+        } else {
+            setOldestMessageId(null);
+            setHasMore(false);
+        }
+        setTimeout(() => scrollToBottom(true), 100);
+    }, [threadId, messagesData]);
+
+    // Add scroll event listener for infinite scroll
+    useEffect(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        const handleInfiniteScroll = () => {
+            if (container.scrollTop === 0 && hasMore && !loadingOlder) {
+                fetchOlderMessages();
+            }
+            handleScroll(); // keep existing scroll button logic
+        };
+        container.addEventListener('scroll', handleInfiniteScroll);
+        return () => {
+            container.removeEventListener('scroll', handleInfiniteScroll);
+        };
+    }, [hasMore, loadingOlder, fetchOlderMessages]);
+
+    // Always sort and merge paginated + latest messages, filter duplicates
+    const paginatedIds = new Set(paginatedMessages.map((m) => m.id));
+    const uniqueLatest = (messagesData?.messages || []).filter(
+        (m) => !paginatedIds.has(m.id),
+    );
+    const allMessages = [...paginatedMessages, ...uniqueLatest];
+
     return (
         <div className="flex h-full w-full flex-col">
             {/* Chat Header */}
@@ -284,6 +361,17 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
                 className="relative flex-1 overflow-y-auto scroll-smooth p-4"
                 style={{ scrollbarGutter: 'stable' }}
             >
+                {/* Top loader or no more messages info */}
+                {loadingOlder && (
+                    <div className="text-muted-foreground mb-2 flex justify-center text-xs">
+                        Loading older messages...
+                    </div>
+                )}
+                {!hasMore && paginatedMessages.length > 0 && (
+                    <div className="text-muted-foreground mb-2 flex justify-center text-xs">
+                        No more messages
+                    </div>
+                )}
                 {/* Scroll to bottom button */}
                 {showScrollButton && (
                     <Button
@@ -324,10 +412,9 @@ export function ChatMessageView({ threadId }: ChatMessageViewProps) {
                                 </div>
                             ))}
                     </div>
-                ) : messagesData?.messages &&
-                  messagesData.messages.length > 0 ? (
+                ) : allMessages && allMessages.length > 0 ? (
                     <div className="flex min-h-full flex-col space-y-4">
-                        {messagesData.messages.map((msg) => {
+                        {allMessages.map((msg) => {
                             const isCurrentUser =
                                 msg.senderId === session?.user?.id;
                             return (
