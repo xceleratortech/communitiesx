@@ -6,11 +6,17 @@ import React, { useState, useEffect } from 'react';
 import { useSession, signOut } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Globe, Menu, X } from 'lucide-react';
+import { Globe, Menu, X, User, Settings, LogOut, Eye } from 'lucide-react';
 import { ChatButton } from '@/components/chat-button';
 import { useChat } from '@/providers/chat-provider';
 import { NotificationButton } from './NotificationButton';
 import { ViewNotificationButton } from './ViewNotificationButton';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -18,29 +24,25 @@ export function Navbar() {
     const pathname = usePathname();
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [popoverOpen, setPopoverOpen] = useState(false);
     const { closeChat } = useChat();
-    const [isSubscribed, setIsSubscribed] = useState(false);
-    const [isPushSupported, setIsPushSupported] = useState(false);
 
-    // Set mounted state to true after hydration
     useEffect(() => {
         setMounted(true);
     }, []);
 
     const handleSignOut = async () => {
-        // Close chat drawer before signing out
         closeChat();
+        setPopoverOpen(false);
         await signOut();
         router.push('/');
     };
 
-    // Function to determine if a path is active
     const isActive = (path: string) => {
         if (!pathname) return false;
         return pathname.startsWith(path);
     };
 
-    // Get the active link style
     const getNavLinkClass = (path: string) => {
         const baseClass = 'inline-flex items-center px-1 pt-1 border-b-2';
         const activeClass =
@@ -51,7 +53,6 @@ export function Navbar() {
         return `${baseClass} ${isActive(path) ? activeClass : inactiveClass}`;
     };
 
-    // Get the active mobile link style
     const getMobileNavLinkClass = (path: string) => {
         const baseClass = 'block px-3 py-2 rounded-md text-base font-medium';
         const activeClass =
@@ -62,10 +63,14 @@ export function Navbar() {
         return `${baseClass} ${isActive(path) ? activeClass : inactiveClass}`;
     };
 
+    const getUserInitials = (email: string) => {
+        return email.split('@')[0].charAt(0).toUpperCase();
+    };
+
     return (
         <nav className="bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div className="flex h-16 justify-between">
+                <div className="flex h-14 justify-between">
                     <div className="flex">
                         <Link href="/" className="flex items-center">
                             <span className="text-xl font-bold dark:text-white">
@@ -76,15 +81,6 @@ export function Navbar() {
                             </span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                            {mounted && session?.user?.role === 'admin' && (
-                                <Link
-                                    href="/admin"
-                                    className={getNavLinkClass('/admin')}
-                                >
-                                    Admin Dashboard
-                                </Link>
-                            )}
-                            {/* Only show Posts and Communities links when user is logged in */}
                             {mounted && session && (
                                 <>
                                     <Link
@@ -99,7 +95,6 @@ export function Navbar() {
                                             '/communities',
                                         )}
                                     >
-                                        <Globe className="mr-1 h-4 w-4" />
                                         Communities
                                     </Link>
                                 </>
@@ -107,147 +102,338 @@ export function Navbar() {
                         </div>
                     </div>
                     <div className="flex items-center space-x-4">
-                        {/* Add ChatButton here so it's visible on mobile */}
                         {mounted && session && (
                             <>
                                 <div className="flex sm:hidden">
                                     <ChatButton />
                                 </div>
                                 <div className="flex sm:hidden">
-                                    <NotificationButton />
-                                </div>
-                                <div className="flex sm:hidden">
                                     <ViewNotificationButton />
                                 </div>
                             </>
                         )}
-                        <ThemeToggle />
+
                         {mounted ? (
                             session ? (
-                                <div className="hidden items-center space-x-4 sm:flex">
-                                    <ChatButton />
-                                    <NotificationButton />
-                                    <ViewNotificationButton />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                        {session.user.email}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleSignOut}
-                                        className="text-sm"
-                                    >
-                                        Sign Out
+                                <>
+                                    <div className="hidden items-center space-x-4 sm:flex">
+                                        <ChatButton />
+                                        <ViewNotificationButton />
+
+                                        <Popover
+                                            open={popoverOpen}
+                                            onOpenChange={setPopoverOpen}
+                                        >
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    className="relative h-8 w-8 rounded-full p-0"
+                                                >
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage
+                                                            src={
+                                                                session.user
+                                                                    ?.image ||
+                                                                ''
+                                                            }
+                                                            alt={
+                                                                session.user
+                                                                    ?.email ||
+                                                                ''
+                                                            }
+                                                        />
+                                                        <AvatarFallback>
+                                                            {getUserInitials(
+                                                                session.user
+                                                                    ?.email ||
+                                                                    '',
+                                                            )}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="w-56"
+                                                align="end"
+                                            >
+                                                <div className="grid gap-4">
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center space-x-2">
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage
+                                                                    src={
+                                                                        session
+                                                                            .user
+                                                                            ?.image ||
+                                                                        ''
+                                                                    }
+                                                                    alt={
+                                                                        session
+                                                                            .user
+                                                                            ?.email ||
+                                                                        ''
+                                                                    }
+                                                                />
+                                                                <AvatarFallback>
+                                                                    {getUserInitials(
+                                                                        session
+                                                                            .user
+                                                                            ?.email ||
+                                                                            '',
+                                                                    )}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex flex-col space-y-1">
+                                                                <p className="text-sm leading-none font-medium">
+                                                                    {session
+                                                                        .user
+                                                                        ?.name ||
+                                                                        session.user?.email?.split(
+                                                                            '@',
+                                                                        )[0]}
+                                                                </p>
+                                                                <p className="text-muted-foreground text-xs leading-none">
+                                                                    {
+                                                                        session
+                                                                            .user
+                                                                            ?.email
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <div className="grid gap-1 border-b border-gray-200 pb-2 sm:hidden dark:border-gray-700">
+                                                            <Link
+                                                                href="/posts"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                onClick={() =>
+                                                                    setPopoverOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                                <span>
+                                                                    Posts
+                                                                </span>
+                                                            </Link>
+                                                            <Link
+                                                                href="/communities"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                onClick={() =>
+                                                                    setPopoverOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Globe className="h-4 w-4" />
+                                                                <span>
+                                                                    Communities
+                                                                </span>
+                                                            </Link>
+                                                        </div>
+
+                                                        <ThemeToggle variant="popover" />
+
+                                                        <NotificationButton variant="popover" />
+
+                                                        {session.user?.role ===
+                                                            'admin' && (
+                                                            <Link
+                                                                href="/admin"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                onClick={() =>
+                                                                    setPopoverOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                            >
+                                                                <Settings className="h-4 w-4" />
+                                                                <span>
+                                                                    Admin
+                                                                    Dashboard
+                                                                </span>
+                                                            </Link>
+                                                        )}
+                                                        <button
+                                                            onClick={
+                                                                handleSignOut
+                                                            }
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                        >
+                                                            <LogOut className="h-4 w-4" />
+                                                            <span>
+                                                                Sign Out
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+
+                                    <div className="flex items-center sm:hidden">
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="ghost"
+                                                    className="relative h-8 w-8 rounded-full p-0"
+                                                >
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage
+                                                            src={
+                                                                session.user
+                                                                    ?.image ||
+                                                                ''
+                                                            }
+                                                            alt={
+                                                                session.user
+                                                                    ?.email ||
+                                                                ''
+                                                            }
+                                                        />
+                                                        <AvatarFallback>
+                                                            {getUserInitials(
+                                                                session.user
+                                                                    ?.email ||
+                                                                    '',
+                                                            )}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent
+                                                className="w-56"
+                                                align="end"
+                                            >
+                                                <div className="grid gap-4">
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center space-x-2">
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage
+                                                                    src={
+                                                                        session
+                                                                            .user
+                                                                            ?.image ||
+                                                                        ''
+                                                                    }
+                                                                    alt={
+                                                                        session
+                                                                            .user
+                                                                            ?.email ||
+                                                                        ''
+                                                                    }
+                                                                />
+                                                                <AvatarFallback>
+                                                                    {getUserInitials(
+                                                                        session
+                                                                            .user
+                                                                            ?.email ||
+                                                                            '',
+                                                                    )}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex flex-col space-y-1">
+                                                                <p className="text-sm leading-none font-medium">
+                                                                    {session
+                                                                        .user
+                                                                        ?.name ||
+                                                                        session.user?.email?.split(
+                                                                            '@',
+                                                                        )[0]}
+                                                                </p>
+                                                                <p className="text-muted-foreground text-xs leading-none">
+                                                                    {
+                                                                        session
+                                                                            .user
+                                                                            ?.email
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="grid gap-2">
+                                                        <div className="grid gap-1 border-b border-gray-200 pb-2 dark:border-gray-700">
+                                                            <Link
+                                                                href="/posts"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                                <span>
+                                                                    Posts
+                                                                </span>
+                                                            </Link>
+                                                            <Link
+                                                                href="/communities"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            >
+                                                                <Globe className="h-4 w-4" />
+                                                                <span>
+                                                                    Communities
+                                                                </span>
+                                                            </Link>
+                                                        </div>
+
+                                                        <ThemeToggle variant="popover" />
+
+                                                        <NotificationButton variant="popover" />
+
+                                                        {session.user?.role ===
+                                                            'admin' && (
+                                                            <Link
+                                                                href="/admin"
+                                                                className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            >
+                                                                <Settings className="h-4 w-4" />
+                                                                <span>
+                                                                    Admin
+                                                                    Dashboard
+                                                                </span>
+                                                            </Link>
+                                                        )}
+                                                        <button
+                                                            onClick={
+                                                                handleSignOut
+                                                            }
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                        >
+                                                            <LogOut className="h-4 w-4" />
+                                                            <span>
+                                                                Sign Out
+                                                            </span>
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="flex items-center space-x-4">
+                                    <ThemeToggle />
+                                    <Button asChild className="hidden sm:flex">
+                                        <Link
+                                            href="/auth/login"
+                                            className="text-sm"
+                                        >
+                                            Sign In
+                                        </Link>
+                                    </Button>
+                                    <Button asChild className="flex sm:hidden">
+                                        <Link
+                                            href="/auth/login"
+                                            className="text-sm"
+                                        >
+                                            Sign In
+                                        </Link>
                                     </Button>
                                 </div>
-                            ) : (
-                                <Button asChild className="hidden sm:flex">
-                                    <Link
-                                        href="/auth/login"
-                                        className="text-sm"
-                                    >
-                                        Sign In
-                                    </Link>
-                                </Button>
                             )
                         ) : (
-                            <div className="hidden h-9 w-[100px] sm:block" /> // Placeholder with similar dimensions
+                            <div className="hidden h-9 w-[100px] sm:block" />
                         )}
-
-                        {/* Mobile menu button */}
-                        <div className="flex items-center sm:hidden">
-                            <button
-                                onClick={() =>
-                                    setMobileMenuOpen(!mobileMenuOpen)
-                                }
-                                className="inline-flex items-center justify-center rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-50"
-                                aria-expanded="false"
-                            >
-                                <span className="sr-only">Open main menu</span>
-                                {mobileMenuOpen ? (
-                                    <X
-                                        className="block h-6 w-6"
-                                        aria-hidden="true"
-                                    />
-                                ) : (
-                                    <Menu
-                                        className="block h-6 w-6"
-                                        aria-hidden="true"
-                                    />
-                                )}
-                            </button>
-                        </div>
                     </div>
-                </div>
-            </div>
-
-            {/* Mobile menu, show/hide based on menu state */}
-            <div className={`sm:hidden ${mobileMenuOpen ? 'block' : 'hidden'}`}>
-                <div className="space-y-1 px-2 pt-2 pb-3">
-                    {mounted && session?.user?.role === 'admin' && (
-                        <Link
-                            href="/admin"
-                            className={getMobileNavLinkClass('/admin')}
-                            onClick={() => setMobileMenuOpen(false)}
-                        >
-                            Admin Dashboard
-                        </Link>
-                    )}
-                    {mounted && session && (
-                        <>
-                            <Link
-                                href="/posts"
-                                className={getMobileNavLinkClass('/posts')}
-                                onClick={() => setMobileMenuOpen(false)}
-                            >
-                                Posts
-                            </Link>
-                            <Link
-                                href="/communities"
-                                className={getMobileNavLinkClass(
-                                    '/communities',
-                                )}
-                                onClick={() => setMobileMenuOpen(false)}
-                            >
-                                <div className="flex items-center">
-                                    <Globe className="mr-1 h-4 w-4" />
-                                    Communities
-                                </div>
-                            </Link>
-                        </>
-                    )}
-
-                    {/* Mobile auth buttons */}
-                    {mounted && (
-                        <div className="border-t border-gray-200 pt-4 pb-3 dark:border-gray-700">
-                            {session ? (
-                                <div className="space-y-1 px-2">
-                                    <p className="block px-3 py-2 text-base font-medium text-gray-500 dark:text-gray-400">
-                                        {session.user.email}
-                                    </p>
-                                    <button
-                                        onClick={() => {
-                                            closeChat();
-                                            handleSignOut();
-                                            setMobileMenuOpen(false);
-                                        }}
-                                        className="block w-full rounded-md px-3 py-2 text-left text-base font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
-                                    >
-                                        Sign Out
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="px-2">
-                                    <Link
-                                        href="/auth/login"
-                                        className="block rounded-md px-3 py-2 text-base font-medium text-gray-900 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-800"
-                                        onClick={() => setMobileMenuOpen(false)}
-                                    >
-                                        Sign In
-                                    </Link>
-                                </div>
-                            )}
-                        </div>
-                    )}
                 </div>
             </div>
         </nav>
