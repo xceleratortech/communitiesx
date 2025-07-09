@@ -10,6 +10,8 @@ import { relations } from 'drizzle-orm';
 export const orgs = pgTable('orgs', {
     id: text('id').primaryKey(),
     name: text('name').notNull().unique(),
+    slug: text('slug').notNull().unique(),
+    createdAt: timestamp('created_at').notNull(),
 });
 
 export const users = pgTable('users', {
