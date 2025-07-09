@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { users, orgs, accounts, verifications } from '@/server/db/auth-schema';
 import { TRPCError } from '@trpc/server';
-import { eq } from 'drizzle-orm';
+import { eq, count, or, ilike } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
@@ -62,6 +62,14 @@ export const adminRouter = router({
         .input(
             z.object({
                 name: z.string().min(1),
+                slug: z
+                    .string()
+                    .min(1)
+                    .max(50)
+                    .regex(/^[a-z0-9-]+$/i, {
+                        message:
+                            'Slug must be alphanumeric and can include dashes',
+                    }),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -92,6 +100,8 @@ export const adminRouter = router({
                     .values({
                         id: orgId,
                         name: input.name,
+                        slug: input.slug,
+                        createdAt: new Date(),
                     })
                     .returning();
 
@@ -338,5 +348,62 @@ export const adminRouter = router({
                     message: 'Failed to remove user',
                 });
             }
+        }),
+
+    // Get all organizations with member count
+    getAllOrganizations: publicProcedure.query(async ({ ctx }) => {
+        // Only allow admins
+        if (!ctx.session?.user || ctx.session.user.role !== 'admin') {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'Only admins can view organizations',
+            });
+        }
+        // Optimized: join users and orgs, group by org, count members in one query
+        const orgsWithMemberCount = await db
+            .select({
+                id: orgs.id,
+                name: orgs.name,
+                slug: orgs.slug,
+                createdAt: orgs.createdAt,
+                memberCount: count(users.id).as('memberCount'),
+            })
+            .from(orgs)
+            .leftJoin(users, eq(users.orgId, orgs.id))
+            .groupBy(orgs.id);
+        return orgsWithMemberCount;
+    }),
+
+    // Search organizations by name or slug
+    searchOrganizations: publicProcedure
+        .input(z.object({ searchTerm: z.string() }))
+        .query(async ({ input, ctx }) => {
+            if (!ctx.session?.user || ctx.session.user.role !== 'admin') {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'Only admins can search organizations',
+                });
+            }
+
+            // Fixed: Use proper Drizzle syntax for where clause
+            const orgsWithMemberCount = await db
+                .select({
+                    id: orgs.id,
+                    name: orgs.name,
+                    slug: orgs.slug,
+                    createdAt: orgs.createdAt,
+                    memberCount: count(users.id).as('memberCount'),
+                })
+                .from(orgs)
+                .leftJoin(users, eq(users.orgId, orgs.id))
+                .where(
+                    or(
+                        ilike(orgs.name, `%${input.searchTerm}%`),
+                        ilike(orgs.slug, `%${input.searchTerm}%`),
+                    ),
+                )
+                .groupBy(orgs.id);
+
+            return orgsWithMemberCount;
         }),
 });
