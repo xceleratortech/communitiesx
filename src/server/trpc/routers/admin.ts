@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, adminProcedure, authProcedure } from '../trpc';
 import { users, orgs, accounts, verifications } from '@/server/db/auth-schema';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { eq, count, or, ilike } from 'drizzle-orm';
@@ -9,31 +9,6 @@ import { sendEmail } from '@/lib/email';
 import { hashPassword } from 'better-auth/crypto';
 import { communityMembers } from '@/server/db/schema';
 import { Context } from '../context';
-
-// Create admin middleware that checks for admin appRole
-
-const t = initTRPC.context<Context>().create();
-
-const isAdmin = t.middleware(({ ctx, next }) => {
-    if (!ctx.session?.user) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Unauthorized' });
-    }
-    if (ctx.session.user.appRole !== 'admin') {
-        throw new TRPCError({
-            code: 'FORBIDDEN',
-            message: 'Forbidden - Insufficient permissions',
-        });
-    }
-    return next({
-        ctx: {
-            ...ctx,
-            session: ctx.session,
-        },
-    });
-});
-
-// Create admin procedure using the middleware
-const adminProcedure = publicProcedure.use(isAdmin);
 
 export const adminRouter = router({
     // Get all users
@@ -237,7 +212,7 @@ export const adminRouter = router({
         }),
 
     // Send invite to a user
-    inviteUser: publicProcedure
+    inviteUser: authProcedure
         .input(
             z.object({
                 email: z.string().email(),

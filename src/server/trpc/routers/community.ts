@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure, authProcedure } from '../trpc';
 import {
     posts,
     comments,
@@ -31,6 +31,8 @@ import type { Context } from '@/server/trpc/context';
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
 import _ from 'lodash';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -73,7 +75,7 @@ type PostWithSource = PostWithAuthor & {
 
 export const communityRouter = router({
     // Create a new post
-    createPost: publicProcedure
+    createPost: authProcedure
         .input(
             z.object({
                 title: z.string().min(1).max(200),
@@ -95,17 +97,10 @@ export const communityRouter = router({
                 };
                 ctx: Context;
             }) => {
-                if (!ctx.session?.user) {
-                    throw new TRPCError({
-                        code: 'UNAUTHORIZED',
-                        message: 'You must be logged in to create a post',
-                    });
-                }
-
                 try {
                     // Always fetch orgId from DB
                     const user = await db.query.users.findFirst({
-                        where: eq(users.id, ctx.session.user.id),
+                        where: eq(users.id, ctx.session?.user?.id ?? ''),
                     });
                     const orgId = user?.orgId;
                     if (!orgId) {
@@ -123,7 +118,7 @@ export const communityRouter = router({
                                 members: {
                                     where: eq(
                                         communityMembers.userId,
-                                        ctx.session.user.id,
+                                        ctx.session?.user?.id ?? '',
                                     ),
                                 },
                             },
@@ -178,7 +173,7 @@ export const communityRouter = router({
                             .values({
                                 title: input.title.trim(),
                                 content: input.content,
-                                authorId: ctx.session.user.id,
+                                authorId: ctx.session?.user?.id ?? '',
                                 orgId: orgId,
                                 communityId: input.communityId || null,
                                 visibility: input.communityId
@@ -214,14 +209,8 @@ export const communityRouter = router({
         ),
 
     // Get all posts (org-specific) that don't belong to any community
-    getPosts: publicProcedure.query(
+    getPosts: authProcedure.query(
         async ({ ctx }): Promise<PostWithAuthor[]> => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view posts',
-                });
-            }
             try {
                 // Always fetch orgId from DB
                 const user = await db.query.users.findFirst({
@@ -256,14 +245,8 @@ export const communityRouter = router({
     ),
 
     // Get posts from communities the user is a member of or following
-    getRelevantPosts: publicProcedure.query(
+    getRelevantPosts: authProcedure.query(
         async ({ ctx }): Promise<PostWithAuthor[]> => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view posts',
-                });
-            }
             try {
                 const userId = ctx.session.user.id;
 
@@ -314,7 +297,7 @@ export const communityRouter = router({
     ),
 
     // Get all posts relevant to user (org-wide + community posts)
-    getAllRelevantPosts: publicProcedure
+    getAllRelevantPosts: authProcedure
         .input(
             z.object({
                 limit: z.number().min(1).max(100).default(10),
@@ -322,12 +305,6 @@ export const communityRouter = router({
             }),
         )
         .query(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view posts',
-                });
-            }
             try {
                 const { limit, offset } = input;
                 const userId = ctx.session.user.id;
@@ -495,20 +472,13 @@ export const communityRouter = router({
         }),
 
     // Get a single post with its comments
-    getPost: publicProcedure
+    getPost: authProcedure
         .input(
             z.object({
                 postId: z.number(),
             }),
         )
         .query(async ({ input, ctx }): Promise<PostWithAuthorAndComments> => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view posts',
-                });
-            }
-
             try {
                 const postFromDb = await db.query.posts.findFirst({
                     where: eq(posts.id, input.postId),
@@ -608,7 +578,7 @@ export const communityRouter = router({
         }),
 
     // Create a comment
-    createComment: publicProcedure
+    createComment: authProcedure
         .input(
             z.object({
                 postId: z.number(),
@@ -624,15 +594,6 @@ export const communityRouter = router({
                 input: { postId: number; content: string; parentId?: number };
                 ctx: Context;
             }) => {
-                if (!ctx.session?.user) {
-                    throw new TRPCError({
-                        code: 'UNAUTHORIZED',
-                        message: 'You must be logged in to comment',
-                    });
-                }
-
-                console.log('Session user:', ctx.session.user);
-
                 try {
                     // First check if the post exists
                     const orgId = (ctx.session?.user as any).orgId;
@@ -652,7 +613,7 @@ export const communityRouter = router({
                         .values({
                             content: input.content,
                             postId: input.postId,
-                            authorId: ctx.session.user.id,
+                            authorId: ctx.session?.user?.id ?? '',
                             parentId: input.parentId,
                             createdAt: new Date(),
                             updatedAt: new Date(),
@@ -681,7 +642,7 @@ export const communityRouter = router({
         ),
 
     // Update a comment
-    updateComment: publicProcedure
+    updateComment: authProcedure
         .input(
             z.object({
                 commentId: z.number(),
@@ -689,13 +650,6 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to edit a comment',
-                });
-            }
-
             const commentToUpdate = await db.query.comments.findFirst({
                 where: eq(comments.id, input.commentId),
             });
@@ -745,7 +699,7 @@ export const communityRouter = router({
         }),
 
     // Edit a post
-    editPost: publicProcedure
+    editPost: authProcedure
         .input(
             z.object({
                 postId: z.number(),
@@ -755,12 +709,6 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to edit a post',
-                });
-            }
             // Find the post
             const post = await db.query.posts.findFirst({
                 where: eq(posts.id, input.postId),
@@ -800,20 +748,13 @@ export const communityRouter = router({
         }),
 
     // Soft delete a comment
-    deleteComment: publicProcedure
+    deleteComment: authProcedure
         .input(
             z.object({
                 commentId: z.number(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to delete a comment',
-                });
-            }
-
             const commentToDelete = await db.query.comments.findFirst({
                 where: eq(comments.id, input.commentId),
             });
@@ -853,20 +794,13 @@ export const communityRouter = router({
         }),
 
     // Soft delete a post
-    deletePost: publicProcedure
+    deletePost: authProcedure
         .input(
             z.object({
                 postId: z.number(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to delete a post',
-                });
-            }
-
             const postToDelete = await db.query.posts.findFirst({
                 where: eq(posts.id, input.postId),
             });
@@ -899,14 +833,7 @@ export const communityRouter = router({
         }),
 
     // Get statistics for the community
-    getStats: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view statistics',
-            });
-        }
-
+    getStats: authProcedure.query(async ({ ctx }) => {
         try {
             // Get the user's organization
             const user = await db.query.users.findFirst({
@@ -959,14 +886,7 @@ export const communityRouter = router({
     }),
 
     // Get admin users for the community
-    getAdmins: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view admins',
-            });
-        }
-
+    getAdmins: authProcedure.query(async ({ ctx }) => {
         try {
             // Get the user's organization
             const user = await db.query.users.findFirst({
@@ -998,7 +918,7 @@ export const communityRouter = router({
     }),
 
     // Create a new community
-    create: publicProcedure
+    create: authProcedure
         .input(
             z.object({
                 name: z.string().min(3).max(50),
@@ -1032,26 +952,26 @@ export const communityRouter = router({
                 };
                 ctx: Context;
             }) => {
-                if (!ctx.session?.user) {
+                if (!ctx.session?.user?.id) {
                     throw new TRPCError({
                         code: 'UNAUTHORIZED',
                         message: 'You must be logged in to create a community',
                     });
                 }
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canCreateCommunity = permission.checkOrgPermission(
+                    PERMISSIONS.CREATE_COMMUNITY,
+                );
 
-                // if (!input.orgId) {
-                //     throw new Error('Organization ID is required');
-                // }
-
-                // const user = await db.query.users.findFirst({
-                //     where: eq(users.id, ctx.session.user.id),
-                //   });
-                //   if (!user || user.orgId !== input.orgId || user.role !== 'admin') {
-                //     throw new TRPCError({
-                //       code: 'FORBIDDEN',
-                //       message: 'You must be an admin of the selected organization to create a community.',
-                //     });
-                //   }
+                if (!canCreateCommunity) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to create a community',
+                    });
+                }
 
                 try {
                     const existingCommunity =
@@ -1136,22 +1056,21 @@ export const communityRouter = router({
                 });
             }
 
-            // Check if user is an admin of the community
-            // const membership = await db.query.communityMembers.findFirst({
-            //     where: and(
-            //         eq(communityMembers.userId, ctx.session.user.id),
-            //         eq(communityMembers.communityId, input.communityId),
-            //         eq(communityMembers.role, 'admin'),
-            //     ),
-            // });
+            const permission = await ServerPermissions.fromUserId(
+                ctx.session.user.id,
+            );
+            const canUpdateCommunity = permission.checkCommunityPermission(
+                input.communityId.toString(),
+                PERMISSIONS.EDIT_COMMUNITY,
+            );
 
-            // if (!membership) {
-            //     throw new TRPCError({
-            //         code: 'FORBIDDEN',
-            //         message:
-            //             'Only community admins can update community details',
-            //     });
-            // }
+            if (!canUpdateCommunity) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'You do not have permission to update this community',
+                });
+            }
 
             try {
                 const updateData: any = {
@@ -1184,7 +1103,7 @@ export const communityRouter = router({
         }),
 
     // Assign moderator role to a community member (admin only)
-    assignModerator: publicProcedure
+    assignModerator: authProcedure
         .input(
             z.object({
                 communityId: z.number(),
@@ -1192,29 +1111,20 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to assign moderators',
-                });
-            }
+            const permission = await ServerPermissions.fromUserId(
+                ctx.session.user.id,
+            );
+            const canAssignModerator = permission.checkCommunityPermission(
+                input.communityId.toString(),
+                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+            );
 
-            // Check if the current user is an admin of the community
-            const adminMembership = await db.query.communityMembers.findFirst({
-                where: and(
-                    eq(communityMembers.userId, ctx.session.user.id),
-                    eq(communityMembers.communityId, input.communityId),
-                    eq(communityMembers.role, 'admin'),
-                ),
-            });
-
-            if (!adminMembership) {
+            if (!canAssignModerator) {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
-                    message: 'Only community admins can assign moderators',
+                    message: 'You do not have permission to assign moderator',
                 });
             }
-
             // Check if the target user is a member of the community
             const targetMembership = await db.query.communityMembers.findFirst({
                 where: and(
@@ -1331,7 +1241,7 @@ export const communityRouter = router({
         }),
 
     // Create invite link for a community (admin and moderator)
-    createInviteLink: publicProcedure
+    createInviteLink: authProcedure
         .input(
             z.object({
                 communityId: z.number(),
@@ -1340,39 +1250,19 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to create invite links',
-                });
-            }
+            const permission = await ServerPermissions.fromUserId(
+                ctx.session.user.id,
+            );
+            const canCreateInvite = permission.checkCommunityPermission(
+                input.communityId.toString(),
+                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+            );
 
-            // Check if the current user is an admin or moderator of the community
-            const membership = await db.query.communityMembers.findFirst({
-                where: and(
-                    eq(communityMembers.userId, ctx.session.user.id),
-                    eq(communityMembers.communityId, input.communityId),
-                    or(
-                        eq(communityMembers.role, 'admin'),
-                        eq(communityMembers.role, 'moderator'),
-                    ),
-                ),
-            });
-
-            if (!membership) {
+            if (!canCreateInvite) {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
                     message:
-                        'Only community admins and moderators can create invite links',
-                });
-            }
-
-            // Only admins can create moderator invites
-            if (input.role === 'moderator' && membership.role !== 'admin') {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message:
-                        'Only community admins can create moderator invites',
+                        'You do not have permission to create invite links',
                 });
             }
 
@@ -1470,7 +1360,7 @@ export const communityRouter = router({
         }),
 
     // Join a community via invite link
-    joinViaInvite: publicProcedure
+    joinViaInvite: authProcedure
         .input(
             z.object({
                 inviteCode: z.string(),
@@ -1484,13 +1374,6 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to join a community',
-                });
-            }
-
             try {
                 // Find the invite
                 const invite = await db.query.communityInvites.findFirst({
@@ -1777,7 +1660,7 @@ export const communityRouter = router({
             }
         }),
 
-    searchRelevantPost: publicProcedure
+    searchRelevantPost: authProcedure
         .input(
             z.object({
                 search: z.string().min(1),
@@ -1786,13 +1669,6 @@ export const communityRouter = router({
             }),
         )
         .query(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to search posts',
-                });
-            }
-
             const { search, limit, offset } = input;
             const userId = ctx.session.user.id;
 

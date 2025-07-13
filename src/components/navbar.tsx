@@ -206,11 +206,21 @@ export function Navbar() {
                                                                         )[0]}
                                                                 </p>
                                                                 <p className="text-muted-foreground text-xs leading-none">
-                                                                    {
-                                                                        session
-                                                                            .user
-                                                                            ?.email
-                                                                    }
+                                                                    {session
+                                                                        .user
+                                                                        ?.email &&
+                                                                    session.user
+                                                                        .email
+                                                                        .length >
+                                                                        28
+                                                                        ? session.user.email.slice(
+                                                                              0,
+                                                                              25,
+                                                                          ) +
+                                                                          '...'
+                                                                        : session
+                                                                              .user
+                                                                              ?.email}
                                                                 </p>
                                                             </div>
                                                         </div>
