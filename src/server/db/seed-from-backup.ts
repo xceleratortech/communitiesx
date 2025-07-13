@@ -28,16 +28,12 @@ async function seedFromBackup() {
 
         // --- Insert Organizations ---
         console.log('🏢 Inserting organizations...');
-        await db.insert(orgs).values([
-            {
-                id: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
-                name: 'Xcelerator',
-            },
-            {
-                id: 'THWrGxwfA0F3PpjULmmXp',
-                name: 'Atria University',
-            },
-        ]);
+        await db.insert(orgs).values({
+            id: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
+            name: 'Xcelerator',
+            createdAt: new Date('2025-05-20 11:09:55.569'),
+            slug: 'xcelerator',
+        });
 
         // --- Insert Users ---
         console.log('👤 Inserting users...');

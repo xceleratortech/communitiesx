@@ -1,13 +1,13 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { admin } from 'better-auth/plugins';
+import { admin, customSession } from 'better-auth/plugins';
 import { sendEmail } from '@/lib/email';
 import {
     createVerificationEmail,
     createResetPasswordEmail,
 } from '@/lib/email-templates';
-import { db } from '@/server/db';
+import { db, getUser } from '@/server/db';
 
 if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
@@ -24,6 +24,18 @@ export const auth = betterAuth({
         admin({
             defaultRole: 'user',
             impersonationSessionDuration: 60 * 60 * 24,
+        }),
+        customSession(async ({ session, user }) => {
+            // Custom session logic can be added here
+            const userData = await getUser(user.id);
+            return {
+                appRole: userData?.appRole || 'user',
+                user: {
+                    ...user,
+                    appRole: userData?.appRole || 'user',
+                },
+                session,
+            };
         }),
     ],
     cors: {

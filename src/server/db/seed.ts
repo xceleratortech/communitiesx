@@ -51,6 +51,8 @@ async function seed() {
                 .values({
                     id: orgId,
                     name: 'Xcelerator',
+                    slug: 'xcelerator',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -61,6 +63,8 @@ async function seed() {
                 .values({
                     id: org2Id,
                     name: 'TechCorp',
+                    slug: 'techcorp',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -504,6 +508,8 @@ async function seed() {
             .values({
                 id: orgId,
                 name: 'Xcelerator',
+                slug: 'xcelerator',
+                createdAt: new Date(),
             })
             .returning();
         // Create admin user

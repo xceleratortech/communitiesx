@@ -14,5 +14,11 @@ export const db = drizzle(pool, {
     schema: { ...schema, ...authSchema },
 });
 
+export const getUser = async (userId: string) => {
+    const user = await db.query.users.findFirst({
+        where: (users, { eq }) => eq(users.id, userId),
+    });
+    return user;
+};
 // Export the pool for advanced use if needed
 export { pool };
