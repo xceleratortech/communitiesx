@@ -13,6 +13,10 @@ import {
     communityMemberRequests,
 } from '@/server/db/schema';
 import { addDays } from 'date-fns';
+import { config } from 'dotenv';
+
+// Attempt to load .env.local first (non-fatal if it doesn't exist)
+config({ path: '.env.local', override: false });
 
 // Parse command-line arguments for demo mode
 const args = process.argv.slice(2);

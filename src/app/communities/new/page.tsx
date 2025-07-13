@@ -73,11 +73,13 @@ const formSchema = z.object({
     avatar: z
         .string()
         .url({ message: 'Please enter a valid URL' })
+        .or(z.literal(''))
         .optional()
         .nullable(),
     banner: z
         .string()
         .url({ message: 'Please enter a valid URL' })
+        .or(z.literal(''))
         .optional()
         .nullable(),
     orgId: z.string().min(1, { message: 'Please select an organization.' }),
