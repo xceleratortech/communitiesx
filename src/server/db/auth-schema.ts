@@ -24,6 +24,7 @@ export const users = pgTable('users', {
         .notNull()
         .references(() => orgs.id),
     role: text('role').notNull().default('user'), // 'admin' | 'user'
+    appRole: text('app_role').notNull().default('user'),
     createdAt: timestamp('created_at').notNull(),
     updatedAt: timestamp('updated_at').notNull(),
 });

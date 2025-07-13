@@ -10,6 +10,7 @@ export const getUserPermission = async (userId: string) => {
                 id: users.id,
                 name: users.name,
                 email: users.email,
+                appRole: users.appRole,
                 role: users.role,
                 orgId: users.orgId,
             })
@@ -23,12 +24,8 @@ export const getUserPermission = async (userId: string) => {
             });
         }
 
-        const appRole = user.role;
-        const orgRole = user.orgId
-            ? appRole === 'admin'
-                ? 'admin'
-                : 'member'
-            : null;
+        const appRole = user.appRole;
+        const orgRole = user.role;
 
         const communityRows = await db
             .select({
@@ -54,6 +51,7 @@ export const getUserPermission = async (userId: string) => {
                 id: user.id,
                 name: user.name,
                 email: user.email,
+                appRole: user.appRole,
                 role: user.role,
                 orgId: user.orgId,
             },

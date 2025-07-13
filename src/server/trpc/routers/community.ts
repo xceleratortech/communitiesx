@@ -9,13 +9,28 @@ import {
     communityMembers,
     communityInvites,
     communityMemberRequests,
+    communityAllowedOrgs,
+    tags,
+    postTags,
 } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
-import { eq, desc, count, and, isNull, or, inArray, lt } from 'drizzle-orm';
+import {
+    eq,
+    desc,
+    count,
+    and,
+    isNull,
+    or,
+    inArray,
+    lt,
+    ilike,
+    sql,
+} from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
+import _ from 'lodash';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -42,6 +57,7 @@ type PostWithAuthorAndComments = PostType & {
     author: UserType | null;
     comments: CommentWithAuthor[];
     community?: typeof communities.$inferSelect | null;
+    tags: (typeof tags.$inferSelect)[];
 };
 
 type PostWithSource = PostWithAuthor & {
@@ -63,6 +79,7 @@ export const communityRouter = router({
                 title: z.string().min(1).max(200),
                 content: z.string().min(1),
                 communityId: z.number().nullable().optional(),
+                tagIds: z.array(z.number()).optional(), // Add this line
             }),
         )
         .mutation(
@@ -74,6 +91,7 @@ export const communityRouter = router({
                     title: string;
                     content: string;
                     communityId?: number | null;
+                    tagIds?: number[]; // Add this line
                 };
                 ctx: Context;
             }) => {
@@ -132,25 +150,59 @@ export const communityRouter = router({
                                     'You must be a member to post in this community',
                             });
                         }
+
+                        // If tagIds are provided, verify they belong to the community
+                        if (input.tagIds && input.tagIds.length > 0) {
+                            const communityTags = await db.query.tags.findMany({
+                                where: and(
+                                    eq(tags.communityId, input.communityId),
+                                    inArray(tags.id, input.tagIds),
+                                ),
+                            });
+
+                            if (communityTags.length !== input.tagIds.length) {
+                                throw new TRPCError({
+                                    code: 'BAD_REQUEST',
+                                    message:
+                                        'Some tags do not belong to this community',
+                                });
+                            }
+                        }
                     }
 
-                    const [post] = await db
-                        .insert(posts)
-                        .values({
-                            title: input.title.trim(),
-                            content: input.content,
-                            authorId: ctx.session.user.id,
-                            orgId: orgId,
-                            communityId: input.communityId || null,
-                            visibility: input.communityId
-                                ? 'community'
-                                : 'public',
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                        })
-                        .returning();
+                    // Use a transaction to create post and link tags
+                    const result = await db.transaction(async (tx) => {
+                        // Create the post
+                        const [post] = await tx
+                            .insert(posts)
+                            .values({
+                                title: input.title.trim(),
+                                content: input.content,
+                                authorId: ctx.session.user.id,
+                                orgId: orgId,
+                                communityId: input.communityId || null,
+                                visibility: input.communityId
+                                    ? 'community'
+                                    : 'public',
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                            })
+                            .returning();
 
-                    return post;
+                        // Link the post with tags if any are provided
+                        if (input.tagIds && input.tagIds.length > 0) {
+                            const postTagValues = input.tagIds.map((tagId) => ({
+                                postId: post.id,
+                                tagId: tagId,
+                            }));
+
+                            await tx.insert(postTags).values(postTagValues);
+                        }
+
+                        return post;
+                    });
+
+                    return result;
                 } catch (error) {
                     console.error('Error creating post:', error);
                     throw new TRPCError({
@@ -266,7 +318,7 @@ export const communityRouter = router({
         .input(
             z.object({
                 limit: z.number().min(1).max(100).default(10),
-                offset: z.number().default(0), // Use offset-based pagination instead of cursor
+                offset: z.number().default(0),
             }),
         )
         .query(async ({ ctx, input }) => {
@@ -334,6 +386,11 @@ export const communityRouter = router({
                             },
                         },
                         comments: true,
+                        postTags: {
+                            with: {
+                                tag: true,
+                            },
+                        },
                     },
                 });
 
@@ -347,6 +404,7 @@ export const communityRouter = router({
                 // Add source information to org posts
                 const orgPostsWithSource = orgPosts.map((post) => ({
                     ...post,
+                    tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
                     source: {
                         type: 'org',
                         orgId,
@@ -371,6 +429,11 @@ export const communityRouter = router({
                             },
                             community: true,
                             comments: true,
+                            postTags: {
+                                with: {
+                                    tag: true,
+                                },
+                            },
                         },
                     });
 
@@ -381,6 +444,7 @@ export const communityRouter = router({
                         );
                         return {
                             ...post,
+                            tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
                             source: {
                                 type: 'community',
                                 communityId: post.communityId ?? undefined,
@@ -687,6 +751,7 @@ export const communityRouter = router({
                 postId: z.number(),
                 title: z.string().min(1).max(200),
                 content: z.string().min(1),
+                tagIds: z.array(z.number()).optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -706,12 +771,7 @@ export const communityRouter = router({
                     message: 'Post not found',
                 });
             }
-            if (post.authorId !== ctx.session.user.id) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'You are not allowed to edit this post',
-                });
-            }
+            // Update post content/title
             const [updatedPost] = await db
                 .update(posts)
                 .set({
@@ -721,6 +781,21 @@ export const communityRouter = router({
                 })
                 .where(eq(posts.id, input.postId))
                 .returning();
+            // Update tags if provided
+            if (input.tagIds) {
+                // Remove existing tags
+                await db
+                    .delete(postTags)
+                    .where(eq(postTags.postId, input.postId));
+                // Add new tags
+                if (input.tagIds.length > 0) {
+                    const postTagValues = input.tagIds.map((tagId) => ({
+                        postId: input.postId,
+                        tagId,
+                    }));
+                    await db.insert(postTags).values(postTagValues);
+                }
+            }
             return updatedPost;
         }),
 
@@ -800,13 +875,6 @@ export const communityRouter = router({
                 throw new TRPCError({
                     code: 'NOT_FOUND',
                     message: 'Post not found',
-                });
-            }
-
-            if (postToDelete.authorId !== ctx.session.user.id) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'You are not authorized to delete this post',
                 });
             }
 
@@ -944,6 +1012,7 @@ export const communityRouter = router({
                 rules: z.string().max(2000).nullable(),
                 avatar: z.string().nullable(),
                 banner: z.string().nullable(),
+                orgId: z.string(),
             }),
         )
         .mutation(
@@ -959,6 +1028,7 @@ export const communityRouter = router({
                     rules: string | null;
                     avatar: string | null;
                     banner: string | null;
+                    orgId: string;
                 };
                 ctx: Context;
             }) => {
@@ -968,6 +1038,20 @@ export const communityRouter = router({
                         message: 'You must be logged in to create a community',
                     });
                 }
+
+                // if (!input.orgId) {
+                //     throw new Error('Organization ID is required');
+                // }
+
+                // const user = await db.query.users.findFirst({
+                //     where: eq(users.id, ctx.session.user.id),
+                //   });
+                //   if (!user || user.orgId !== input.orgId || user.role !== 'admin') {
+                //     throw new TRPCError({
+                //       code: 'FORBIDDEN',
+                //       message: 'You must be an admin of the selected organization to create a community.',
+                //     });
+                //   }
 
                 try {
                     const existingCommunity =
@@ -1010,6 +1094,14 @@ export const communityRouter = router({
                         updatedAt: new Date(),
                     });
 
+                    await db.insert(communityAllowedOrgs).values({
+                        communityId: community.id,
+                        orgId: input.orgId,
+                        permissions: 'view',
+                        addedBy: ctx.session.user.id,
+                        addedAt: new Date(),
+                    });
+
                     return community;
                 } catch (error) {
                     if (error instanceof TRPCError) {
@@ -1045,21 +1137,21 @@ export const communityRouter = router({
             }
 
             // Check if user is an admin of the community
-            const membership = await db.query.communityMembers.findFirst({
-                where: and(
-                    eq(communityMembers.userId, ctx.session.user.id),
-                    eq(communityMembers.communityId, input.communityId),
-                    eq(communityMembers.role, 'admin'),
-                ),
-            });
+            // const membership = await db.query.communityMembers.findFirst({
+            //     where: and(
+            //         eq(communityMembers.userId, ctx.session.user.id),
+            //         eq(communityMembers.communityId, input.communityId),
+            //         eq(communityMembers.role, 'admin'),
+            //     ),
+            // });
 
-            if (!membership) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message:
-                        'Only community admins can update community details',
-                });
-            }
+            // if (!membership) {
+            //     throw new TRPCError({
+            //         code: 'FORBIDDEN',
+            //         message:
+            //             'Only community admins can update community details',
+            //     });
+            // }
 
             try {
                 const updateData: any = {
@@ -1683,5 +1775,132 @@ export const communityRouter = router({
                     message: 'Failed to send invites',
                 });
             }
+        }),
+
+    searchRelevantPost: publicProcedure
+        .input(
+            z.object({
+                search: z.string().min(1),
+                limit: z.number().min(1).max(100).default(10),
+                offset: z.number().default(0),
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to search posts',
+                });
+            }
+
+            const { search, limit, offset } = input;
+            const userId = ctx.session.user.id;
+
+            // Get user's org and communities
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, userId),
+                with: { organization: true },
+            });
+            const orgId = user?.orgId;
+            if (!orgId) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'User does not have an organization.',
+                });
+            }
+
+            const memberships = await db.query.communityMembers.findMany({
+                where: and(
+                    eq(communityMembers.userId, userId),
+                    eq(communityMembers.status, 'active'),
+                ),
+            });
+            const communityIds = memberships.map((m) => m.communityId);
+
+            // Build search conditions using database-level filtering
+            const searchTerm = `%${search.toLowerCase()}%`;
+
+            // Create base conditions for posts the user can see
+            const baseConditions = and(
+                eq(posts.isDeleted, false),
+                or(
+                    // User's org posts
+                    eq(posts.orgId, orgId),
+                    // Community posts user has access to
+                    communityIds.length > 0
+                        ? inArray(posts.communityId, communityIds)
+                        : sql`false`,
+                ),
+            );
+
+            // Add search conditions - use database-level text search for better performance
+            const searchConditions = and(
+                baseConditions,
+                or(
+                    ilike(posts.title, searchTerm),
+                    ilike(posts.content, searchTerm),
+                ),
+            );
+
+            // Get total count for pagination
+            const totalCountResult = await db
+                .select({ count: sql<number>`count(*)` })
+                .from(posts)
+                .where(searchConditions);
+
+            const totalCount = totalCountResult[0]?.count || 0;
+
+            // Fetch paginated results with all necessary relations
+            const searchResults = await db.query.posts.findMany({
+                where: searchConditions,
+                with: {
+                    author: {
+                        with: {
+                            organization: true,
+                        },
+                    },
+                    community: true,
+                    postTags: {
+                        with: {
+                            tag: true,
+                        },
+                    },
+                    comments: true, // Include comments for count
+                },
+                orderBy: [desc(posts.createdAt)], // Order by creation date
+                limit: limit,
+                offset: offset,
+            });
+
+            // Transform the results to match your PostDisplay type
+            const transformedPosts = searchResults.map((post) => ({
+                ...post,
+                // Add source information based on post type
+                source: post.communityId
+                    ? {
+                          type: 'community' as const,
+                          communityId: post.communityId,
+                          reason: 'from your community',
+                      }
+                    : {
+                          type: 'org' as const,
+                          orgId: post.orgId,
+                          reason: 'from your organization',
+                      },
+                // Transform tags to match PostTag type
+                tags:
+                    post.postTags?.map((pt) => ({
+                        id: pt.tag.id,
+                        name: pt.tag.name,
+                        color: undefined, // Add color if you have it in your tag schema
+                    })) || [],
+            }));
+
+            return {
+                posts: transformedPosts,
+                totalCount,
+                hasNextPage: offset + limit < totalCount,
+                nextOffset: offset + limit < totalCount ? offset + limit : null,
+            };
         }),
 });

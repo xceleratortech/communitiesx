@@ -71,6 +71,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { usePermission } from '@/hooks/use-permission';
 
 type User = {
     id: string;
@@ -84,6 +86,7 @@ type User = {
         name: string;
     };
     role: string;
+    appRole: string;
     createdAt: string | Date;
     updatedAt: string | Date;
 };
@@ -120,14 +123,6 @@ export default function AdminDashboard() {
         slug: '',
     });
 
-    // State for invite user dialog
-    const [isInviteUserDialogOpen, setIsInviteUserDialogOpen] = useState(false);
-    const [inviteUser, setInviteUser] = useState({
-        email: '',
-        role: 'user' as 'admin' | 'user',
-        orgId: '',
-    });
-
     // For direct email verification
     const [verifyEmail, setVerifyEmail] = useState('');
     const [isVerifying, setIsVerifying] = useState(false);
@@ -139,15 +134,18 @@ export default function AdminDashboard() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const utils = trpc.useUtils();
 
+    const { appRole } = usePermission();
+    const isAppAdmin = appRole?.includes('admin');
+
     // Queries
     const { data: users, isLoading: isLoadingUsers } =
         trpc.admin.getUsers.useQuery(undefined, {
-            enabled: !!session && session.user.role === 'admin',
+            enabled: !!session,
         });
 
     const { data: orgs, isLoading: isLoadingOrgs } =
         trpc.admin.getOrgs.useQuery(undefined, {
-            enabled: !!session && session.user.role === 'admin',
+            enabled: !!session,
         });
 
     const { data: organizations, isLoading: isLoadingInitial } =
@@ -165,7 +163,23 @@ export default function AdminDashboard() {
             },
         );
 
+    const makeAppAdminMutation = trpc.admin.makeAppAdmin.useMutation();
+
     // Mutations
+    const makeAppAdmin = (userId: string) => {
+        makeAppAdminMutation.mutate(
+            { userId },
+            {
+                onSuccess: () => {
+                    toast.success('User promoted to App Admin');
+                    utils.admin.getUsers.invalidate();
+                },
+                onError: (error) => {
+                    toast.error(`Failed to promote user: ${error.message}`);
+                },
+            },
+        );
+    };
     const createUserMutation = trpc.admin.createUser.useMutation({
         onSuccess: () => {
             setIsCreateUserDialogOpen(false);
@@ -191,16 +205,29 @@ export default function AdminDashboard() {
         },
     });
 
-    const inviteUserMutation = trpc.admin.inviteUser.useMutation({
-        onSuccess: () => {
-            setIsInviteUserDialogOpen(false);
-            setInviteUser({
-                email: '',
-                role: 'user' as 'admin' | 'user',
-                orgId: '',
-            });
-        },
-    });
+    const removeOrgMutation = trpc.admin.removeOrg.useMutation();
+
+    const removeOrg = async (orgId: string) => {
+        try {
+            await removeOrgMutation.mutateAsync(
+                { orgId },
+                {
+                    onSuccess: () => {
+                        toast.success('Organization removed successfully');
+                        utils.admin.getOrgs.invalidate();
+                    },
+                    onError: (error) => {
+                        toast.error(
+                            `Failed to remove organization: ${error.message}`,
+                        );
+                    },
+                },
+            );
+        } catch (error) {
+            console.error('Error removing organization:', error);
+            toast.error('Failed to remove organization');
+        }
+    };
 
     const removeUserMutation = trpc.admin.removeUser.useMutation({
         onSuccess: () => {
@@ -217,11 +244,6 @@ export default function AdminDashboard() {
     const handleCreateOrg = (e: React.FormEvent) => {
         e.preventDefault();
         createOrgMutation.mutate(newOrg);
-    };
-
-    const handleInviteUser = (e: React.FormEvent) => {
-        e.preventDefault();
-        inviteUserMutation.mutate(inviteUser);
     };
 
     // Updated to open the alert dialog instead of using browser confirm
@@ -322,7 +344,7 @@ export default function AdminDashboard() {
         );
     }
 
-    if (session.user.role !== 'admin') {
+    if (!isAppAdmin) {
         return (
             <div className="container mx-auto p-4">
                 <h1 className="mb-4 text-2xl font-bold">Access Denied</h1>
@@ -334,7 +356,6 @@ export default function AdminDashboard() {
     return (
         <div className="container mx-auto p-4">
             <h1 className="mb-6 text-3xl font-bold">Admin Dashboard</h1>
-
             <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="mb-4">
                     <TabsTrigger value="users">Users</TabsTrigger>
@@ -343,7 +364,6 @@ export default function AdminDashboard() {
                     </TabsTrigger>
                     <TabsTrigger value="tools">Admin Tools</TabsTrigger>
                 </TabsList>
-
                 <TabsContent value="users">
                     <Card>
                         <CardHeader>
@@ -551,7 +571,7 @@ export default function AdminDashboard() {
                                                     {user.email}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {user.role}
+                                                    {user.appRole}
                                                 </TableCell>
                                                 <TableCell>
                                                     {user.organization?.name ||
@@ -568,27 +588,60 @@ export default function AdminDashboard() {
                                                     ).toLocaleDateString()}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() =>
-                                                            handleRemoveUser(
-                                                                user.id,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            user.id ===
-                                                            session.user.id
-                                                        }
-                                                        title={
-                                                            user.id ===
-                                                            session.user.id
-                                                                ? 'You cannot remove yourself'
-                                                                : 'Kick user'
-                                                        }
-                                                    >
-                                                        <UserMinus className="h-4 w-4" />
-                                                    </Button>
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger
+                                                            asChild
+                                                        >
+                                                            <Button
+                                                                variant="ghost"
+                                                                className="h-8 w-8 p-0"
+                                                            >
+                                                                <span className="sr-only">
+                                                                    Open menu
+                                                                </span>
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>
+                                                                Actions
+                                                            </DropdownMenuLabel>
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    makeAppAdmin(
+                                                                        user.id,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    user.appRole ===
+                                                                    'admin'
+                                                                }
+                                                            >
+                                                                <CheckCircle className="mr-2 h-4 w-4" />
+                                                                {user.appRole ===
+                                                                'admin'
+                                                                    ? 'Already Admin'
+                                                                    : 'Make Admin'}
+                                                            </DropdownMenuItem>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    handleRemoveUser(
+                                                                        user.id,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    user.id ===
+                                                                    session.user
+                                                                        .id
+                                                                }
+                                                                className="text-destructive"
+                                                            >
+                                                                <UserMinus className="mr-2 h-4 w-4" />
+                                                                Remove User
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -598,155 +651,17 @@ export default function AdminDashboard() {
                         </CardContent>
                     </Card>
                 </TabsContent>
-
                 <TabsContent value="organizations">
                     <Card>
                         <CardHeader>
                             <div className="flex items-center justify-between">
                                 <CardTitle>Organization Management</CardTitle>
                                 <div className="flex gap-2">
-                                    <Dialog
-                                        open={isInviteUserDialogOpen}
-                                        onOpenChange={setIsInviteUserDialogOpen}
-                                    >
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline">
-                                                Invite User
-                                            </Button>
-                                        </DialogTrigger>
-                                        <DialogContent>
-                                            <DialogHeader>
-                                                <DialogTitle>
-                                                    Invite User
-                                                </DialogTitle>
-                                                <DialogDescription>
-                                                    Send an invitation email to
-                                                    a new user. Fill in the
-                                                    details and click Invite.
-                                                </DialogDescription>
-                                            </DialogHeader>
-                                            <form
-                                                onSubmit={handleInviteUser}
-                                                className="space-y-4"
-                                            >
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="invite-email">
-                                                        Email
-                                                    </Label>
-                                                    <Input
-                                                        id="invite-email"
-                                                        type="email"
-                                                        value={inviteUser.email}
-                                                        onChange={(e) =>
-                                                            setInviteUser({
-                                                                ...inviteUser,
-                                                                email: e.target
-                                                                    .value,
-                                                            })
-                                                        }
-                                                        placeholder="user@example.com"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="invite-role">
-                                                        Role
-                                                    </Label>
-                                                    <Select
-                                                        value={inviteUser.role}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setInviteUser({
-                                                                ...inviteUser,
-                                                                role: value as
-                                                                    | 'admin'
-                                                                    | 'user',
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select role" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="user">
-                                                                User
-                                                            </SelectItem>
-                                                            <SelectItem value="admin">
-                                                                Admin
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="invite-org">
-                                                        Organization
-                                                    </Label>
-                                                    <Select
-                                                        value={inviteUser.orgId}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setInviteUser({
-                                                                ...inviteUser,
-                                                                orgId: value,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select organization" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {orgs?.map(
-                                                                (
-                                                                    org: Organization,
-                                                                ) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            org.id
-                                                                        }
-                                                                        value={
-                                                                            org.id
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            org.name
-                                                                        }
-                                                                    </SelectItem>
-                                                                ),
-                                                            )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <DialogFooter>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            setIsInviteUserDialogOpen(
-                                                                false,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            inviteUserMutation.isPending
-                                                        }
-                                                    >
-                                                        Cancel
-                                                    </Button>
-                                                    <Button
-                                                        type="submit"
-                                                        disabled={
-                                                            inviteUserMutation.isPending
-                                                        }
-                                                    >
-                                                        {inviteUserMutation.isPending
-                                                            ? 'Inviting...'
-                                                            : 'Invite User'}
-                                                    </Button>
-                                                </DialogFooter>
-                                            </form>
-                                        </DialogContent>
-                                    </Dialog>
+                                    <InviteUserDialog orgs={orgs ?? []}>
+                                        <Button variant="outline">
+                                            Invite User
+                                        </Button>
+                                    </InviteUserDialog>
                                     <Dialog
                                         open={isCreateOrgDialogOpen}
                                         onOpenChange={setIsCreateOrgDialogOpen}
@@ -944,6 +859,17 @@ export default function AdminDashboard() {
                                                                 </Button>
                                                             </DropdownMenuItem>
                                                             <DropdownMenuSeparator />
+                                                            <DropdownMenuItem
+                                                                onClick={() =>
+                                                                    removeOrg(
+                                                                        org.id,
+                                                                    )
+                                                                }
+                                                                className="text-destructive"
+                                                            >
+                                                                Remove
+                                                                Organization
+                                                            </DropdownMenuItem>
                                                         </DropdownMenuContent>
                                                     </DropdownMenu>
                                                 </TableCell>
@@ -955,7 +881,6 @@ export default function AdminDashboard() {
                         </CardContent>
                     </Card>
                 </TabsContent>
-
                 <TabsContent value="tools">
                     <div className="grid gap-6 md:grid-cols-2">
                         {/* Verify Email Card */}

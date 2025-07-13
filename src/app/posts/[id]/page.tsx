@@ -251,57 +251,16 @@ export default function PostPage() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl p-4">
+        <div className="mx-auto max-w-4xl py-4">
             <div className="mb-8">
-                <div className="mb-4 flex items-start justify-between">
+                <div className="mb-2 flex items-start justify-between">
                     <div>
-                        <h1 className="mb-2 text-3xl font-bold dark:text-white">
+                        <h1 className="text-3xl font-bold dark:text-white">
                             {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
-                        <div className="mb-2 text-sm text-gray-500 dark:text-gray-300">
-                            Posted by{' '}
-                            {postData.author?.id ? (
-                                <UserProfilePopover userId={postData.author.id}>
-                                    <span className="cursor-pointer hover:underline">
-                                        {postData.author.name || 'Unknown'}
-                                    </span>
-                                </UserProfilePopover>
-                            ) : (
-                                'Unknown'
-                            )}{' '}
-                            on {new Date(postData.createdAt).toLocaleString()}
-                        </div>
                     </div>
-                    {session.user.id === postData.authorId &&
-                        !postData.isDeleted && (
-                            <div className="flex space-x-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        router.push(
-                                            `/posts/${postData.id}/edit`,
-                                        )
-                                    }
-                                    className="flex items-center gap-2 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                                >
-                                    <Edit className="h-4 w-4" />
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleDeletePost}
-                                    className="flex items-center gap-2 text-red-600 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/20"
-                                    disabled={deletePostMutation.isPending}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    Delete
-                                </Button>
-                            </div>
-                        )}
                 </div>
-                <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 dark:text-gray-100 dark:shadow-gray-900">
+                <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none rounded-lg shadow-sm">
                     {postData.isDeleted ? (
                         <div className="space-y-2">
                             <span className="block text-gray-500 italic dark:text-gray-300">

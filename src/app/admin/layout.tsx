@@ -27,8 +27,6 @@ export default function AdminLayout({
         if (!session.isPending) {
             if (!session.data) {
                 router.push('/auth/login');
-            } else if (session.data.user.role?.toLowerCase() !== 'admin') {
-                router.push('/');
             }
         }
     }, [session.isPending, session.data, router]);
@@ -41,12 +39,5 @@ export default function AdminLayout({
         );
     }
 
-    if (!session.data || session.data.user.role !== 'admin') {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                Access Denied
-            </div>
-        );
-    }
     return <div className="bg-background min-h-screen">{children}</div>;
 }

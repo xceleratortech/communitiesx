@@ -1,7 +1,6 @@
 'use client';
-
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -33,121 +32,96 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 
-// Form schema
 const formSchema = z.object({
-    name: z
-        .string()
-        .min(3, {
-            message: 'Community name must be at least 3 characters.',
-        })
-        .max(50, {
-            message: 'Community name must not exceed 50 characters.',
-        }),
+    name: z.string().min(3).max(50),
     slug: z
         .string()
-        .min(3, {
-            message: 'Slug must be at least 3 characters.',
-        })
-        .max(50, {
-            message: 'Slug must not exceed 50 characters.',
-        })
-        .regex(/^[a-z0-9-]+$/, {
-            message:
-                'Slug can only contain lowercase letters, numbers, and hyphens.',
-        }),
-    description: z
-        .string()
-        .max(500, {
-            message: 'Description must not exceed 500 characters.',
-        })
-        .optional(),
-    type: z.enum(['public', 'private'], {
-        required_error: 'You must select a community type.',
-    }),
-    rules: z
-        .string()
-        .max(2000, {
-            message: 'Rules must not exceed 2000 characters.',
-        })
-        .optional(),
-    avatar: z
-        .string()
-        .url({ message: 'Please enter a valid URL' })
-        .optional()
-        .nullable(),
-    banner: z
-        .string()
-        .url({ message: 'Please enter a valid URL' })
-        .optional()
-        .nullable(),
-    orgId: z.string().min(1, { message: 'Please select an organization.' }),
+        .min(3)
+        .max(50)
+        .regex(/^[a-z0-9-]+$/),
+    description: z.string().max(500).optional(),
+    type: z.enum(['public', 'private']),
+    rules: z.string().max(2000).optional(),
+    avatar: z.string().url().optional().nullable(),
+    banner: z.string().url().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function NewCommunityPage() {
+export default function EditCommunityPage() {
+    const params = useParams();
+    const slug = params.slug as string | undefined;
+    const shouldFetch = !!slug && typeof slug === 'string';
     const router = useRouter();
     const sessionData = useSession();
     const session = sessionData.data;
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    // Create community mutation
-    const createCommunity = trpc.community.create.useMutation({
-        onSuccess: (data) => {
-            toast.success('Community created successfully!');
-            router.push(`/communities/${data.slug}`);
+    // Fetch community data
+    const { data: community, isLoading } = trpc.communities.getBySlug.useQuery(
+        { slug: slug || '' },
+        { enabled: shouldFetch },
+    );
+
+    // Update mutation
+    const updateCommunity = trpc.community.updateCommunity.useMutation({
+        onSuccess: () => {
+            toast.success('Community updated successfully!');
+            router.push(`/communities/${slug}`);
         },
         onError: (error) => {
-            toast.error(error.message || 'Failed to create community');
+            toast.error(error.message || 'Failed to update community');
             setIsSubmitting(false);
         },
     });
 
-    // Fetch organizations for the select
-    const { data: organizations, isLoading: isLoadingOrgs } =
-        trpc.organizations.getOrganizationsForCommunityCreate.useQuery(
-            { userId: session?.user?.id! },
-            {
-                enabled: !!session?.user?.id,
-            },
-        );
-
-    // Initialize form
+    // Form setup
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            name: '',
-            slug: '',
-            description: '',
-            type: 'public',
-            rules: '',
-            avatar: '',
-            banner: '',
+            name: community?.name || '',
+            slug: community?.slug || '',
+            description: community?.description || '',
+            type:
+                community?.type === 'public' || community?.type === 'private'
+                    ? community.type
+                    : 'public',
+            rules: community?.rules || '',
+            avatar: community?.avatar || '',
+            banner: community?.banner || '',
         },
+        values: community
+            ? {
+                  name: community.name || '',
+                  slug: community.slug || '',
+                  description: community.description || '',
+                  type:
+                      community.type === 'public' ||
+                      community.type === 'private'
+                          ? community.type
+                          : 'public',
+                  rules: community.rules || '',
+                  avatar: community.avatar || '',
+                  banner: community.banner || '',
+              }
+            : undefined,
     });
 
-    // Handle form submission
+    // Handle form submit
     const onSubmit = async (values: FormValues) => {
-        if (!session) {
-            toast.error('You must be signed in to create a community');
-            return;
-        }
+        if (!session || !community) return;
         setIsSubmitting(true);
-        createCommunity.mutate({
+        updateCommunity.mutate({
+            communityId: community.id,
             name: values.name,
-            slug: values.slug,
             description: values.description || null,
-            type: values.type,
             rules: values.rules || null,
             avatar: values.avatar || null,
             banner: values.banner || null,
-            orgId: values.orgId,
         });
     };
 
@@ -155,8 +129,6 @@ export default function NewCommunityPage() {
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const name = e.target.value;
         form.setValue('name', name);
-
-        // Only auto-generate slug if user hasn't manually edited it
         if (
             !form.getValues('slug') ||
             form.getValues('slug') ===
@@ -174,15 +146,13 @@ export default function NewCommunityPage() {
         }
     };
 
-    // Don't render anything meaningful during SSR to avoid hydration mismatches
-    if (!isClient) {
-        return <NewCommunityPageSkeleton />;
+    if (!isClient || isLoading) {
+        return (
+            <div className="container mx-auto px-4 py-8">
+                <Skeleton className="h-10 w-full" />
+            </div>
+        );
     }
-
-    if (session === undefined) {
-        return <NewCommunityPageSkeleton />;
-    }
-
     if (!session) {
         return (
             <div className="container mx-auto px-4 py-16 text-center">
@@ -190,10 +160,23 @@ export default function NewCommunityPage() {
                     Authentication Required
                 </h1>
                 <p className="text-muted-foreground mb-8">
-                    Please sign in to create a new community.
+                    Please sign in to edit this community.
                 </p>
                 <Button asChild>
                     <Link href="/auth/login">Sign In</Link>
+                </Button>
+            </div>
+        );
+    }
+    if (!community) {
+        return (
+            <div className="container mx-auto px-4 py-16 text-center">
+                <h1 className="mb-4 text-3xl font-bold">Community Not Found</h1>
+                <Button asChild>
+                    <Link href="/communities">
+                        <ArrowLeft className="mr-2 h-4 w-4" />
+                        Back to Communities
+                    </Link>
                 </Button>
             </div>
         );
@@ -203,11 +186,10 @@ export default function NewCommunityPage() {
         <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
                 <h1 className="text-3xl font-bold tracking-tight">
-                    Create a New Community
+                    Edit {community.name}
                 </h1>
                 <p className="text-muted-foreground mt-2">
-                    Set up your community space where people can gather to
-                    discuss and share content
+                    Update your community details below
                 </p>
             </div>
 
@@ -237,42 +219,6 @@ export default function NewCommunityPage() {
 
                         <FormField
                             control={form.control}
-                            name="orgId"
-                            render={({ field }) => (
-                                <FormItem className="w-full">
-                                    <FormLabel>Organization</FormLabel>
-                                    <FormControl>
-                                        <div className="w-full">
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                                disabled={isLoadingOrgs}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Select organization" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {organizations?.map(
-                                                        (org) => (
-                                                            <SelectItem
-                                                                key={org.id}
-                                                                value={org.id}
-                                                            >
-                                                                {org.name}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-
-                        <FormField
-                            control={form.control}
                             name="slug"
                             render={({ field }) => (
                                 <FormItem>
@@ -285,6 +231,7 @@ export default function NewCommunityPage() {
                                             <Input
                                                 placeholder="community-url"
                                                 {...field}
+                                                disabled
                                             />
                                         </div>
                                     </FormControl>
@@ -447,8 +394,8 @@ export default function NewCommunityPage() {
                                 className="w-full"
                             >
                                 {isSubmitting
-                                    ? 'Creating...'
-                                    : 'Create Community'}
+                                    ? 'Updating...'
+                                    : 'Update Community'}
                             </Button>
                         </div>
                     </form>

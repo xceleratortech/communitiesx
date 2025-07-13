@@ -15,11 +15,27 @@ export const permissions = {
             'view_community',
             'edit_community',
             'delete_community',
+            'create_community',
             'manage_community_members',
             'invite_community_members',
+
+            'create_post',
+            'edit_post',
+            'delete_post',
+            'view_post',
+
+            'create_tag',
+            'edit_tag',
+            'delete_tag',
+            'view_tag',
         ] as const,
 
-        member: ['view_org', 'view_community'] as const,
+        member: [
+            'view_org',
+            'view_community',
+            'create_post',
+            'view_post',
+        ] as const,
     },
 
     community: {
@@ -30,15 +46,10 @@ export const permissions = {
             'manage_community_members',
             'invite_community_members',
 
-            'create_task',
-            'edit_task',
-            'delete_task',
-            'view_task',
-            'manage_task',
-            'view_pow',
-
-            'add_milestone_submission',
-            'delete_milestone_submission',
+            'create_post',
+            'edit_post',
+            'delete_post',
+            'view_post',
         ] as const,
 
         moderator: [
@@ -47,19 +58,18 @@ export const permissions = {
             'manage_community_members',
             'invite_community_members',
 
-            'create_task',
-            'edit_task',
-            'delete_task',
-            'view_task',
-            'manage_task',
-            'view_pow',
+            'create_post',
+            'edit_post',
+            'delete_post',
+            'view_post',
+
+            'create_tag',
+            'edit_tag',
+            'delete_tag',
+            'view_tag',
         ] as const,
 
-        member: [
-            'view_community',
-            'view_task',
-            'add_milestone_submission',
-        ] as const,
+        member: ['view_community', 'create_post', 'view_post'] as const,
     },
 } as const;
 

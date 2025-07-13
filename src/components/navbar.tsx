@@ -6,7 +6,16 @@ import React, { useState, useEffect } from 'react';
 import { useSession, signOut } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
-import { Globe, Menu, X, User, Settings, LogOut, Eye } from 'lucide-react';
+import {
+    Globe,
+    Menu,
+    X,
+    User,
+    Settings,
+    LogOut,
+    Eye,
+    Building,
+} from 'lucide-react';
 import { ChatButton } from '@/components/chat-button';
 import { useChat } from '@/providers/chat-provider';
 import { NotificationButton } from './NotificationButton';
@@ -17,6 +26,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { usePermission } from '@/hooks/use-permission';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -26,6 +36,9 @@ export function Navbar() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
     const { closeChat } = useChat();
+
+    const { appRole } = usePermission();
+    const isAppAdmin = appRole?.includes('admin');
 
     useEffect(() => {
         setMounted(true);
@@ -238,8 +251,22 @@ export function Navbar() {
 
                                                         <NotificationButton variant="popover" />
 
-                                                        {session.user?.role ===
-                                                            'admin' && (
+                                                        <Link
+                                                            href="/organization"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            onClick={() =>
+                                                                setPopoverOpen(
+                                                                    false,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Building className="h-4 w-4" />
+                                                            <span>
+                                                                My Organization
+                                                            </span>
+                                                        </Link>
+
+                                                        {isAppAdmin && (
                                                             <Link
                                                                 href="/admin"
                                                                 className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -379,8 +406,17 @@ export function Navbar() {
 
                                                         <NotificationButton variant="popover" />
 
-                                                        {session.user?.role ===
-                                                            'admin' && (
+                                                        <Link
+                                                            href="/organization"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                        >
+                                                            <Building className="h-4 w-4" />
+                                                            <span>
+                                                                My Organization
+                                                            </span>
+                                                        </Link>
+
+                                                        {isAppAdmin && (
                                                             <Link
                                                                 href="/admin"
                                                                 className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"

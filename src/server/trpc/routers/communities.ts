@@ -6,6 +6,7 @@ import {
     communityMembers,
     posts,
     communityMemberRequests,
+    tags,
 } from '@/server/db/schema';
 import { eq, and, desc, or, lt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -125,6 +126,7 @@ export const communitiesRouter = router({
                                 organization: true,
                             },
                         },
+                        tags: true,
                     },
                 });
 
@@ -168,10 +170,17 @@ export const communitiesRouter = router({
                     orderBy: desc(posts.createdAt),
                 });
 
+                //Load the tags associated with the community
+                const communityTags = await db.query.tags.findMany({
+                    where: eq(tags.communityId, community.id),
+                    orderBy: desc(tags.createdAt),
+                });
+
                 // Return the community with posts that include author information
                 return {
                     ...community,
                     posts: postsWithAuthors,
+                    tags: communityTags,
                 };
             } catch (error) {
                 console.error(
@@ -216,6 +225,7 @@ export const communitiesRouter = router({
                                 organization: true,
                             },
                         },
+                        tags: true,
                     },
                 });
 
@@ -1313,6 +1323,160 @@ export const communitiesRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to remove user from community',
+                });
+            }
+        }),
+
+    createTag: publicProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                name: z.string().min(1, 'Tag name is required'),
+                description: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to create a tag',
+                });
+            }
+
+            try {
+                // Check if the user is a member of the community
+                // const membership = await db.query.communityMembers.findFirst({
+                //     where: and(
+                //         eq(communityMembers.userId, ctx.session.user.id),
+                //         eq(communityMembers.communityId, input.communityId),
+                //     ),
+                // });
+
+                // if (!membership) {
+                //     throw new TRPCError({
+                //         code: 'FORBIDDEN',
+                //         message: 'You must be a member of the community to create tags',
+                //     });
+                // }
+
+                // Create the tag
+                const [newTag] = await db
+                    .insert(tags)
+                    .values({
+                        name: input.name,
+                        description: input.description || '',
+                        communityId: input.communityId,
+                        createdAt: new Date(),
+                    })
+                    .returning();
+
+                return newTag;
+            } catch (error) {
+                console.error('Error creating tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create tag',
+                });
+            }
+        }),
+
+    editTag: publicProcedure
+        .input(
+            z.object({
+                tagId: z.number(),
+                name: z.string().min(1, 'Tag name is required'),
+                description: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to edit a tag',
+                });
+            }
+
+            try {
+                // Check if the tag exists
+                const tag = await db.query.tags.findFirst({
+                    where: eq(tags.id, input.tagId),
+                });
+
+                if (!tag) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Tag not found',
+                    });
+                }
+
+                // Check if the user is the creator of the tag or an admin of the community
+                // const membership = await db.query.communityMembers.findFirst({
+                //     where: and(
+                //         eq(communityMembers.userId, ctx.session.user.id),
+                //         eq(communityMembers.communityId, tag.communityId),
+                //     ),
+                // });
+
+                // if (!membership || (membership.role !== 'admin')) {
+                //     throw new TRPCError({
+                //         code: 'FORBIDDEN',
+                //         message: 'You do not have permission to edit this tag',
+                //     });
+                // }
+
+                // Update the tag
+                const [updatedTag] = await db
+                    .update(tags)
+                    .set({
+                        name: input.name,
+                        description: input.description || '',
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(tags.id, input.tagId))
+                    .returning();
+
+                return updatedTag;
+            } catch (error) {
+                console.error('Error editing tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to edit tag',
+                });
+            }
+        }),
+
+    deleteTag: publicProcedure
+        .input(z.object({ tagId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to delete a tag',
+                });
+            }
+
+            try {
+                // Check if the tag exists
+                const tag = await db.query.tags.findFirst({
+                    where: eq(tags.id, input.tagId),
+                });
+
+                if (!tag) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Tag not found',
+                    });
+                }
+
+                // Delete the tag
+                await db.delete(tags).where(eq(tags.id, input.tagId));
+
+                return { success: true };
+            } catch (error) {
+                console.error('Error deleting tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete tag',
                 });
             }
         }),

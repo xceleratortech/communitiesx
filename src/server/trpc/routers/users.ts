@@ -25,6 +25,8 @@ export const usersRouter = router({
                         email: true,
                         image: true,
                         orgId: true,
+                        role: true,
+                        appRole: true,
                     },
                 });
 
@@ -50,6 +52,8 @@ export const usersRouter = router({
                     image: user.image,
                     orgId: user.orgId,
                     orgName: organization?.name,
+                    appRole: user.appRole,
+                    orgRole: user.role,
                 };
             } catch (error) {
                 console.error('Error fetching user profile:', error);
