@@ -519,7 +519,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: adminId,
-                name: 'Admin User',
+                name: 'IT Admin',
                 email: 'it@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,
@@ -545,7 +545,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: userId,
-                name: 'Regular User',
+                name: 'Rajesh',
                 email: 'raj@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,
