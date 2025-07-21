@@ -21,7 +21,6 @@ import {
     count,
     inArray,
 } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 
 import webpush from 'web-push';
 import { sendChatNotification } from '@/lib/push-notifications';
@@ -133,9 +132,19 @@ export const chatRouter = router({
                 }
 
                 // Get messages with pagination
-                let query = db.query.directMessages.findMany({
-                    where: eq(directMessages.threadId, input.threadId),
-                    orderBy: asc(directMessages.createdAt),
+                let whereClause: any = eq(
+                    directMessages.threadId,
+                    input.threadId,
+                );
+                if (input.cursor !== undefined && input.cursor !== null) {
+                    whereClause = and(
+                        eq(directMessages.threadId, input.threadId),
+                        lt(directMessages.id, input.cursor), // Fetch older messages
+                    );
+                }
+                let messages = await db.query.directMessages.findMany({
+                    where: whereClause,
+                    orderBy: desc(directMessages.createdAt), // LATEST messages first
                     limit: input.limit,
                     with: {
                         sender: {
@@ -148,30 +157,8 @@ export const chatRouter = router({
                         },
                     },
                 });
-
-                // Apply cursor if provided
-                if (input.cursor) {
-                    query = db.query.directMessages.findMany({
-                        where: and(
-                            eq(directMessages.threadId, input.threadId),
-                            sql`${directMessages.id} > ${input.cursor}`,
-                        ),
-                        orderBy: asc(directMessages.createdAt),
-                        limit: input.limit,
-                        with: {
-                            sender: {
-                                columns: {
-                                    id: true,
-                                    name: true,
-                                    email: true,
-                                    image: true,
-                                },
-                            },
-                        },
-                    });
-                }
-
-                const messages = await query;
+                // Reverse so newest is at the bottom
+                messages = messages.slice().reverse();
 
                 // Mark messages as read
                 await db
@@ -188,7 +175,7 @@ export const chatRouter = router({
                 // Get the next cursor
                 const nextCursor =
                     messages.length > 0
-                        ? messages[messages.length - 1].id
+                        ? messages[0].id // The oldest message id in this batch
                         : null;
 
                 return {
