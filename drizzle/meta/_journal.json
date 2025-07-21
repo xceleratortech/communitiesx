@@ -61,8 +61,50 @@
         {
             "idx": 8,
             "version": "7",
-            "when": 1750498835165,
-            "tag": "0008_safe_caretaker",
+            "when": 1751963701051,
+            "tag": "0008_sturdy_power_pack",
+            "breakpoints": true
+        },
+        {
+            "idx": 9,
+            "version": "7",
+            "when": 1752084097275,
+            "tag": "0009_violet_jigsaw",
+            "breakpoints": true
+        },
+        {
+            "idx": 10,
+            "version": "7",
+            "when": 1752121960243,
+            "tag": "0010_productive_scalphunter",
+            "breakpoints": true
+        },
+        {
+            "idx": 11,
+            "version": "7",
+            "when": 1752171803215,
+            "tag": "0011_talented_scarlet_witch",
+            "breakpoints": true
+        },
+        {
+            "idx": 12,
+            "version": "7",
+            "when": 1752179898458,
+            "tag": "0012_curly_dexter_bennett",
+            "breakpoints": true
+        },
+        {
+            "idx": 13,
+            "version": "7",
+            "when": 1752210173486,
+            "tag": "0013_lovely_robin_chapel",
+            "breakpoints": true
+        },
+        {
+            "idx": 14,
+            "version": "7",
+            "when": 1752312839354,
+            "tag": "0014_majestic_night_thrasher",
             "breakpoints": true
         }
     ]

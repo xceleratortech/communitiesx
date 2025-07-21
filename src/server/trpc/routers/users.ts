@@ -4,6 +4,7 @@ import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
 import { eq, and, inArray } from 'drizzle-orm';
 import { users, orgs, communityMembers, communities } from '@/server/db/schema';
+import { getUserPermission } from '../services/user-service';
 
 export const usersRouter = router({
     // Get a user's profile information
@@ -24,6 +25,8 @@ export const usersRouter = router({
                         email: true,
                         image: true,
                         orgId: true,
+                        role: true,
+                        appRole: true,
                     },
                 });
 
@@ -49,6 +52,8 @@ export const usersRouter = router({
                     image: user.image,
                     orgId: user.orgId,
                     orgName: organization?.name,
+                    appRole: user.appRole,
+                    orgRole: user.role,
                 };
             } catch (error) {
                 console.error('Error fetching user profile:', error);
@@ -137,4 +142,16 @@ export const usersRouter = router({
                 });
             }
         }),
+
+    // Get the current user's permissions
+    getPermissions: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view permissions',
+            });
+        }
+
+        return await getUserPermission(ctx.session.user.id);
+    }),
 });
