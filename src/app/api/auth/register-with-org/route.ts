@@ -23,22 +23,10 @@ export async function POST(request: Request) {
         });
 
         if (!organization) {
-            // Special case for the specific orgId from the error
-            if (orgId === 'org-e80751bb-911f-4d9d-b0f8-858f897f0b6c') {
-                // Create the organization
-                await db
-                    .insert(orgs)
-                    .values({
-                        id: orgId,
-                        name: `Organization ${orgId.substring(0, 8)}`,
-                    })
-                    .returning();
-            } else {
-                return NextResponse.json(
-                    { error: 'Organization not found' },
-                    { status: 404 },
-                );
-            }
+            return NextResponse.json(
+                { error: 'Organization not found' },
+                { status: 404 },
+            );
         }
 
         // Check if token is provided, verify it

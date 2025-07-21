@@ -1,14 +1,17 @@
 import { z } from 'zod';
-import { publicProcedure, router } from '../trpc';
+import { authProcedure, publicProcedure, router } from '../trpc';
 import { db } from '@/server/db';
 import {
     communities,
     communityMembers,
     posts,
     communityMemberRequests,
+    tags,
 } from '@/server/db/schema';
 import { eq, and, desc, or, lt } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 export const communitiesRouter = router({
     getAll: publicProcedure
@@ -125,6 +128,7 @@ export const communitiesRouter = router({
                                 organization: true,
                             },
                         },
+                        tags: true,
                     },
                 });
 
@@ -168,10 +172,17 @@ export const communitiesRouter = router({
                     orderBy: desc(posts.createdAt),
                 });
 
+                //Load the tags associated with the community
+                const communityTags = await db.query.tags.findMany({
+                    where: eq(tags.communityId, community.id),
+                    orderBy: desc(tags.createdAt),
+                });
+
                 // Return the community with posts that include author information
                 return {
                     ...community,
                     posts: postsWithAuthors,
+                    tags: communityTags,
                 };
             } catch (error) {
                 console.error(
@@ -216,6 +227,7 @@ export const communitiesRouter = router({
                                 organization: true,
                             },
                         },
+                        tags: true,
                     },
                 });
 
@@ -273,16 +285,9 @@ export const communitiesRouter = router({
             }
         }),
 
-    joinCommunity: publicProcedure
+    joinCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to join a community',
-                });
-            }
-
             try {
                 // Check if the community exists
                 const community = await db.query.communities.findFirst({
@@ -466,16 +471,9 @@ export const communitiesRouter = router({
             }
         }),
 
-    followCommunity: publicProcedure
+    followCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to follow a community',
-                });
-            }
-
             try {
                 // Check if the community exists
                 const community = await db.query.communities.findFirst({
@@ -590,16 +588,9 @@ export const communitiesRouter = router({
             }
         }),
 
-    leaveCommunity: publicProcedure
+    leaveCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to leave a community',
-                });
-            }
-
             try {
                 // Check if the user is a member of the community
                 const membership = await db.query.communityMembers.findFirst({
@@ -653,16 +644,9 @@ export const communitiesRouter = router({
             }
         }),
 
-    unfollowCommunity: publicProcedure
+    unfollowCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to unfollow a community',
-                });
-            }
-
             try {
                 // Check if the user is following the community
                 const membership = await db.query.communityMembers.findFirst({
@@ -704,37 +688,26 @@ export const communitiesRouter = router({
         }),
 
     // Get pending membership requests for a community (admin/moderator only)
-    getPendingRequests: publicProcedure
+    getPendingRequests: authProcedure
         .input(z.object({ communityId: z.number() }))
         .query(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view pending requests',
-                });
-            }
-
             try {
                 // Check if user is an admin or moderator of the community
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, input.communityId),
-                        or(
-                            eq(communityMembers.role, 'admin'),
-                            eq(communityMembers.role, 'moderator'),
-                        ),
-                    ),
-                });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
-                if (!membership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
-                            'Only community admins and moderators can view pending requests',
+                            'You dont have access to view pending requests',
                     });
                 }
-
                 // Get all pending requests for the community
                 const pendingRequests =
                     await db.query.communityMemberRequests.findMany({
@@ -772,16 +745,9 @@ export const communitiesRouter = router({
         }),
 
     // Approve a membership request (admin/moderator only)
-    approveRequest: publicProcedure
+    approveRequest: authProcedure
         .input(z.object({ requestId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to approve requests',
-                });
-            }
-
             try {
                 // Get the request details
                 const request =
@@ -796,23 +762,18 @@ export const communitiesRouter = router({
                     });
                 }
 
-                // Check if user is an admin or moderator of the community
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, request.communityId),
-                        or(
-                            eq(communityMembers.role, 'admin'),
-                            eq(communityMembers.role, 'moderator'),
-                        ),
-                    ),
-                });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    request.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
-                if (!membership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
-                        message:
-                            'Only community admins and moderators can approve requests',
+                        message: 'You dont have access to approve requests',
                     });
                 }
 
@@ -899,16 +860,9 @@ export const communitiesRouter = router({
         }),
 
     // Reject a membership request (admin/moderator only)
-    rejectRequest: publicProcedure
+    rejectRequest: authProcedure
         .input(z.object({ requestId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to reject requests',
-                });
-            }
-
             try {
                 // Get the request details
                 const request =
@@ -923,23 +877,18 @@ export const communitiesRouter = router({
                     });
                 }
 
-                // Check if user is an admin or moderator of the community
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, request.communityId),
-                        or(
-                            eq(communityMembers.role, 'admin'),
-                            eq(communityMembers.role, 'moderator'),
-                        ),
-                    ),
-                });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    request.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
-                if (!membership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
-                        message:
-                            'Only community admins and moderators can reject requests',
+                        message: 'You dont have access to reject requests',
                     });
                 }
 
@@ -975,7 +924,7 @@ export const communitiesRouter = router({
         }),
 
     // Assign moderator role to a community member (admin only)
-    assignModerator: publicProcedure
+    assignModerator: authProcedure
         .input(
             z.object({
                 communityId: z.number(),
@@ -983,28 +932,19 @@ export const communitiesRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to assign moderators',
-                });
-            }
-
             try {
-                // Check if the current user is an admin of the community
-                const adminMembership =
-                    await db.query.communityMembers.findFirst({
-                        where: and(
-                            eq(communityMembers.userId, ctx.session.user.id),
-                            eq(communityMembers.communityId, input.communityId),
-                            eq(communityMembers.role, 'admin'),
-                        ),
-                    });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
-                if (!adminMembership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
-                        message: 'Only community admins can assign moderators',
+                        message: 'You dont have access to assign moderator',
                     });
                 }
 
@@ -1071,7 +1011,7 @@ export const communitiesRouter = router({
         }),
 
     // Remove moderator role from a community member (admin only)
-    removeModerator: publicProcedure
+    removeModerator: authProcedure
         .input(
             z.object({
                 communityId: z.number(),
@@ -1079,28 +1019,19 @@ export const communitiesRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to remove moderators',
-                });
-            }
-
             try {
-                // Check if the current user is an admin of the community
-                const adminMembership =
-                    await db.query.communityMembers.findFirst({
-                        where: and(
-                            eq(communityMembers.userId, ctx.session.user.id),
-                            eq(communityMembers.communityId, input.communityId),
-                            eq(communityMembers.role, 'admin'),
-                        ),
-                    });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
-                if (!adminMembership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
-                        message: 'Only community admins can remove moderators',
+                        message: 'You dont have access to remove moderator',
                     });
                 }
 
@@ -1151,13 +1082,9 @@ export const communitiesRouter = router({
         }),
 
     // Get user's pending requests for a community
-    getUserPendingRequests: publicProcedure
+    getUserPendingRequests: authProcedure
         .input(z.object({ communityId: z.number() }))
         .query(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                return [];
-            }
-
             try {
                 // Get all pending requests for the user in this community
                 const pendingRequests =
@@ -1182,14 +1109,7 @@ export const communitiesRouter = router({
             }
         }),
 
-    getUserCommunities: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view your communities',
-            });
-        }
-
+    getUserCommunities: authProcedure.query(async ({ ctx }) => {
         try {
             // Get all communities where the user is a member or follower
             const userMemberships = await db.query.communityMembers.findMany({
@@ -1219,7 +1139,7 @@ export const communitiesRouter = router({
     }),
 
     // Add a new procedure to remove a user from a community
-    removeUserFromCommunity: publicProcedure
+    removeUserFromCommunity: authProcedure
         .input(
             z.object({
                 communityId: z.number(),
@@ -1227,13 +1147,6 @@ export const communitiesRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to perform this action',
-                });
-            }
-
             try {
                 // Check if community exists
                 const community = await db.query.communities.findFirst({
@@ -1250,16 +1163,19 @@ export const communitiesRouter = router({
                     });
                 }
 
-                // Check if the current user is an admin of the community
-                const currentUserMembership = community.members.find(
-                    (m) =>
-                        m.userId === ctx.session?.user.id && m.role === 'admin',
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canManageMembers = permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
                 );
 
-                if (!currentUserMembership) {
+                if (!canManageMembers) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
-                        message: 'Only community admins can remove users',
+                        message:
+                            'You dont have access to remove user from community',
                     });
                 }
 
@@ -1313,6 +1229,157 @@ export const communitiesRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to remove user from community',
+                });
+            }
+        }),
+
+    createTag: authProcedure
+        .input(
+            z.object({
+                communityId: z.number(),
+                name: z.string().min(1, 'Tag name is required'),
+                description: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canCreateTag = permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.CREATE_TAG,
+                );
+
+                if (!canCreateTag) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You dont have access to create tags in this community',
+                    });
+                }
+
+                // Create the tag
+                const [newTag] = await db
+                    .insert(tags)
+                    .values({
+                        name: input.name,
+                        description: input.description || '',
+                        communityId: input.communityId,
+                        createdAt: new Date(),
+                    })
+                    .returning();
+
+                return newTag;
+            } catch (error) {
+                console.error('Error creating tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create tag',
+                });
+            }
+        }),
+
+    editTag: authProcedure
+        .input(
+            z.object({
+                tagId: z.number(),
+                name: z.string().min(1, 'Tag name is required'),
+                description: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Check if the tag exists
+                const tag = await db.query.tags.findFirst({
+                    where: eq(tags.id, input.tagId),
+                });
+
+                if (!tag) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Tag not found',
+                    });
+                }
+
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canEditTag = permission.checkCommunityPermission(
+                    tag.communityId.toString(),
+                    PERMISSIONS.EDIT_TAG,
+                );
+
+                if (!canEditTag) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You dont have access to edit tags in this community',
+                    });
+                }
+
+                // Update the tag
+                const [updatedTag] = await db
+                    .update(tags)
+                    .set({
+                        name: input.name,
+                        description: input.description || '',
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(tags.id, input.tagId))
+                    .returning();
+
+                return updatedTag;
+            } catch (error) {
+                console.error('Error editing tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to edit tag',
+                });
+            }
+        }),
+
+    deleteTag: authProcedure
+        .input(z.object({ tagId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Check if the tag exists
+                const tag = await db.query.tags.findFirst({
+                    where: eq(tags.id, input.tagId),
+                });
+
+                if (!tag) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Tag not found',
+                    });
+                }
+
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canDeleteTag = permission.checkCommunityPermission(
+                    tag.communityId.toString(),
+                    PERMISSIONS.EDIT_TAG,
+                );
+
+                if (!canDeleteTag) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You dont have access to delete tags in this community',
+                    });
+                }
+
+                // Delete the tag
+                await db.delete(tags).where(eq(tags.id, input.tagId));
+
+                return { success: true };
+            } catch (error) {
+                console.error('Error deleting tag:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete tag',
                 });
             }
         }),

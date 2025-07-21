@@ -171,6 +171,11 @@ async function importUsers() {
                         await db.insert(orgs).values({
                             id: orgId,
                             name: cleanInstitute,
+                            slug: cleanInstitute
+                                .toLowerCase()
+                                .replace(/\s+/g, '-')
+                                .replace(/[^a-z0-9\-]/g, ''),
+                            createdAt: new Date(),
                         });
                         createdOrgs.set(cleanInstitute, orgId);
                         orgCount++;
