@@ -32,6 +32,7 @@ export const auth = betterAuth({
                 appRole: userData?.appRole || 'user',
                 user: {
                     ...user,
+                    orgId: userData?.orgId, // Ensure orgId is always set from userData
                     appRole: userData?.appRole || 'user',
                 },
                 session,

@@ -7,8 +7,9 @@ import {
     posts,
     communityMemberRequests,
     tags,
+    communityAllowedOrgs,
 } from '@/server/db/schema';
-import { eq, and, desc, or, lt } from 'drizzle-orm';
+import { eq, and, desc, or, lt, inArray, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
@@ -27,70 +28,88 @@ export const communitiesRouter = router({
             const limit = input?.limit ?? 6;
             const cursor = input?.cursor;
 
-            try {
-                let query = db.query.communities;
-
-                // If cursor is provided, fetch items after the cursor
-                if (cursor) {
-                    const allCommunities = await query.findMany({
-                        where: lt(communities.id, cursor),
-                        with: {
-                            members: true,
-                            posts: true,
-                            creator: {
-                                columns: {
-                                    id: true,
-                                    name: true,
-                                    email: true,
-                                },
-                            },
-                        },
-                        orderBy: desc(communities.id),
-                        limit,
-                    });
-
-                    // Get the next cursor
-                    const nextCursor =
-                        allCommunities.length === limit
-                            ? allCommunities[allCommunities.length - 1]?.id
-                            : undefined;
-
-                    return {
-                        items: allCommunities,
-                        nextCursor,
-                    };
-                } else {
-                    // First page
-                    const allCommunities = await query.findMany({
-                        with: {
-                            members: true,
-                            posts: true,
-                            creator: {
-                                columns: {
-                                    id: true,
-                                    name: true,
-                                    email: true,
-                                },
-                            },
-                        },
-                        orderBy: desc(communities.id),
-                        limit,
-                    });
-
-                    // Get the next cursor
-                    const nextCursor =
-                        allCommunities.length === limit
-                            ? allCommunities[allCommunities.length - 1]?.id
-                            : undefined;
-
-                    return {
-                        items: allCommunities,
-                        nextCursor,
-                    };
-                }
-            } catch (error) {
-                console.error('Error fetching communities:', error);
+            // orgId is included in the user object via selectUserFields and customSession in better-auth config
+            const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
+            console.log('DEBUG: session orgId', orgId);
+            if (!orgId) {
                 return { items: [], nextCursor: undefined };
+            }
+
+            // Get all community IDs where this org is allowed
+            const allowedCommunityRows = await db
+                .select({ communityId: communityAllowedOrgs.communityId })
+                .from(communityAllowedOrgs)
+                .where(eq(communityAllowedOrgs.orgId, orgId));
+            const allowedCommunityIds = allowedCommunityRows.map(
+                (row) => row.communityId,
+            );
+
+            // Compose filter: orgId match OR allowed orgs
+            const filter = or(
+                eq(communities.orgId, orgId),
+                allowedCommunityIds.length > 0
+                    ? inArray(communities.id, allowedCommunityIds)
+                    : sql`false`,
+            );
+
+            let query = db.query.communities;
+
+            // If cursor is provided, fetch items after the cursor
+            if (cursor) {
+                const allCommunities = await query.findMany({
+                    where: and(filter, lt(communities.id, cursor)),
+                    with: {
+                        members: true,
+                        posts: true,
+                        creator: {
+                            columns: {
+                                id: true,
+                                name: true,
+                                email: true,
+                            },
+                        },
+                    },
+                    orderBy: desc(communities.id),
+                    limit,
+                });
+
+                const nextCursor =
+                    allCommunities.length === limit
+                        ? allCommunities[allCommunities.length - 1]?.id
+                        : undefined;
+
+                return {
+                    items: allCommunities,
+                    nextCursor,
+                };
+            } else {
+                // First page
+                const allCommunities = await query.findMany({
+                    where: filter,
+                    with: {
+                        members: true,
+                        posts: true,
+                        creator: {
+                            columns: {
+                                id: true,
+                                name: true,
+                                email: true,
+                            },
+                        },
+                    },
+                    orderBy: desc(communities.id),
+                    limit,
+                });
+
+                const nextCursor =
+                    allCommunities.length === limit
+                        ? allCommunities[allCommunities.length - 1]?.id
+                        : undefined;
+
+                return {
+                    items: allCommunities,
+                    nextCursor,
+                };
             }
         }),
 
