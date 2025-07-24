@@ -33,6 +33,7 @@ import { sendEmail } from '@/lib/email';
 import _ from 'lodash';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import type { Community, CommunityAllowedOrg } from '@/types/models';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -81,7 +82,8 @@ export const communityRouter = router({
                 title: z.string().min(1).max(200),
                 content: z.string().min(1),
                 communityId: z.number().nullable().optional(),
-                tagIds: z.array(z.number()).optional(), // Add this line
+                orgId: z.string().optional().nullable(), // Add orgId as optional/nullable
+                tagIds: z.array(z.number()).optional(),
             }),
         )
         .mutation(
@@ -93,6 +95,7 @@ export const communityRouter = router({
                     title: string;
                     content: string;
                     communityId?: number | null;
+                    orgId?: string | null; // Add orgId as optional/nullable
                     tagIds?: number[]; // Add this line
                 };
                 ctx: Context;
@@ -932,88 +935,77 @@ export const communityRouter = router({
                 rules: z.string().max(2000).nullable(),
                 avatar: z.string().nullable(),
                 banner: z.string().nullable(),
-                orgId: z.string(),
+                orgId: z.string().nullable().default(null), // Ensure orgId is string|null, never undefined
             }),
         )
-        .mutation(
-            async ({
-                input,
-                ctx,
-            }: {
-                input: {
-                    name: string;
-                    slug: string;
-                    description: string | null;
-                    type: 'public' | 'private';
-                    rules: string | null;
-                    avatar: string | null;
-                    banner: string | null;
-                    orgId: string;
-                };
-                ctx: Context;
-            }) => {
-                if (!ctx.session?.user?.id) {
-                    throw new TRPCError({
-                        code: 'UNAUTHORIZED',
-                        message: 'You must be logged in to create a community',
-                    });
-                }
-                const permission = await ServerPermissions.fromUserId(
-                    ctx.session.user.id,
-                );
-                const canCreateCommunity = permission.checkOrgPermission(
-                    PERMISSIONS.CREATE_COMMUNITY,
-                );
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user?.id) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to create a community',
+                });
+            }
+            const permission = await ServerPermissions.fromUserId(
+                ctx.session.user.id,
+            );
+            const canCreateCommunity = permission.checkOrgPermission(
+                PERMISSIONS.CREATE_COMMUNITY,
+            );
 
-                if (!canCreateCommunity) {
+            if (!canCreateCommunity) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You do not have permission to create a community',
+                });
+            }
+
+            try {
+                const existingCommunity = await db.query.communities.findFirst({
+                    where: eq(communities.slug, input.slug),
+                });
+
+                if (existingCommunity) {
                     throw new TRPCError({
-                        code: 'FORBIDDEN',
-                        message:
-                            'You do not have permission to create a community',
+                        code: 'BAD_REQUEST',
+                        message: 'Community URL is already taken',
                     });
                 }
 
-                try {
-                    const existingCommunity =
-                        await db.query.communities.findFirst({
-                            where: eq(communities.slug, input.slug),
-                        });
-
-                    if (existingCommunity) {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: 'Community URL is already taken',
-                        });
-                    }
-
-                    // Create the community
-                    const [community] = await db
-                        .insert(communities)
-                        .values({
-                            name: input.name,
-                            slug: input.slug,
-                            description: input.description,
-                            type: input.type,
-                            rules: input.rules,
-                            avatar: input.avatar,
-                            banner: input.banner,
-                            createdBy: ctx.session.user.id,
-                            createdAt: new Date(),
-                            updatedAt: new Date(),
-                        })
-                        .returning();
-
-                    // Add creator as an admin
-                    await db.insert(communityMembers).values({
-                        userId: ctx.session.user.id,
-                        communityId: community.id,
-                        role: 'admin',
-                        membershipType: 'member',
-                        status: 'active',
-                        joinedAt: new Date(),
+                // Create the community
+                const [community] = await db
+                    .insert(communities)
+                    .values({
+                        name: input.name,
+                        slug: input.slug,
+                        description: input.description,
+                        type: input.type,
+                        rules: input.rules,
+                        avatar: input.avatar,
+                        banner: input.banner,
+                        orgId: input.orgId,
+                        createdBy: ctx.session.user.id,
+                        createdAt: new Date(),
                         updatedAt: new Date(),
-                    });
+                    })
+                    .returning();
 
+                // Add creator as an admin
+                await db.insert(communityMembers).values({
+                    userId: ctx.session.user.id,
+                    communityId: community.id,
+                    role: 'admin',
+                    membershipType: 'member',
+                    status: 'active',
+                    joinedAt: new Date(),
+                    updatedAt: new Date(),
+                });
+
+                // Only insert into communityAllowedOrgs if orgId is a non-empty string
+                if (
+                    input.orgId &&
+                    typeof input.orgId === 'string' &&
+                    input.orgId.trim() !== ''
+                ) {
                     await db.insert(communityAllowedOrgs).values({
                         communityId: community.id,
                         orgId: input.orgId,
@@ -1021,20 +1013,20 @@ export const communityRouter = router({
                         addedBy: ctx.session.user.id,
                         addedAt: new Date(),
                     });
-
-                    return community;
-                } catch (error) {
-                    if (error instanceof TRPCError) {
-                        throw error;
-                    }
-                    console.error('Error creating community:', error);
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: 'Failed to create community',
-                    });
                 }
-            },
-        ),
+
+                return community;
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error creating community:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create community',
+                });
+            }
+        }),
 
     // Update community details (admin only)
     updateCommunity: publicProcedure

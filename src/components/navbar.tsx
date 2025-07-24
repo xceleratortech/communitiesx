@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/popover';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePermission } from '@/hooks/use-permission';
+import { trpc } from '@/providers/trpc-provider';
 
 export function Navbar() {
     const { data: session } = useSession();
@@ -37,8 +38,15 @@ export function Navbar() {
     const [popoverOpen, setPopoverOpen] = useState(false);
     const { closeChat } = useChat();
 
-    const { appRole } = usePermission();
+    const { appRole, orgRole, userDetails } = usePermission();
     const isAppAdmin = appRole?.includes('admin');
+    const isOrgAdmin = orgRole?.includes('admin');
+
+    const { data: userOrgs } =
+        trpc.organizations.getOrganizationByUserId.useQuery(
+            { userId: session?.user?.id || '' },
+            { enabled: !!session?.user?.id && isOrgAdmin },
+        );
 
     useEffect(() => {
         setMounted(true);
@@ -85,7 +93,10 @@ export function Navbar() {
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex h-14 justify-between">
                     <div className="flex">
-                        <Link href="/" className="flex items-center">
+                        <Link
+                            href={mounted && session ? '/posts' : '/'}
+                            className="flex items-center"
+                        >
                             <span className="text-xl font-bold dark:text-white">
                                 Community-
                                 <span className="text-blue-600 dark:text-blue-400">
@@ -110,6 +121,28 @@ export function Navbar() {
                                     >
                                         Communities
                                     </Link>
+                                    {isAppAdmin && (
+                                        <Link
+                                            href="/admin"
+                                            className={getNavLinkClass(
+                                                '/admin',
+                                            )}
+                                        >
+                                            Manage App
+                                        </Link>
+                                    )}
+                                    {isOrgAdmin &&
+                                        userOrgs &&
+                                        userOrgs.length > 0 && (
+                                            <Link
+                                                href={`/organization/${userOrgs[0].slug}`}
+                                                className={getNavLinkClass(
+                                                    `/organization/${userOrgs[0].slug}`,
+                                                )}
+                                            >
+                                                Manage Org
+                                            </Link>
+                                        )}
                                 </>
                             )}
                         </div>
@@ -288,11 +321,30 @@ export function Navbar() {
                                                             >
                                                                 <Settings className="h-4 w-4" />
                                                                 <span>
-                                                                    Admin
-                                                                    Dashboard
+                                                                    Manage App
                                                                 </span>
                                                             </Link>
                                                         )}
+                                                        {isOrgAdmin &&
+                                                            userOrgs &&
+                                                            userOrgs.length >
+                                                                0 && (
+                                                                <Link
+                                                                    href={`/organization/${userOrgs[0].slug}`}
+                                                                    className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                    onClick={() =>
+                                                                        setPopoverOpen(
+                                                                            false,
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Settings className="h-4 w-4" />
+                                                                    <span>
+                                                                        Manage
+                                                                        Org
+                                                                    </span>
+                                                                </Link>
+                                                            )}
                                                         <button
                                                             onClick={
                                                                 handleSignOut
@@ -433,11 +485,25 @@ export function Navbar() {
                                                             >
                                                                 <Settings className="h-4 w-4" />
                                                                 <span>
-                                                                    Admin
-                                                                    Dashboard
+                                                                    Manage App
                                                                 </span>
                                                             </Link>
                                                         )}
+                                                        {isOrgAdmin &&
+                                                            userOrgs &&
+                                                            userOrgs.length >
+                                                                0 && (
+                                                                <Link
+                                                                    href={`/organization/${userOrgs[0].slug}`}
+                                                                    className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                                >
+                                                                    <Settings className="h-4 w-4" />
+                                                                    <span>
+                                                                        Manage
+                                                                        Org
+                                                                    </span>
+                                                                </Link>
+                                                            )}
                                                         <button
                                                             onClick={
                                                                 handleSignOut

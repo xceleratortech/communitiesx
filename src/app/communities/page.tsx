@@ -30,34 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
-
-// Define community type
-interface Community {
-    id: number;
-    name: string;
-    slug: string;
-    description: string | null;
-    type: string;
-    rules: string | null;
-    banner: string | null;
-    avatar: string | null;
-    createdBy: string;
-    createdAt: string | Date;
-    updatedAt: string | Date;
-    members?: Array<{
-        userId: string;
-        communityId: number;
-        role: string;
-        membershipType: string;
-        status: string;
-    }>;
-    posts?: any[];
-    creator?: {
-        id: string;
-        name: string;
-        email: string;
-    };
-}
+import type { Community } from '@/types/models';
 
 // Define CommunityCardProps type
 interface CommunityCardProps {

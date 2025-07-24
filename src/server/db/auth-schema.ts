@@ -12,6 +12,7 @@ export const orgs = pgTable('orgs', {
     name: text('name').notNull().unique(),
     slug: text('slug').notNull().unique(),
     createdAt: timestamp('created_at').notNull(),
+    allowCrossOrgDM: boolean('allow_cross_org_dm').notNull().default(false),
 });
 
 export const users = pgTable('users', {
