@@ -867,17 +867,44 @@ export const communityRouter = router({
 
             const totalPosts = postsResult[0]?.count || 0;
 
-            // Count total communities in the database
+            // Count total communities in the database (global)
             const communitiesResult = await db
                 .select({ count: count() })
                 .from(communities);
 
             const totalCommunities = communitiesResult[0]?.count || 0;
 
+            // Count communities associated with the user's organization
+            // 1. Communities where orgId matches
+            const orgCreatedCommunitiesResult = await db
+                .select({ id: communities.id })
+                .from(communities)
+                .where(eq(communities.orgId, orgId));
+            const orgCreatedCommunityIds = orgCreatedCommunitiesResult.map(
+                (c) => c.id,
+            );
+
+            // 2. Communities where org is in communityAllowedOrgs
+            const allowedCommunitiesResult = await db
+                .select({ communityId: communityAllowedOrgs.communityId })
+                .from(communityAllowedOrgs)
+                .where(eq(communityAllowedOrgs.orgId, orgId));
+            const allowedCommunityIds = allowedCommunitiesResult.map(
+                (c) => c.communityId,
+            );
+
+            // Combine and dedupe
+            const orgCommunityIdSet = new Set([
+                ...orgCreatedCommunityIds,
+                ...allowedCommunityIds,
+            ]);
+            const orgCommunityCount = orgCommunityIdSet.size;
+
             return {
                 totalUsers,
                 totalPosts,
-                totalCommunities,
+                totalCommunities, // global
+                orgCommunityCount, // org-specific
             };
         } catch (error) {
             console.error('Error fetching statistics:', error);

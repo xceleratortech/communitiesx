@@ -412,7 +412,7 @@ export default function CommunitiesPage() {
                                                 Communities:
                                             </span>
                                             <span className="font-medium">
-                                                {orgStats.totalCommunities}
+                                                {orgStats.orgCommunityCount}
                                             </span>
                                         </p>
                                     </div>
