@@ -57,6 +57,7 @@ export const adminRouter = router({
                         message:
                             'Slug must be alphanumeric and can include dashes',
                     }),
+                allowCrossOrgDM: z.boolean().optional(), // Add allowCrossOrgDM
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -82,6 +83,7 @@ export const adminRouter = router({
                         name: input.name,
                         slug: input.slug,
                         createdAt: new Date(),
+                        allowCrossOrgDM: input.allowCrossOrgDM, // Add allowCrossOrgDM
                     })
                     .returning();
 
@@ -138,57 +140,68 @@ export const adminRouter = router({
                 email: z.string().email(),
                 password: z.string().min(8),
                 role: z.enum(['admin', 'user']),
-                orgId: z.string(),
+                orgId: z.string().nullable(), // allow nullable for super-admin
+                appRole: z.string().optional(), // allow passing appRole for super-admin
+                allowCrossOrgDM: z.boolean().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            try {
-                // Check if org exists
-                const org = await db.query.orgs.findFirst({
-                    where: eq(orgs.id, input.orgId),
+            // Application-level check: Only appRole=admin can have orgId null
+            if (
+                (input.appRole !== 'admin' && !input.orgId) ||
+                (!input.orgId && input.role !== 'admin')
+            ) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Non-admin users must belong to an organization',
                 });
-
-                if (!org) {
-                    throw new TRPCError({
-                        code: 'NOT_FOUND',
-                        message: 'Organization not found',
+            }
+            try {
+                // Only check org existence if orgId is provided
+                if (input.orgId) {
+                    const org = await db.query.orgs.findFirst({
+                        where: eq(orgs.id, input.orgId),
                     });
+                    if (!org) {
+                        throw new TRPCError({
+                            code: 'NOT_FOUND',
+                            message: 'Organization not found',
+                        });
+                    }
                 }
-
                 // Check if user with same email exists
                 const existingUser = await db.query.users.findFirst({
                     where: eq(users.email, input.email),
                 });
-
                 if (existingUser) {
                     throw new TRPCError({
                         code: 'CONFLICT',
                         message: 'A user with this email already exists',
                     });
                 }
-
                 // Create user manually
                 const userId = nanoid();
                 const now = new Date();
-
                 // Hash the password
                 const hashedPassword = await hashPassword(input.password);
-
                 // Create the user
+                const userInsert: any = {
+                    id: userId,
+                    name: input.name,
+                    email: input.email,
+                    emailVerified: true, // Admin-created users are pre-verified
+                    role: input.role,
+                    appRole: input.appRole ?? 'user',
+                    createdAt: now,
+                    updatedAt: now,
+                };
+                if (typeof input.orgId === 'string') {
+                    userInsert.orgId = input.orgId;
+                }
                 const [user] = await db
                     .insert(users)
-                    .values({
-                        id: userId,
-                        name: input.name,
-                        email: input.email,
-                        emailVerified: true, // Admin-created users are pre-verified
-                        orgId: input.orgId,
-                        role: input.role,
-                        createdAt: now,
-                        updatedAt: now,
-                    })
+                    .values(userInsert)
                     .returning();
-
                 // Create account with password
                 await db.insert(accounts).values({
                     id: nanoid(),
@@ -199,7 +212,6 @@ export const adminRouter = router({
                     createdAt: now,
                     updatedAt: now,
                 });
-
                 return user;
             } catch (error) {
                 if (error instanceof TRPCError) throw error;
@@ -216,29 +228,39 @@ export const adminRouter = router({
         .input(
             z.object({
                 email: z.string().email(),
-                orgId: z.string(),
+                orgId: z.string().nullable(), // allow nullable for super-admin
                 role: z.enum(['admin', 'user']),
+                appRole: z.string().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            try {
-                // Check if org exists
-                const org = await db.query.orgs.findFirst({
-                    where: eq(orgs.id, input.orgId),
+            // Application-level check: Only appRole=admin can have orgId null
+            if (
+                (input.appRole !== 'admin' && !input.orgId) ||
+                (!input.orgId && input.role !== 'admin')
+            ) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Non-admin users must belong to an organization',
                 });
-
-                if (!org) {
-                    throw new TRPCError({
-                        code: 'NOT_FOUND',
-                        message: 'Organization not found',
+            }
+            try {
+                // Only check org existence if orgId is provided
+                if (input.orgId) {
+                    const org = await db.query.orgs.findFirst({
+                        where: eq(orgs.id, input.orgId),
                     });
+                    if (!org) {
+                        throw new TRPCError({
+                            code: 'NOT_FOUND',
+                            message: 'Organization not found',
+                        });
+                    }
                 }
-
                 // Check if user already exists
                 const existingUser = await db.query.users.findFirst({
                     where: eq(users.email, input.email),
                 });
-
                 if (existingUser) {
                     // If user is already part of any org, return error
                     if (existingUser.orgId) {
@@ -253,41 +275,37 @@ export const adminRouter = router({
                         message: 'A user with this email already exists',
                     });
                 }
-
                 // Generate a unique invite token
                 const inviteToken = nanoid(32);
                 const now = new Date();
                 const expiresAt = new Date();
-                expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
-
+                expiresAt.setDate(expiresAt.getDate() + 7);
                 // Store invite in verifications table
                 await db.insert(verifications).values({
                     id: nanoid(),
                     identifier: input.email,
                     value: JSON.stringify({
                         token: inviteToken,
-                        orgId: input.orgId,
+                        orgId: input.orgId ?? undefined,
                         role: input.role,
+                        appRole: input.appRole ?? 'user',
                     }),
                     expiresAt,
                     createdAt: now,
                     updatedAt: now,
                 });
-
                 // Send the invite email
                 const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${input.email}`;
-
                 await sendEmail({
                     to: input.email,
-                    subject: `Invitation to join ${org.name}`,
+                    subject: `Invitation to join${input.orgId ? '' : ' as super-admin'}`,
                     html: `
-                        <h1>You've been invited to join ${org.name}</h1>
+                        <h1>You've been invited to join${input.orgId ? '' : ' as super-admin'}</h1>
                         <p>Click the link below to create your account:</p>
                         <a href="${inviteUrl}">Accept Invitation</a>
                         <p>This link will expire in 7 days.</p>
                     `,
                 });
-
                 return { success: true, email: input.email };
             } catch (error) {
                 console.error('Error inviting user:', error);

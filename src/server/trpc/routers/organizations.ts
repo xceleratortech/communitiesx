@@ -11,6 +11,7 @@ import {
     communities,
     communityAllowedOrgs,
 } from '@/server/db/schema';
+import type { Org, OrgMember } from '@/types/models';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -18,6 +19,7 @@ export const organizationsRouter = router({
         .input(
             z.object({
                 orgId: z.string(),
+                allowCrossOrgDM: z.boolean().optional(), // Add allowCrossOrgDM
             }),
         )
         .query(async ({ input, ctx }) => {

@@ -56,6 +56,7 @@
         "drizzle-orm": "^0.42.0",
         "framer-motion": "^12.12.1",
         "import-in-the-middle": "^1.14.2",
+        "lodash": "^4.17.21",
         "lucide-react": "^0.488.0",
         "nanoid": "^5.1.5",
         "next": "15.3.0",

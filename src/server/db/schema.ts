@@ -61,6 +61,7 @@ export const communities = pgTable('communities', {
     rules: text('rules'),
     banner: text('banner'),
     avatar: text('avatar'),
+    orgId: text('org_id').references(() => orgs.id), // <-- Make orgId nullable
     createdBy: text('created_by')
         .notNull()
         .references(() => users.id),
@@ -463,3 +464,24 @@ export const tagsRelations = relations(tags, ({ one, many }) => ({
     }),
     postTags: many(postTags),
 }));
+
+export const orgMembers = pgTable(
+    'org_members',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        orgId: text('org_id')
+            .notNull()
+            .references(() => orgs.id, { onDelete: 'cascade' }),
+        role: text('role').notNull().default('user'), // 'admin' | 'moderator' | 'user'
+        status: text('status').notNull().default('active'), // 'active' | 'pending'
+        joinedAt: timestamp('joined_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.userId, table.orgId] }),
+        };
+    },
+);
