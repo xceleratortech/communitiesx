@@ -121,7 +121,7 @@ export function Navbar() {
                                     >
                                         Communities
                                     </Link>
-                                    {isAppAdmin && (
+                                    {/* {isAppAdmin && (
                                         <Link
                                             href="/admin"
                                             className={getNavLinkClass(
@@ -130,8 +130,8 @@ export function Navbar() {
                                         >
                                             Manage App
                                         </Link>
-                                    )}
-                                    {isOrgAdmin &&
+                                    )} */}
+                                    {/* {isOrgAdmin &&
                                         userOrgs &&
                                         userOrgs.length > 0 && (
                                             <Link
@@ -142,7 +142,7 @@ export function Navbar() {
                                             >
                                                 Manage Org
                                             </Link>
-                                        )}
+                                        )} */}
                                 </>
                             )}
                         </div>
