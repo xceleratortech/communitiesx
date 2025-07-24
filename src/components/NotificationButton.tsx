@@ -1,60 +1,28 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, ChevronRight } from 'lucide-react';
 import { trpc } from '@/providers/trpc-provider';
 import { toast } from 'sonner';
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-    DialogClose,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-export function NotificationButton() {
+interface NotificationButtonProps {
+    variant?: 'popover' | 'default';
+}
+
+export function NotificationButton({
+    variant = 'default',
+}: NotificationButtonProps) {
     const [isSupported, setIsSupported] = useState(false);
-    const [isLocallySubscribed, setIsLocallySubscribed] = useState(false);
-    const [localPermission, setLocalPermission] =
-        useState<NotificationPermission>('default');
-    const [showPrompt, setShowPrompt] = useState(false);
 
     const { data: subscriptionStatus, refetch: refetchStatus } =
         trpc.chat.getSubscriptionStatus.useQuery();
-
-    // Check local browser subscription and permission
-    useEffect(() => {
-        setIsSupported('serviceWorker' in navigator && 'PushManager' in window);
-        async function checkLocalSubscription() {
-            if ('serviceWorker' in navigator && 'PushManager' in window) {
-                setLocalPermission(Notification.permission);
-                try {
-                    const reg = await navigator.serviceWorker.getRegistration();
-                    if (reg) {
-                        const sub = await reg.pushManager.getSubscription();
-                        setIsLocallySubscribed(!!sub);
-                        // Show prompt if not subscribed and permission not granted
-                        if (!sub && Notification.permission !== 'granted') {
-                            setShowPrompt(true);
-                        }
-                    } else {
-                        setIsLocallySubscribed(false);
-                        if (Notification.permission !== 'granted') {
-                            setShowPrompt(true);
-                        }
-                    }
-                } catch {
-                    setIsLocallySubscribed(false);
-                    if (Notification.permission !== 'granted') {
-                        setShowPrompt(true);
-                    }
-                }
-            }
-        }
-        checkLocalSubscription();
-    }, []);
 
     const subscribeMutation = trpc.chat.subscribeToPush.useMutation({
         onSuccess: () => {
@@ -76,7 +44,12 @@ export function NotificationButton() {
         },
     });
 
+    useEffect(() => {
+        setIsSupported('serviceWorker' in navigator && 'PushManager' in window);
+    }, []);
+
     const handleSubscribe = async () => {
+        console.log('handleSubscribe called');
         if (!isSupported) {
             toast.error('Push notifications are not supported in this browser');
             return;
@@ -86,7 +59,6 @@ export function NotificationButton() {
             let permission = Notification.permission;
             if (permission === 'default') {
                 permission = await Notification.requestPermission();
-                setLocalPermission(permission);
             }
 
             if (permission !== 'granted') {
@@ -134,12 +106,9 @@ export function NotificationButton() {
             if (!subscription) {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey:
-                        applicationServerKey.buffer as ArrayBuffer,
+                    applicationServerKey: applicationServerKey,
                 });
             }
-
-            setIsLocallySubscribed(true);
 
             const subscriptionData = {
                 endpoint: subscription.endpoint,
@@ -149,7 +118,6 @@ export function NotificationButton() {
 
             await subscribeMutation.mutateAsync(subscriptionData);
         } catch (error) {
-            setIsLocallySubscribed(false);
             if (error instanceof Error) {
                 if (error.name === 'NotSupportedError') {
                     toast.error('Push messaging is not supported');
@@ -178,64 +146,99 @@ export function NotificationButton() {
                 await subscription.unsubscribe();
             }
 
-            setIsLocallySubscribed(false);
             await unsubscribeMutation.mutateAsync();
         } catch (error) {
             toast.error('Failed to disable notifications');
         }
     };
 
-    const handlePromptSubscribe = async () => {
-        setShowPrompt(false);
-        await handleSubscribe();
+    const getNotificationIcon = () => {
+        return subscriptionStatus?.isSubscribed ? (
+            <BellOff className="h-4 w-4" />
+        ) : (
+            <Bell className="h-4 w-4" />
+        );
     };
 
-    // Use local state to determine button UI and logic
+    const getNotificationLabel = () => {
+        return subscriptionStatus?.isSubscribed ? 'On' : 'Off';
+    };
+
     const isLoading =
         subscribeMutation.isPending || unsubscribeMutation.isPending;
-    const shouldShowSubscribed =
-        isLocallySubscribed && localPermission === 'granted';
+
+    if (!isSupported) {
+        return null;
+    }
+
+    if (variant === 'popover') {
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        className="flex w-full items-center justify-between space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                        disabled={isLoading}
+                    >
+                        <div className="flex items-center space-x-2">
+                            {getNotificationIcon()}
+                            <span>Notifications: {getNotificationLabel()}</span>
+                        </div>
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="right">
+                    <DropdownMenuItem
+                        onClick={handleSubscribe}
+                        disabled={isLoading || subscriptionStatus?.isSubscribed}
+                    >
+                        <Bell className="mr-2 h-4 w-4" />
+                        Turn On
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={handleUnsubscribe}
+                        disabled={
+                            isLoading || !subscriptionStatus?.isSubscribed
+                        }
+                    >
+                        <BellOff className="mr-2 h-4 w-4" />
+                        Turn Off
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    }
 
     return (
-        <>
-            <button
-                onClick={
-                    shouldShowSubscribed ? handleUnsubscribe : handleSubscribe
-                }
-                disabled={isLoading}
-                className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                title={
-                    shouldShowSubscribed
-                        ? 'Disable notifications'
-                        : 'Enable notifications'
-                }
-            >
-                {shouldShowSubscribed ? (
-                    <BellOff className="text-muted-foreground h-4 w-4" />
-                ) : (
-                    <Bell className="text-muted-foreground h-4 w-4" />
-                )}
-            </button>
-            <Dialog open={showPrompt} onOpenChange={setShowPrompt}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Enable Notifications</DialogTitle>
-                    </DialogHeader>
-                    <div className="mb-4">
-                        Would you like to enable push notifications for this
-                        device?
-                    </div>
-                    <DialogFooter>
-                        <Button onClick={handlePromptSubscribe}>
-                            Enable Notifications
-                        </Button>
-                        <DialogClose asChild>
-                            <Button variant="outline">Not Now</Button>
-                        </DialogClose>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                    disabled={isLoading}
+                >
+                    {getNotificationIcon()}
+                    <span>{getNotificationLabel()}</span>
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                    onClick={handleSubscribe}
+                    disabled={isLoading || subscriptionStatus?.isSubscribed}
+                >
+                    <Bell className="mr-2 h-4 w-4" />
+                    Turn On
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={handleUnsubscribe}
+                    disabled={isLoading || !subscriptionStatus?.isSubscribed}
+                >
+                    <BellOff className="mr-2 h-4 w-4" />
+                    Turn Off
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

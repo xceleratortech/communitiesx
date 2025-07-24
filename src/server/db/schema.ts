@@ -22,6 +22,35 @@ export const hello = pgTable('hello', {
     greeting: text('greeting').notNull(),
 });
 
+export const tags = pgTable('tags', {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    communityId: integer('community_id')
+        .notNull()
+        .references(() => communities.id, { onDelete: 'cascade' }),
+});
+
+export const postTags = pgTable(
+    'post_tags',
+    {
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        tagId: integer('tag_id')
+            .notNull()
+            .references(() => tags.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.postId, table.tagId] }),
+        };
+    },
+);
+
 // Communities schema
 export const communities = pgTable('communities', {
     id: serial('id').primaryKey(),
@@ -32,6 +61,7 @@ export const communities = pgTable('communities', {
     rules: text('rules'),
     banner: text('banner'),
     avatar: text('avatar'),
+    orgId: text('org_id').references(() => orgs.id), // <-- Make orgId nullable
     createdBy: text('created_by')
         .notNull()
         .references(() => users.id),
@@ -174,6 +204,7 @@ export const communitiesRelations = relations(communities, ({ one, many }) => ({
     allowedOrgs: many(communityAllowedOrgs),
     invites: many(communityInvites),
     memberRequests: many(communityMemberRequests),
+    tags: many(tags), // <-- Add this line to relate tags to communities
 }));
 
 export const communityMembersRelations = relations(
@@ -265,6 +296,18 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
         references: [communities.id],
     }),
     comments: many(comments),
+    postTags: many(postTags),
+}));
+
+export const postTagsRelations = relations(postTags, ({ one }) => ({
+    post: one(posts, {
+        fields: [postTags.postId],
+        references: [posts.id],
+    }),
+    tag: one(tags, {
+        fields: [postTags.tagId],
+        references: [tags.id],
+    }),
 }));
 
 export const commentsRelations = relations(comments, ({ one }) => ({
@@ -412,3 +455,33 @@ export const notifications = pgTable('notifications', {
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// Add tags relations
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+    community: one(communities, {
+        fields: [tags.communityId],
+        references: [communities.id],
+    }),
+    postTags: many(postTags),
+}));
+
+export const orgMembers = pgTable(
+    'org_members',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        orgId: text('org_id')
+            .notNull()
+            .references(() => orgs.id, { onDelete: 'cascade' }),
+        role: text('role').notNull().default('user'), // 'admin' | 'moderator' | 'user'
+        status: text('status').notNull().default('active'), // 'active' | 'pending'
+        joinedAt: timestamp('joined_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.userId, table.orgId] }),
+        };
+    },
+);

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure, authProcedure } from '../trpc';
 import { db } from '@/server/db';
 import {
     chatThreads,
@@ -33,14 +33,7 @@ webpush.setVapidDetails(
 
 export const chatRouter = router({
     // Get all chat threads for the current user
-    getThreads: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view messages',
-            });
-        }
-
+    getThreads: authProcedure.query(async ({ ctx }) => {
         try {
             const userId = ctx.session.user.id;
 
@@ -108,7 +101,7 @@ export const chatRouter = router({
     }),
 
     // Get messages for a specific thread
-    getMessages: publicProcedure
+    getMessages: authProcedure
         .input(
             z.object({
                 threadId: z.number(),
@@ -117,13 +110,6 @@ export const chatRouter = router({
             }),
         )
         .query(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view messages',
-                });
-            }
-
             try {
                 const userId = ctx.session.user.id;
 
@@ -205,7 +191,7 @@ export const chatRouter = router({
             }
         }),
 
-    sendMessage: publicProcedure
+    sendMessage: authProcedure
         .input(
             z.object({
                 recipientId: z.string(),
@@ -214,13 +200,6 @@ export const chatRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to send messages',
-                });
-            }
-
             try {
                 const senderId = ctx.session.user.id;
 
@@ -405,7 +384,7 @@ export const chatRouter = router({
         }),
 
     // Get new messages since a specific timestamp (for polling)
-    getNewMessages: publicProcedure
+    getNewMessages: authProcedure
         .input(
             z.object({
                 threadId: z.number(),
@@ -413,13 +392,6 @@ export const chatRouter = router({
             }),
         )
         .query(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view messages',
-                });
-            }
-
             try {
                 const userId = ctx.session.user.id;
 
@@ -515,14 +487,7 @@ export const chatRouter = router({
     }),
 
     // Get users in the same org for starting new conversations
-    getOrgUsers: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view org users',
-            });
-        }
-
+    getOrgUsers: authProcedure.query(async ({ ctx }) => {
         try {
             const userId = ctx.session.user.id;
 
@@ -563,20 +528,13 @@ export const chatRouter = router({
     }),
 
     // Find an existing thread or create a new one
-    findOrCreateThread: publicProcedure
+    findOrCreateThread: authProcedure
         .input(
             z.object({
                 recipientId: z.string(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to access chat threads',
-                });
-            }
-
             try {
                 const senderId = ctx.session.user.id;
 
@@ -661,20 +619,13 @@ export const chatRouter = router({
         }),
 
     // Get thread by ID
-    getThreadById: publicProcedure
+    getThreadById: authProcedure
         .input(
             z.object({
                 threadId: z.number(),
             }),
         )
         .query(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view thread details',
-                });
-            }
-
             try {
                 const userId = ctx.session.user.id;
 
@@ -733,7 +684,7 @@ export const chatRouter = router({
         }),
 
     // Subscribe to push notifications
-    subscribeToPush: publicProcedure
+    subscribeToPush: authProcedure
         .input(
             z.object({
                 endpoint: z.string(),
@@ -742,14 +693,6 @@ export const chatRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message:
-                        'You must be logged in to subscribe to notifications',
-                });
-            }
-
             try {
                 // Check if subscription already exists
                 const existingSubscription =
@@ -799,14 +742,7 @@ export const chatRouter = router({
         }),
 
     // Unsubscribe from push notifications
-    unsubscribeFromPush: publicProcedure.mutation(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in',
-            });
-        }
-
+    unsubscribeFromPush: authProcedure.mutation(async ({ ctx }) => {
         try {
             await db
                 .delete(pushSubscriptions)
@@ -844,7 +780,7 @@ export const chatRouter = router({
     }),
 
     // Get notifications for the current user with pagination
-    getNotifications: publicProcedure
+    getNotifications: authProcedure
         .input(
             z.object({
                 limit: z.number().default(5),
@@ -852,13 +788,6 @@ export const chatRouter = router({
             }),
         )
         .query(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to view notifications',
-                });
-            }
-
             const whereConditions = [
                 eq(notifications.recipientId, ctx.session.user.id),
             ];
@@ -896,14 +825,7 @@ export const chatRouter = router({
         }),
 
     // Get unread notifications count
-    getUnreadNotificationsCount: publicProcedure.query(async ({ ctx }) => {
-        if (!ctx.session?.user) {
-            throw new TRPCError({
-                code: 'UNAUTHORIZED',
-                message: 'You must be logged in to view notifications',
-            });
-        }
-
+    getUnreadNotificationsCount: authProcedure.query(async ({ ctx }) => {
         const [result] = await db
             .select({ count: count() })
             .from(notifications)
@@ -918,21 +840,13 @@ export const chatRouter = router({
     }),
 
     // Mark notifications as read
-    markNotificationsAsRead: publicProcedure
+    markNotificationsAsRead: authProcedure
         .input(
             z.object({
                 notificationIds: z.array(z.number()).optional(), // If not provided, mark all as read
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message:
-                        'You must be logged in to mark notifications as read',
-                });
-            }
-
             const whereConditions = [
                 eq(notifications.recipientId, ctx.session.user.id),
             ];
@@ -955,21 +869,13 @@ export const chatRouter = router({
         }),
 
     // Mark single notification as read
-    markNotificationAsRead: publicProcedure
+    markNotificationAsRead: authProcedure
         .input(
             z.object({
                 notificationId: z.number(),
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message:
-                        'You must be logged in to mark notification as read',
-                });
-            }
-
             await db
                 .update(notifications)
                 .set({
@@ -987,20 +893,13 @@ export const chatRouter = router({
         }),
 
     // Delete notification
-    deleteNotification: publicProcedure
+    deleteNotification: authProcedure
         .input(
             z.object({
                 notificationId: z.number(),
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to delete notifications',
-                });
-            }
-
             await db
                 .delete(notifications)
                 .where(
