@@ -35,9 +35,27 @@ export async function GET(request: NextRequest) {
         }
 
         // Generate presigned URL
-        const presignedUrl = await generatePresignedUploadUrl(key, contentType);
-
-        return NextResponse.json({ url: presignedUrl });
+        try {
+            const presignedUrl = await generatePresignedUploadUrl(
+                key,
+                contentType,
+            );
+            return NextResponse.json({ url: presignedUrl });
+        } catch (error) {
+            console.error('Error generating presigned URL:', error);
+            if (
+                error instanceof Error &&
+                error.message.includes('environment variables')
+            ) {
+                return NextResponse.json(
+                    {
+                        error: 'Server configuration error: R2 not properly configured',
+                    },
+                    { status: 500 },
+                );
+            }
+            throw error; // Re-throw other errors
+        }
     } catch (error) {
         console.error('Error generating presigned URL:', error);
         return NextResponse.json(
