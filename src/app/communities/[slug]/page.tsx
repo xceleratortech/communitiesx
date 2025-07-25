@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/providers/trpc-provider';
@@ -68,6 +68,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { SafeHtml } from '@/lib/sanitize';
 
 // Function to calculate relative time
 function getRelativeTime(date: Date): string {
@@ -137,6 +138,9 @@ export default function CommunityDetailPage() {
     const [editTagDialogOpen, setEditTagDialogOpen] = useState(false);
     const [deleteTagDialogOpen, setDeleteTagDialogOpen] = useState(false);
     const [selectedTag, setSelectedTag] = useState<any>(null);
+
+    // Tag filtering state
+    const [selectedTagFilters, setSelectedTagFilters] = useState<number[]>([]);
 
     const { checkCommunityPermission } = usePermission();
     const canCreatePost = checkCommunityPermission(
@@ -444,6 +448,32 @@ export default function CommunityDetailPage() {
         setActiveTab(value);
         // Reset pagination when switching tabs
         setCurrentMembersPage(1);
+    };
+
+    // Filter posts by selected tags
+    const filteredPosts = useMemo(() => {
+        if (!community?.posts) return [];
+
+        if (selectedTagFilters.length === 0) {
+            return community.posts;
+        }
+
+        return community.posts.filter(
+            (post: any) =>
+                post.tags &&
+                post.tags.some((tag: any) =>
+                    selectedTagFilters.includes(tag.id),
+                ),
+        );
+    }, [community?.posts, selectedTagFilters]);
+
+    // Handle tag filter toggle
+    const handleTagFilterToggle = (tagId: number) => {
+        setSelectedTagFilters((prev) =>
+            prev.includes(tagId)
+                ? prev.filter((id) => id !== tagId)
+                : [...prev, tagId],
+        );
     };
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
@@ -981,47 +1011,292 @@ export default function CommunityDetailPage() {
                     </TabsContent>
 
                     <TabsContent value="posts" className="mt-0 space-y-6">
-                        {isMember &&
-                            (community.posts && community.posts.length > 0 ? (
-                                <div>
-                                    <div className="mb-6 flex items-center justify-between">
-                                        <div className="flex flex-col">
-                                            <h2 className="text-xl font-semibold">
-                                                Posts
-                                            </h2>
-                                            <p className="text-muted-foreground text-sm">
-                                                All the posts in this community
-                                            </p>
+                        {/* Show loading skeleton while data is being fetched */}
+                        {isLoading ? (
+                            <div className="space-y-4">
+                                {[...Array(3)].map((_, index) => (
+                                    <Card
+                                        key={index}
+                                        className="relative gap-2 py-2"
+                                    >
+                                        <div className="px-4 py-0">
+                                            <Skeleton className="mb-2 h-6 w-3/4" />
+                                            <Skeleton className="mb-2 h-4 w-full" />
+                                            <Skeleton className="mb-2 h-4 w-full" />
+                                            <Skeleton className="mb-2 h-4 w-2/3" />
+                                            <div className="mt-3 flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Skeleton className="h-4 w-32" />
+                                                    <div className="ml-4">
+                                                        <Skeleton className="h-4 w-8" />
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
-                                        {canCreatePost && (
-                                            <Button asChild>
-                                                <Link
-                                                    href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
-                                                >
-                                                    Create Post
-                                                </Link>
-                                            </Button>
-                                        )}
+                                    </Card>
+                                ))}
+                            </div>
+                        ) : (
+                            <>
+                                {/* Posts header and tag filters */}
+                                <div className="mb-6 flex items-center justify-between">
+                                    <div className="flex flex-col">
+                                        <h2 className="text-xl font-semibold">
+                                            Posts
+                                        </h2>
+                                        <p className="text-muted-foreground text-sm">
+                                            All the posts in this community
+                                        </p>
                                     </div>
-                                </div>
-                            ) : (
-                                <div className="py-12 text-center">
-                                    <Calendar className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
-                                    <p className="text-muted-foreground">
-                                        No posts yet.
-                                    </p>
                                     {canCreatePost && (
-                                        <Button asChild className="mt-4">
+                                        <Button asChild>
                                             <Link
                                                 href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
                                             >
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Create First Post
+                                                Create Post
                                             </Link>
                                         </Button>
                                     )}
                                 </div>
-                            ))}
+
+                                {/* Tag Filter */}
+                                {community.tags &&
+                                    community.tags.length > 0 && (
+                                        <div className="mt-4 mb-6">
+                                            <div className="flex flex-wrap gap-2">
+                                                {community.tags.map(
+                                                    (tag: any) => (
+                                                        <button
+                                                            key={tag.id}
+                                                            onClick={() =>
+                                                                handleTagFilterToggle(
+                                                                    tag.id,
+                                                                )
+                                                            }
+                                                            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                                                                selectedTagFilters.includes(
+                                                                    tag.id,
+                                                                )
+                                                                    ? 'bg-primary text-primary-foreground'
+                                                                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                                            }`}
+                                                        >
+                                                            {tag.name}
+                                                        </button>
+                                                    ),
+                                                )}
+                                                {selectedTagFilters.length >
+                                                    0 && (
+                                                    <button
+                                                        onClick={() =>
+                                                            setSelectedTagFilters(
+                                                                [],
+                                                            )
+                                                        }
+                                                        className="bg-muted text-muted-foreground hover:bg-muted/80 inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
+                                                    >
+                                                        Clear Filters
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                {/* Render posts for members */}
+                                {isMember &&
+                                    filteredPosts &&
+                                    filteredPosts.length > 0 && (
+                                        <div className="space-y-4">
+                                            {filteredPosts.map((post: any) => (
+                                                <Card
+                                                    key={post.id}
+                                                    className="hover:border-primary border shadow-sm transition-shadow hover:cursor-pointer hover:shadow-md"
+                                                >
+                                                    <CardHeader>
+                                                        <CardTitle className="flex items-center justify-between">
+                                                            <Link
+                                                                href={`/posts/${post.id}`}
+                                                                className="hover:underline"
+                                                            >
+                                                                {post.title}
+                                                            </Link>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                    >
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem
+                                                                        asChild
+                                                                    >
+                                                                        <Link
+                                                                            href={`/posts/${post.id}`}
+                                                                        >
+                                                                            <MessageSquare className="mr-2 h-4 w-4" />
+                                                                            View
+                                                                            Post
+                                                                        </Link>
+                                                                    </DropdownMenuItem>
+                                                                    {canEditPost && (
+                                                                        <DropdownMenuItem
+                                                                            asChild
+                                                                        >
+                                                                            <Link
+                                                                                href={`/posts/${post.id}/edit`}
+                                                                            >
+                                                                                <Edit className="mr-2 h-4 w-4" />
+                                                                                Edit
+                                                                                Post
+                                                                            </Link>
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    <DropdownMenuSeparator />
+                                                                    {canDeletePost && (
+                                                                        <DropdownMenuItem
+                                                                            className="text-destructive"
+                                                                            onClick={() => {
+                                                                                // Add your delete logic here, e.g. open a dialog or call a mutation
+                                                                                toast.info(
+                                                                                    'Delete post clicked',
+                                                                                );
+                                                                            }}
+                                                                        >
+                                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                                            Delete
+                                                                            Post
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </CardTitle>
+                                                        <CardDescription>
+                                                            Posted by{' '}
+                                                            {post.author
+                                                                ?.name ||
+                                                                'Unknown'}{' '}
+                                                            •{' '}
+                                                            {new Date(
+                                                                post.createdAt,
+                                                            ).toLocaleDateString()}
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent>
+                                                        <SafeHtml
+                                                            html={post.content}
+                                                            className="prose prose-sm line-clamp-3 max-w-none"
+                                                        />
+
+                                                        {/* Tags display */}
+                                                        {post.tags &&
+                                                            post.tags.length >
+                                                                0 && (
+                                                                <div className="mt-2 flex flex-wrap gap-1">
+                                                                    {post.tags
+                                                                        .slice(
+                                                                            0,
+                                                                            3,
+                                                                        )
+                                                                        .map(
+                                                                            (
+                                                                                tag: any,
+                                                                            ) => (
+                                                                                <span
+                                                                                    key={
+                                                                                        tag.id
+                                                                                    }
+                                                                                    className="bg-secondary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                                                                                    style={{
+                                                                                        backgroundColor:
+                                                                                            tag.color
+                                                                                                ? `${tag.color}20`
+                                                                                                : undefined,
+                                                                                        color:
+                                                                                            tag.color ||
+                                                                                            undefined,
+                                                                                    }}
+                                                                                >
+                                                                                    {
+                                                                                        tag.name
+                                                                                    }
+                                                                                </span>
+                                                                            ),
+                                                                        )}
+                                                                    {post.tags
+                                                                        .length >
+                                                                        3 && (
+                                                                        <span className="bg-secondary text-muted-foreground inline-flex items-center rounded-full px-2 py-1 text-xs font-medium">
+                                                                            +
+                                                                            {post
+                                                                                .tags
+                                                                                .length -
+                                                                                3}{' '}
+                                                                            more
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                    </CardContent>
+                                                    <CardFooter className="flex justify-between">
+                                                        <div className="flex items-center gap-4">
+                                                            <span className="text-muted-foreground flex items-center gap-1 text-sm">
+                                                                <MessageSquare className="h-4 w-4" />
+                                                                {post.comments
+                                                                    ?.length ||
+                                                                    0}{' '}
+                                                                comments
+                                                            </span>
+                                                        </div>
+                                                    </CardFooter>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                {/* Empty state for members */}
+                                {isMember &&
+                                    (!filteredPosts ||
+                                        filteredPosts.length === 0) && (
+                                        <div className="py-12 text-center">
+                                            <Calendar className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
+                                            <p className="text-muted-foreground">
+                                                {selectedTagFilters.length > 0
+                                                    ? 'No posts match the selected tags.'
+                                                    : 'No posts yet.'}
+                                            </p>
+                                            {selectedTagFilters.length > 0 ? (
+                                                <Button
+                                                    onClick={() =>
+                                                        setSelectedTagFilters(
+                                                            [],
+                                                        )
+                                                    }
+                                                    className="mt-4"
+                                                >
+                                                    Clear Filters
+                                                </Button>
+                                            ) : canCreatePost ? (
+                                                <Button
+                                                    asChild
+                                                    className="mt-4"
+                                                >
+                                                    <Link
+                                                        href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
+                                                    >
+                                                        <Plus className="mr-2 h-4 w-4" />
+                                                        Create First Post
+                                                    </Link>
+                                                </Button>
+                                            ) : null}
+                                        </div>
+                                    )}
+                            </>
+                        )}
 
                         {!isMember && isFollower && (
                             <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
@@ -1068,119 +1343,6 @@ export default function CommunityDetailPage() {
                                     </div>
                                 </div>
                             )}
-
-                        {community.posts && community.posts.length > 0 ? (
-                            <div className="space-y-4">
-                                {community.posts.map((post: any) => (
-                                    <Card
-                                        key={post.id}
-                                        className="hover:border-primary border shadow-sm transition-shadow hover:cursor-pointer hover:shadow-md"
-                                    >
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center justify-between">
-                                                <Link
-                                                    href={`/posts/${post.id}`}
-                                                    className="hover:underline"
-                                                >
-                                                    {post.title}
-                                                </Link>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger
-                                                        asChild
-                                                    >
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                        >
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem
-                                                            asChild
-                                                        >
-                                                            <Link
-                                                                href={`/posts/${post.id}`}
-                                                            >
-                                                                <MessageSquare className="mr-2 h-4 w-4" />
-                                                                View Post
-                                                            </Link>
-                                                        </DropdownMenuItem>
-                                                        {canEditPost && (
-                                                            <DropdownMenuItem
-                                                                asChild
-                                                            >
-                                                                <Link
-                                                                    href={`/posts/${post.id}/edit`}
-                                                                >
-                                                                    <Edit className="mr-2 h-4 w-4" />
-                                                                    Edit Post
-                                                                </Link>
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        <DropdownMenuSeparator />
-                                                        {canDeletePost && (
-                                                            <DropdownMenuItem
-                                                                className="text-destructive"
-                                                                onClick={() => {
-                                                                    // Add your delete logic here, e.g. open a dialog or call a mutation
-                                                                    toast.info(
-                                                                        'Delete post clicked',
-                                                                    );
-                                                                }}
-                                                            >
-                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                Delete Post
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Posted by{' '}
-                                                {post.author?.name || 'Unknown'}{' '}
-                                                •{' '}
-                                                {new Date(
-                                                    post.createdAt,
-                                                ).toLocaleDateString()}
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <div
-                                                className="prose prose-sm line-clamp-3 max-w-none"
-                                                dangerouslySetInnerHTML={{
-                                                    __html: post.content,
-                                                }}
-                                            />
-                                        </CardContent>
-                                        <CardFooter className="flex justify-between">
-                                            <div className="flex items-center gap-4">
-                                                <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                                                    <MessageSquare className="h-4 w-4" />
-                                                    {post.comments?.length || 0}{' '}
-                                                    comments
-                                                </span>
-                                            </div>
-                                        </CardFooter>
-                                    </Card>
-                                ))}
-                            </div>
-                        ) : community.type === 'private' &&
-                          !isMember &&
-                          !isFollower ? (
-                            <div className="py-12 text-center">
-                                <h3 className="text-lg font-medium">
-                                    Private Community
-                                </h3>
-                                <p className="text-muted-foreground mt-2">
-                                    Follow or join this community to view posts.
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="py-12 text-center">
-                                {/* Empty state handled above */}
-                            </div>
-                        )}
                     </TabsContent>
 
                     <TabsContent value="about" className="mt-0">

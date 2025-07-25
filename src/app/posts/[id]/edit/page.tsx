@@ -156,6 +156,9 @@ export default function EditPostPage() {
                         content={content}
                         onChange={setContent}
                         placeholder="Edit your post content here..."
+                        postId={postId}
+                        communityId={post?.communityId || undefined}
+                        communitySlug={community?.slug || undefined}
                     />
                 </div>
                 {/* Tags Selection */}

@@ -54,8 +54,6 @@ function NewPostForm() {
             { enabled: !!communityId },
         );
 
-    console.log('Community:', community);
-
     // Check if user is a member of the community
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
@@ -204,6 +202,8 @@ function NewPostForm() {
                         content={content}
                         onChange={setContent}
                         placeholder="Write your post content here..."
+                        communityId={communityId || undefined}
+                        communitySlug={communitySlug || undefined}
                     />
                 </div>
 
