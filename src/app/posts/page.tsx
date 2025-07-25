@@ -29,6 +29,7 @@ import { PostsFilter } from '@/components/post-filter';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { Input } from '@/components/ui/input';
+import { SafeHtml } from '@/lib/sanitize';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -476,8 +477,8 @@ export default function PostsPage() {
         isSearching && searchResults !== null ? searchResults : filteredPosts;
 
     const renderPosts = () => {
-        // Show loading skeleton during search
-        if (isSearching && searchQuery.isLoading) {
+        // Show loading skeleton during initial load or search
+        if (isLoading || (isSearching && searchQuery.isLoading)) {
             return <PostSkeleton />;
         }
 
@@ -651,11 +652,9 @@ export default function PostsPage() {
                                     </div>
                                 ) : (
                                     <div className="text-muted-foreground text-sm">
-                                        <div
+                                        <SafeHtml
+                                            html={post.content}
                                             className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                            dangerouslySetInnerHTML={{
-                                                __html: post.content,
-                                            }}
                                         />
                                     </div>
                                 )}

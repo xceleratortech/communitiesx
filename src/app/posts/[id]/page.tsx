@@ -12,6 +12,7 @@ import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
 
 type User = {
     id: string;
@@ -272,11 +273,9 @@ export default function PostPage() {
                             </span>
                         </div>
                     ) : (
-                        <div
+                        <SafeHtml
+                            html={postData.content}
                             className="whitespace-pre-wrap"
-                            dangerouslySetInnerHTML={{
-                                __html: postData.content,
-                            }}
                         />
                     )}
                 </div>
@@ -293,6 +292,9 @@ export default function PostPage() {
                             onChange={setComment}
                             placeholder="Write a comment..."
                             variant="compact"
+                            postId={postId}
+                            communityId={post?.communityId || undefined}
+                            communitySlug={post?.community?.slug || undefined}
                         />
                         <Button
                             type="submit"
