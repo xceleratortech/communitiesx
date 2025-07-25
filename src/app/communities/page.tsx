@@ -179,7 +179,7 @@ export default function CommunitiesPage() {
                     <TabsList className="w-full sm:w-auto">
                         <TabsTrigger value="all">All Communities</TabsTrigger>
                         <TabsTrigger value="my">My Communities</TabsTrigger>
-                        <TabsTrigger value="popular">Popular</TabsTrigger>
+                        {/* <TabsTrigger value="popular">Popular</TabsTrigger> */}
                     </TabsList>
                 </div>
 
@@ -260,41 +260,6 @@ export default function CommunitiesPage() {
                                     <p className="text-muted-foreground mt-2">
                                         Browse the communities and join ones
                                         that interest you
-                                    </p>
-                                </div>
-                            )}
-                        </TabsContent>
-
-                        <TabsContent value="popular">
-                            {isLoadingCommunities &&
-                            communities.length === 0 ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {Array(3)
-                                        .fill(0)
-                                        .map((_, i) => (
-                                            <CommunityCardSkeleton key={i} />
-                                        ))}
-                                </div>
-                            ) : popularCommunities.length ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {popularCommunities.map(
-                                        (community: any) => (
-                                            <CommunityCard
-                                                key={community.id}
-                                                community={
-                                                    community as Community
-                                                }
-                                            />
-                                        ),
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="py-12 text-center">
-                                    <h3 className="text-lg font-medium">
-                                        No communities found
-                                    </h3>
-                                    <p className="text-muted-foreground mt-2">
-                                        Be the first to create a community!
                                     </p>
                                 </div>
                             )}
@@ -412,7 +377,7 @@ export default function CommunitiesPage() {
                                                 Communities:
                                             </span>
                                             <span className="font-medium">
-                                                {orgStats.totalCommunities}
+                                                {orgStats.orgCommunityCount}
                                             </span>
                                         </p>
                                     </div>
@@ -432,82 +397,77 @@ export default function CommunitiesPage() {
 
 function CommunityCard({ community }: CommunityCardProps) {
     return (
-        <Card className="flex h-[380px] flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
-            <div className="relative h-24 w-full">
-                {community.banner ? (
-                    <img
-                        src={community.banner || '/placeholder.svg'}
-                        alt={`${community.name} banner`}
-                        className="h-20 w-full object-cover"
-                    />
-                ) : (
-                    <div className="h-20 w-full bg-gray-200" />
-                )}
-                <div className="absolute -bottom-10 left-4">
-                    <Avatar className="border-background h-20 w-20 border-4">
-                        <AvatarImage
-                            src={community.avatar || undefined}
-                            alt={community.name}
+        <Link href={`/communities/${community.slug}`} className="block">
+            <Card className="group flex h-[380px] cursor-pointer flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
+                <div className="relative h-24 w-full">
+                    {community.banner ? (
+                        <img
+                            src={community.banner || '/placeholder.svg'}
+                            alt={`${community.name} banner`}
+                            className="h-20 w-full object-cover"
                         />
-                        <AvatarFallback className="bg-primary text-xl">
-                            {community.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                    </Avatar>
-                </div>
-            </div>
-            <CardHeader className="pt-8 pb-2">
-                <div className="flex flex-col items-start justify-between">
-                    <div>
-                        <CardTitle className="flex items-center gap-2">
-                            {community.name}
-                            {community.type === 'private' ? (
-                                <Lock className="text-muted-foreground h-4 w-4" />
-                            ) : (
-                                <Globe className="text-muted-foreground h-4 w-4" />
-                            )}
-                        </CardTitle>
-                        <CardDescription className="mt-2 line-clamp-1">
-                            {community.description}
-                        </CardDescription>
-                    </div>
-                    <div className="mt-2">
-                        <Button variant="outline" size="sm" asChild>
-                            <Link href={`/communities/${community.slug}`}>
-                                Visit
-                            </Link>
-                        </Button>
+                    ) : (
+                        <div className="h-20 w-full bg-gray-200" />
+                    )}
+                    <div className="absolute -bottom-10 left-4">
+                        <Avatar className="border-background h-20 w-20 border-4">
+                            <AvatarImage
+                                src={community.avatar || undefined}
+                                alt={community.name}
+                            />
+                            <AvatarFallback className="bg-primary text-xl">
+                                {community.name.substring(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent className="pb-1">
-                <div className="flex flex-wrap gap-1">
-                    <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                    >
-                        <Users className="h-3 w-3" />
-                        {community.members?.length || 0} members
-                    </Badge>
-                    <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                    >
-                        <Eye className="h-3 w-3" />
-                        {community.type}
-                    </Badge>
-                    <Badge
-                        variant="secondary"
-                        className="flex items-center gap-1"
-                    >
-                        <MessageSquare className="h-3 w-3" />
-                        {community.posts?.length || 0} posts
-                    </Badge>
-                </div>
-            </CardContent>
-            <CardFooter className="text-muted-foreground mt-auto pt-2 pb-6 text-xs">
-                Created {new Date(community.createdAt).toLocaleDateString()}
-            </CardFooter>
-        </Card>
+                <CardHeader className="pt-8 pb-2">
+                    <div className="flex flex-col items-start justify-between">
+                        <div>
+                            <CardTitle className="group-hover:text-primary flex items-center gap-2 transition-colors">
+                                {community.name}
+                                {community.type === 'private' ? (
+                                    <Lock className="text-muted-foreground h-4 w-4" />
+                                ) : (
+                                    <Globe className="text-muted-foreground h-4 w-4" />
+                                )}
+                            </CardTitle>
+                            <CardDescription className="mt-2 line-clamp-1">
+                                {community.description}
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="pb-1">
+                    <div className="flex flex-wrap gap-1">
+                        <Badge
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                        >
+                            <Users className="h-3 w-3" />
+                            {community.members?.length || 0} members
+                        </Badge>
+                        <Badge
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                        >
+                            <Eye className="h-3 w-3" />
+                            {community.type}
+                        </Badge>
+                        <Badge
+                            variant="secondary"
+                            className="flex items-center gap-1"
+                        >
+                            <MessageSquare className="h-3 w-3" />
+                            {community.posts?.length || 0} posts
+                        </Badge>
+                    </div>
+                </CardContent>
+                <CardFooter className="text-muted-foreground mt-auto pt-2 pb-6 text-xs">
+                    Created {new Date(community.createdAt).toLocaleDateString()}
+                </CardFooter>
+            </Card>
+        </Link>
     );
 }
 
