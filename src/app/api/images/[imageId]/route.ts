@@ -7,7 +7,7 @@ import { generatePresignedDownloadUrl } from '@/lib/r2';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { imageId: string } },
+    { params }: { params: Promise<{ imageId: string }> },
 ) {
     try {
         // Get user session with headers
@@ -19,7 +19,8 @@ export async function GET(
             );
         }
 
-        const imageId = parseInt(params.imageId);
+        const resolvedParams = await params;
+        const imageId = parseInt(resolvedParams.imageId);
         if (isNaN(imageId)) {
             return NextResponse.json(
                 { error: 'Invalid image ID' },
