@@ -49,17 +49,14 @@ export async function uploadImageWithPresignedFlow(
     // Create proxy URL
     const proxyUrl = `https://edx-storage-proxy.xcelerator.co.in?proxyUrl=${encodeURIComponent(presignedUrl)}`;
 
-    // Upload via proxy
-    const uploadResponse = await fetch(
-        `/api/images/proxy-upload?proxyUrl=${encodeURIComponent(proxyUrl)}`,
-        {
-            method: 'PUT',
-            body: file,
-            headers: {
-                'Content-Type': file.type,
-            },
+    // Upload directly to proxy (bypassing Vercel's 5MB limit)
+    const uploadResponse = await fetch(proxyUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+            'Content-Type': file.type,
         },
-    );
+    });
 
     if (!uploadResponse.ok) {
         const error = await uploadResponse.text();
