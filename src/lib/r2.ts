@@ -83,7 +83,7 @@ export function validateImageFile(file: File): {
         'image/gif',
         'image/webp',
     ];
-    const maxSize = 5 * 1024 * 1024; // 5MB
+    const maxSize = 15 * 1024 * 1024; // 15MB
 
     if (!allowedTypes.includes(file.type)) {
         return {
@@ -95,7 +95,7 @@ export function validateImageFile(file: File): {
     if (file.size > maxSize) {
         return {
             valid: false,
-            error: 'File size too large. Maximum size is 5MB.',
+            error: 'File size too large. Maximum size is 15MB.',
         };
     }
 
