@@ -1108,152 +1108,200 @@ export default function CommunityDetailPage() {
                                     filteredPosts.length > 0 && (
                                         <div className="space-y-4">
                                             {filteredPosts.map((post: any) => (
-                                                <Card
+                                                <Link
                                                     key={post.id}
-                                                    className="hover:border-primary border shadow-sm transition-shadow hover:cursor-pointer hover:shadow-md"
+                                                    href={`/posts/${post.id}`}
+                                                    className="block"
+                                                    style={{
+                                                        textDecoration: 'none',
+                                                    }}
                                                 >
-                                                    <CardHeader>
-                                                        <CardTitle className="flex items-center justify-between">
-                                                            <Link
-                                                                href={`/posts/${post.id}`}
-                                                                className="hover:underline"
-                                                            >
-                                                                {post.title}
-                                                            </Link>
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger
-                                                                    asChild
-                                                                >
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                    >
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    <DropdownMenuItem
-                                                                        asChild
-                                                                    >
-                                                                        <Link
-                                                                            href={`/posts/${post.id}`}
-                                                                        >
-                                                                            <MessageSquare className="mr-2 h-4 w-4" />
-                                                                            View
-                                                                            Post
-                                                                        </Link>
-                                                                    </DropdownMenuItem>
-                                                                    {canEditPost && (
-                                                                        <DropdownMenuItem
-                                                                            asChild
-                                                                        >
-                                                                            <Link
-                                                                                href={`/posts/${post.id}/edit`}
+                                                    <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md">
+                                                        {/* Post content */}
+                                                        <div className="px-4 py-0">
+                                                            {/* Post title */}
+                                                            <h3 className="mt-0 mb-2 text-base font-medium">
+                                                                {post.isDeleted
+                                                                    ? '[Deleted]'
+                                                                    : post.title}
+                                                            </h3>
+
+                                                            {/* Post content */}
+                                                            {post.isDeleted ? (
+                                                                <div className="space-y-1">
+                                                                    <span className="text-muted-foreground text-sm italic">
+                                                                        [Content
+                                                                        deleted]
+                                                                    </span>
+                                                                    <span className="text-muted-foreground block text-xs">
+                                                                        Removed
+                                                                        on{' '}
+                                                                        {new Date(
+                                                                            post.updatedAt,
+                                                                        ).toLocaleString()}
+                                                                    </span>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-muted-foreground text-sm">
+                                                                    <SafeHtml
+                                                                        html={
+                                                                            post.content
+                                                                        }
+                                                                        className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
+                                                                    />
+                                                                </div>
+                                                            )}
+
+                                                            {/* Tags display */}
+                                                            {post.tags &&
+                                                                post.tags
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                                        {post.tags
+                                                                            .slice(
+                                                                                0,
+                                                                                3,
+                                                                            )
+                                                                            .map(
+                                                                                (
+                                                                                    tag: any,
+                                                                                ) => (
+                                                                                    <span
+                                                                                        key={
+                                                                                            tag.id
+                                                                                        }
+                                                                                        className="bg-secondary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
+                                                                                        style={{
+                                                                                            backgroundColor:
+                                                                                                tag.color
+                                                                                                    ? `${tag.color}20`
+                                                                                                    : undefined,
+                                                                                            color:
+                                                                                                tag.color ||
+                                                                                                undefined,
+                                                                                        }}
+                                                                                    >
+                                                                                        {
+                                                                                            tag.name
+                                                                                        }
+                                                                                    </span>
+                                                                                ),
+                                                                            )}
+                                                                        {post
+                                                                            .tags
+                                                                            .length >
+                                                                            3 && (
+                                                                            <span className="bg-secondary text-muted-foreground inline-flex items-center rounded-full px-2 py-1 text-xs font-medium">
+                                                                                +
+                                                                                {post
+                                                                                    .tags
+                                                                                    .length -
+                                                                                    3}{' '}
+                                                                                more
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+
+                                                            {/* Post metadata */}
+                                                            <div className="mt-3 flex items-center justify-between">
+                                                                <div className="flex items-center">
+                                                                    <span className="text-muted-foreground text-xs">
+                                                                        Posted
+                                                                        by{' '}
+                                                                        {post
+                                                                            .author
+                                                                            ?.id ? (
+                                                                            <UserProfilePopover
+                                                                                userId={
+                                                                                    post
+                                                                                        .author
+                                                                                        .id
+                                                                                }
                                                                             >
-                                                                                <Edit className="mr-2 h-4 w-4" />
-                                                                                Edit
-                                                                                Post
-                                                                            </Link>
-                                                                        </DropdownMenuItem>
+                                                                                <span className="cursor-pointer hover:underline">
+                                                                                    {post
+                                                                                        .author
+                                                                                        .name ||
+                                                                                        'Unknown'}
+                                                                                </span>
+                                                                            </UserProfilePopover>
+                                                                        ) : (
+                                                                            'Unknown'
+                                                                        )}{' '}
+                                                                        •{' '}
+                                                                        {new Date(
+                                                                            post.createdAt,
+                                                                        ).toLocaleDateString()}
+                                                                    </span>
+                                                                    <div className="ml-4 items-center space-x-4">
+                                                                        <button
+                                                                            className="text-muted-foreground flex items-center text-xs"
+                                                                            onClick={(
+                                                                                e,
+                                                                            ) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                router.push(
+                                                                                    `/posts/${post.id}`,
+                                                                                );
+                                                                            }}
+                                                                        >
+                                                                            <MessageSquare className="mr-1 h-3 w-3" />
+                                                                            {Array.isArray(
+                                                                                post.comments,
+                                                                            )
+                                                                                ? post
+                                                                                      .comments
+                                                                                      .length
+                                                                                : 0}
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Action buttons */}
+                                                                <div className="flex space-x-1">
+                                                                    {canEditPost && (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(
+                                                                                e: React.MouseEvent,
+                                                                            ) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
+                                                                                router.push(
+                                                                                    `/posts/${post.id}/edit`,
+                                                                                );
+                                                                            }}
+                                                                            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"
+                                                                        >
+                                                                            <Edit className="h-4 w-4" />
+                                                                        </button>
                                                                     )}
-                                                                    <DropdownMenuSeparator />
                                                                     {canDeletePost && (
-                                                                        <DropdownMenuItem
-                                                                            className="text-destructive"
-                                                                            onClick={() => {
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={(
+                                                                                e,
+                                                                            ) => {
+                                                                                e.preventDefault();
+                                                                                e.stopPropagation();
                                                                                 // Add your delete logic here, e.g. open a dialog or call a mutation
                                                                                 toast.info(
                                                                                     'Delete post clicked',
                                                                                 );
                                                                             }}
+                                                                            className="text-muted-foreground hover:bg-accent hover:text-destructive rounded-full p-1.5"
                                                                         >
-                                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                                            Delete
-                                                                            Post
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        </CardTitle>
-                                                        <CardDescription>
-                                                            Posted by{' '}
-                                                            {post.author
-                                                                ?.name ||
-                                                                'Unknown'}{' '}
-                                                            •{' '}
-                                                            {new Date(
-                                                                post.createdAt,
-                                                            ).toLocaleDateString()}
-                                                        </CardDescription>
-                                                    </CardHeader>
-                                                    <CardContent>
-                                                        <SafeHtml
-                                                            html={post.content}
-                                                            className="prose prose-sm line-clamp-3 max-w-none"
-                                                        />
-
-                                                        {/* Tags display */}
-                                                        {post.tags &&
-                                                            post.tags.length >
-                                                                0 && (
-                                                                <div className="mt-2 flex flex-wrap gap-1">
-                                                                    {post.tags
-                                                                        .slice(
-                                                                            0,
-                                                                            3,
-                                                                        )
-                                                                        .map(
-                                                                            (
-                                                                                tag: any,
-                                                                            ) => (
-                                                                                <span
-                                                                                    key={
-                                                                                        tag.id
-                                                                                    }
-                                                                                    className="bg-secondary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                                                                    style={{
-                                                                                        backgroundColor:
-                                                                                            tag.color
-                                                                                                ? `${tag.color}20`
-                                                                                                : undefined,
-                                                                                        color:
-                                                                                            tag.color ||
-                                                                                            undefined,
-                                                                                    }}
-                                                                                >
-                                                                                    {
-                                                                                        tag.name
-                                                                                    }
-                                                                                </span>
-                                                                            ),
-                                                                        )}
-                                                                    {post.tags
-                                                                        .length >
-                                                                        3 && (
-                                                                        <span className="bg-secondary text-muted-foreground inline-flex items-center rounded-full px-2 py-1 text-xs font-medium">
-                                                                            +
-                                                                            {post
-                                                                                .tags
-                                                                                .length -
-                                                                                3}{' '}
-                                                                            more
-                                                                        </span>
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </button>
                                                                     )}
                                                                 </div>
-                                                            )}
-                                                    </CardContent>
-                                                    <CardFooter className="flex justify-between">
-                                                        <div className="flex items-center gap-4">
-                                                            <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                                                                <MessageSquare className="h-4 w-4" />
-                                                                {post.comments
-                                                                    ?.length ||
-                                                                    0}{' '}
-                                                                comments
-                                                            </span>
+                                                            </div>
                                                         </div>
-                                                    </CardFooter>
-                                                </Card>
+                                                    </Card>
+                                                </Link>
                                             ))}
                                         </div>
                                     )}
