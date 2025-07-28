@@ -531,7 +531,11 @@ export default function PostsPage() {
                 {postsToRender.map((post: PostDisplay) => (
                     <Link
                         key={post.id}
-                        href={`/posts/${post.id}`}
+                        href={
+                            post.community
+                                ? `/communities/${post.community.slug}/posts/${post.id}`
+                                : `/posts/${post.id}`
+                        }
                         className="block"
                         style={{ textDecoration: 'none' }}
                     >
@@ -742,7 +746,9 @@ export default function PostsPage() {
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         router.push(
-                                                            `/posts/${post.id}/edit`,
+                                                            post.community
+                                                                ? `/communities/${post.community.slug}/posts/${post.id}/edit`
+                                                                : `/posts/${post.id}/edit`,
                                                         );
                                                     }}
                                                     className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"

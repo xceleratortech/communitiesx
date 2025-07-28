@@ -1110,7 +1110,7 @@ export default function CommunityDetailPage() {
                                             {filteredPosts.map((post: any) => (
                                                 <Link
                                                     key={post.id}
-                                                    href={`/posts/${post.id}`}
+                                                    href={`/communities/${community.slug}/posts/${post.id}`}
                                                     className="block"
                                                     style={{
                                                         textDecoration: 'none',
@@ -1271,7 +1271,7 @@ export default function CommunityDetailPage() {
                                                                                 e.preventDefault();
                                                                                 e.stopPropagation();
                                                                                 router.push(
-                                                                                    `/posts/${post.id}/edit`,
+                                                                                    `/communities/${community.slug}/posts/${post.id}/edit`,
                                                                                 );
                                                                             }}
                                                                             className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"
