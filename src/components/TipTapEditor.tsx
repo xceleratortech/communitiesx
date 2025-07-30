@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -22,14 +22,20 @@ import {
     Code,
     Strikethrough,
     Pilcrow,
+    Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { uploadImageWithPresignedFlow } from '@/lib/image-upload-utils';
+import { useSession } from '@/server/auth/client';
 
 interface TipTapEditorProps {
     content: string;
     onChange: (richText: string) => void;
     placeholder?: string;
     variant?: 'default' | 'compact';
+    postId?: number;
+    communityId?: number;
+    communitySlug?: string;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -37,12 +43,22 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     onChange,
     placeholder = 'Write something...',
     variant = 'default',
+    postId,
+    communityId,
+    communitySlug,
 }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    const { data: session } = useSession();
+
     const editor = useEditor({
         extensions: [
             StarterKit.configure({
                 heading: {
                     levels: [1, 2],
+                    HTMLAttributes: {
+                        class: 'font-bold',
+                    },
                 },
                 bulletList: {
                     keepMarks: true,
@@ -159,6 +175,18 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     .tiptap-editor-content p:last-child {
                         margin-bottom: 0;
                     }
+                    .tiptap-editor-content h1 {
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        margin: 1rem 0 0.5rem 0;
+                        line-height: 1.2;
+                    }
+                    .tiptap-editor-content h2 {
+                        font-size: 1.25rem;
+                        font-weight: bold;
+                        margin: 0.75rem 0 0.5rem 0;
+                        line-height: 1.3;
+                    }
                     .dark .tiptap-editor-content:focus, .dark .tiptap-editor-content:focus-within {
                         background-color: rgba(255, 255, 255, 0.02);
                     }
@@ -190,11 +218,52 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         return null;
     }
 
-    const addImage = () => {
-        const url = prompt('Enter image URL');
-        if (url) {
-            editor.chain().focus().setImage({ src: url }).run();
+    const handleFileUpload = async (
+        event: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        if (!session?.user?.email) {
+            alert('You must be logged in to upload images');
+            return;
         }
+
+        try {
+            setIsUploading(true);
+
+            // Upload image using R2 presigned flow
+            const result = await uploadImageWithPresignedFlow(
+                file,
+                session.user.email,
+                {
+                    postId,
+                    communityId,
+                    communitySlug,
+                },
+            );
+
+            // Insert image into editor
+            editor.chain().focus().setImage({ src: result.url }).run();
+        } catch (error) {
+            console.error('Error uploading image:', error);
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to upload image. Please try again.',
+            );
+        } finally {
+            setIsUploading(false);
+            // Reset the file input
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+    const addImage = () => {
+        // Trigger file input click
+        fileInputRef.current?.click();
     };
 
     const setLink = () => {
@@ -259,6 +328,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 }
             }}
         >
+            {/* Hidden file input for image upload */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileUpload}
+                className="hidden"
+            />
+
             <div
                 className={toolbarClasses}
                 onClick={(e) => e.stopPropagation()}
@@ -428,9 +506,14 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     }}
                     className={buttonClasses}
                     type="button"
-                    title="Image"
+                    title="Upload Image"
+                    disabled={isUploading}
                 >
-                    <ImageIcon className="h-4 w-4" />
+                    {isUploading ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                        <Upload className="h-4 w-4" />
+                    )}
                 </button>
                 <button
                     onClick={(e) => {

@@ -8,6 +8,7 @@ import type { users } from '@/server/db/schema'; // Assuming UserFromDb is simil
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
 
 type SessionData = ReturnType<typeof useSession>['data'];
 
@@ -151,6 +152,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     onChange={onSetEditedContent}
                                     placeholder="Edit your comment..."
                                     variant="compact"
+                                    postId={comment.postId}
                                 />
                                 <div className="flex justify-end gap-1.5">
                                     <Button
@@ -221,11 +223,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             [Comment deleted]
                                         </p>
                                     ) : (
-                                        <div
+                                        <SafeHtml
+                                            html={comment.content}
                                             className="prose prose-sm dark:prose-invert max-w-none text-sm leading-normal"
-                                            dangerouslySetInnerHTML={{
-                                                __html: comment.content,
-                                            }}
                                         />
                                     )}
                                 </div>
@@ -292,6 +292,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     onChange={onSetReplyContent}
                                     placeholder="Write your reply..."
                                     variant="compact"
+                                    postId={comment.postId}
                                 />
                                 <div className="flex justify-end gap-1.5">
                                     <Button

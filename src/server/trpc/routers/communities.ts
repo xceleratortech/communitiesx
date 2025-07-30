@@ -179,7 +179,7 @@ export const communitiesRouter = router({
                     };
                 }
 
-                // Load posts with authors
+                // Load posts with authors and tags
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
@@ -187,9 +187,20 @@ export const communitiesRouter = router({
                     ),
                     with: {
                         author: true,
+                        postTags: {
+                            with: {
+                                tag: true,
+                            },
+                        },
                     },
                     orderBy: desc(posts.createdAt),
                 });
+
+                // Transform posts to include tags array
+                const postsWithTags = postsWithAuthors.map((post) => ({
+                    ...post,
+                    tags: post.postTags.map((pt) => pt.tag),
+                }));
 
                 //Load the tags associated with the community
                 const communityTags = await db.query.tags.findMany({
@@ -197,10 +208,10 @@ export const communitiesRouter = router({
                     orderBy: desc(tags.createdAt),
                 });
 
-                // Return the community with posts that include author information
+                // Return the community with posts that include author information and tags
                 return {
                     ...community,
-                    posts: postsWithAuthors,
+                    posts: postsWithTags,
                     tags: communityTags,
                 };
             } catch (error) {
@@ -278,7 +289,7 @@ export const communitiesRouter = router({
                     };
                 }
 
-                // Load posts with authors
+                // Load posts with authors and tags
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
@@ -286,14 +297,25 @@ export const communitiesRouter = router({
                     ),
                     with: {
                         author: true,
+                        postTags: {
+                            with: {
+                                tag: true,
+                            },
+                        },
                     },
                     orderBy: desc(posts.createdAt),
                 });
 
-                // Return the community with posts that include author information
+                // Transform posts to include tags array
+                const postsWithTags = postsWithAuthors.map((post) => ({
+                    ...post,
+                    tags: post.postTags.map((pt) => pt.tag),
+                }));
+
+                // Return the community with posts that include author information and tags
                 return {
                     ...community,
-                    posts: postsWithAuthors,
+                    posts: postsWithTags,
                 };
             } catch (error) {
                 console.error(

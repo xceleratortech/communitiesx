@@ -1,12 +1,13 @@
 'use client';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useState, useEffect, Suspense } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useState } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import TipTapEditor from '@/components/TipTapEditor';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import {
@@ -22,125 +23,66 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@/components/ui/popover';
-import TipTapEditor from '@/components/TipTapEditor';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Check, ChevronsUpDown, X, ArrowLeft, Home, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-interface Tag {
-    id: number;
-    name: string;
-    description: string | null;
-    communityId: number;
-}
-
-function NewPostForm() {
+export default function EditCommunityPostPage() {
+    const params = useParams();
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const communityId = searchParams.get('communityId')
-        ? parseInt(searchParams.get('communityId')!)
-        : null;
-    const communitySlug = searchParams.get('communitySlug');
     const { data: session } = useSession();
+    const postId = parseInt(params.id as string);
+    const communitySlug = params.slug as string;
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
+    const [error, setError] = useState('');
+    const [selectedTags, setSelectedTags] = useState<any[]>([]);
     const [open, setOpen] = useState(false);
 
-    // Fetch community to check membership status if communityId is provided
-    const { data: community, isLoading: isLoadingCommunity } =
+    const { data: post, isLoading } = trpc.community.getPost.useQuery(
+        { postId },
+        { enabled: !!session },
+    );
+
+    // Fetch community data for context
+    const { data: community } = trpc.communities.getBySlug.useQuery(
+        { slug: communitySlug },
+        { enabled: !!session && !!communitySlug },
+    );
+
+    const editPost = trpc.community.editPost.useMutation({
+        onSuccess: () => {
+            router.push(`/communities/${communitySlug}/posts/${postId}`);
+        },
+        onError: (err: any) => {
+            setError(err.message || 'Failed to update post');
+        },
+    });
+
+    // Fetch available tags for the post's community
+    const communityId = post?.communityId;
+    const { data: communityData, isLoading: isLoadingCommunity } =
         trpc.communities.getById.useQuery(
             { id: communityId! },
             { enabled: !!communityId },
         );
+    const availableTags = communityData?.tags || [];
 
-    // Check if user is a member of the community
-    const userMembership = community?.members?.find(
-        (m) => m.userId === session?.user.id,
-    );
-    const isMember =
-        !!userMembership && userMembership.membershipType === 'member';
-
-    // Get available tags for the community
-    const availableTags = community?.tags || [];
-
-    const createPost = trpc.community.createPost.useMutation({
-        onSuccess: (post) => {
-            // If post was created from a community, redirect to the community-specific post view
-            if (communityId && communitySlug) {
-                router.push(`/communities/${communitySlug}/posts/${post.id}`);
-            } else {
-                router.push(`/posts/${post.id}`);
-            }
-        },
-    });
-
-    // If community ID is provided but user is not a member, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !isMember && !isLoadingCommunity) {
-            router.push(`/communities/${communitySlug}`);
+        if (post) {
+            setTitle(post.title);
+            setContent(post.content);
+            // Pre-select tags
+            setSelectedTags(post.tags || []);
         }
-    }, [
-        communityId,
-        community,
-        isMember,
-        communitySlug,
-        router,
-        isLoadingCommunity,
-    ]);
+    }, [post]);
 
-    if (!session) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
-                <p className="mb-4 text-gray-600">
-                    Please sign in to create a new post.
-                </p>
-                <Button asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                </Button>
-            </div>
-        );
-    }
-
-    // Show loading state while checking community membership
-    if (communityId && isLoadingCommunity) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-6 text-3xl font-bold">Create New Post</h1>
-                <p>Loading community information...</p>
-            </div>
-        );
-    }
-
-    // Show access denied if user is not a member of the community
-    if (communityId && !isMember) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
-                <Alert variant="destructive" className="mb-4">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Membership Required</AlertTitle>
-                    <AlertDescription>
-                        {community?.type === 'private'
-                            ? 'This is a private community. You must be a member to create posts, not just a follower.'
-                            : 'You must be a member of this community to create posts.'}
-                    </AlertDescription>
-                </Alert>
-                <Button asChild>
-                    <Link href={`/communities/${communitySlug}`}>
-                        Return to Community
-                    </Link>
-                </Button>
-            </div>
-        );
-    }
-
-    const handleTagSelect = (tag: Tag) => {
+    const handleTagSelect = (tag: any) => {
         const isAlreadySelected = selectedTags.some(
             (selectedTag) => selectedTag.id === tag.id,
         );
-
         if (isAlreadySelected) {
             setSelectedTags(
                 selectedTags.filter((selectedTag) => selectedTag.id !== tag.id),
@@ -149,64 +91,176 @@ function NewPostForm() {
             setSelectedTags([...selectedTags, tag]);
         }
     };
-
     const handleTagRemove = (tagId: number) => {
         setSelectedTags(selectedTags.filter((tag) => tag.id !== tagId));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError('');
         if (!title.trim() || !content.trim()) {
+            setError('Title and content are required.');
             return;
         }
-
-        await createPost.mutate({
+        editPost.mutate({
+            postId,
             title: title.trim(),
             content: content,
-            communityId: communityId,
-            tagIds: selectedTags.map((tag) => tag.id), // Send the selected tag IDs
+            tagIds: selectedTags.map((tag) => tag.id), // Pass selected tag IDs
         });
     };
 
+    if (!session) {
+        return (
+            <div className="mx-auto max-w-4xl p-4">
+                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
+                <p className="mb-4 text-gray-600">
+                    Please sign in to edit this post.
+                </p>
+            </div>
+        );
+    }
+
+    if (isLoading) {
+        return <div className="p-4">Loading post...</div>;
+    }
+
+    if (!post) {
+        return <div className="p-4">Post not found</div>;
+    }
+
+    if (post.isDeleted) {
+        router.push(`/communities/${communitySlug}/posts/${postId}`);
+        return null;
+    }
+
     return (
         <div className="mx-auto max-w-4xl py-4">
-            <h1 className="text-3xl font-bold">Create New Post</h1>
-            {communityId && communitySlug && (
-                <div className="text-muted-foreground mb-4 text-sm">
-                    Creating post in community:{' '}
-                    <Link
-                        href={`/communities/${communitySlug}`}
-                        className="font-medium underline"
-                    >
-                        {communitySlug}
-                    </Link>
-                </div>
+            {/* Breadcrumb Navigation */}
+            <nav className="text-muted-foreground mb-6 flex items-center space-x-2 text-sm">
+                <Link
+                    href="/"
+                    className="hover:text-foreground flex items-center transition-colors"
+                >
+                    <Home className="mr-1 h-4 w-4" />
+                    Home
+                </Link>
+                <span>/</span>
+                <Link
+                    href="/communities"
+                    className="hover:text-foreground flex items-center transition-colors"
+                >
+                    <Users className="mr-1 h-4 w-4" />
+                    Communities
+                </Link>
+                <span>/</span>
+                <Link
+                    href={`/communities/${communitySlug}`}
+                    className="hover:text-foreground flex items-center transition-colors"
+                >
+                    {community?.name || 'Community'}
+                </Link>
+                <span>/</span>
+                <Link
+                    href={`/communities/${communitySlug}/posts/${postId}`}
+                    className="hover:text-foreground flex items-center transition-colors"
+                >
+                    Posts
+                </Link>
+                <span>/</span>
+                <span className="text-foreground font-medium">Edit Post</span>
+            </nav>
+
+            {/* Community Context Card */}
+            {community && (
+                <Card className="mb-6">
+                    <CardContent className="p-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                                <Avatar className="h-10 w-10">
+                                    <AvatarImage
+                                        src={community.avatar || undefined}
+                                        alt={community.name}
+                                    />
+                                    <AvatarFallback className="bg-primary text-sm font-semibold">
+                                        {community.name
+                                            .substring(0, 2)
+                                            .toUpperCase()}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <h2 className="text-lg font-semibold">
+                                        {community.name}
+                                    </h2>
+                                    <div className="text-muted-foreground flex items-center space-x-2 text-sm">
+                                        <Badge
+                                            variant={
+                                                community.type === 'private'
+                                                    ? 'secondary'
+                                                    : 'outline'
+                                            }
+                                        >
+                                            {community.type === 'private'
+                                                ? 'Private'
+                                                : 'Public'}
+                                        </Badge>
+                                        <span>•</span>
+                                        <span>Edit Community Post</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    router.push(
+                                        `/communities/${communitySlug}/posts/${postId}`,
+                                    )
+                                }
+                            >
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Post
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
             )}
 
+            <h1 className="mb-6 text-3xl font-bold">Edit {post.title}</h1>
+            {error && <div className="mb-4 text-red-500">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <Label htmlFor="title">Title</Label>
+                    <label
+                        htmlFor="title"
+                        className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                        Title
+                    </label>
                     <Input
                         type="text"
                         id="title"
-                        placeholder="Enter post title"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         required
                     />
                 </div>
-
                 <div>
-                    <Label htmlFor="content">Content</Label>
+                    <label
+                        htmlFor="content"
+                        className="mb-1 block text-sm font-medium text-gray-700"
+                    >
+                        Content
+                    </label>
                     <TipTapEditor
+                        key={`editor-${post?.id}-${post?.updatedAt}`}
                         content={content}
                         onChange={setContent}
-                        placeholder="Write your post content here..."
-                        communityId={communityId || undefined}
-                        communitySlug={communitySlug || undefined}
+                        placeholder="Edit your post content here..."
+                        postId={postId}
+                        communityId={post?.communityId || undefined}
+                        communitySlug={community?.slug || undefined}
                     />
                 </div>
-
                 {/* Tags Selection */}
                 {availableTags.length > 0 && (
                     <div>
@@ -235,7 +289,7 @@ function NewPostForm() {
                                             </CommandEmpty>
                                             <CommandGroup>
                                                 {availableTags.map(
-                                                    (tag: Tag) => (
+                                                    (tag: any) => (
                                                         <CommandItem
                                                             key={tag.id}
                                                             value={tag.name}
@@ -279,7 +333,6 @@ function NewPostForm() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-
                             {/* Selected Tags Display */}
                             {selectedTags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
@@ -303,34 +356,10 @@ function NewPostForm() {
                         </div>
                     </div>
                 )}
-
-                <div className="flex space-x-4">
-                    {communitySlug && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                                router.push(`/communities/${communitySlug}`)
-                            }
-                        >
-                            Cancel
-                        </Button>
-                    )}
-                    <Button type="submit" disabled={createPost.isPending}>
-                        {createPost.isPending ? 'Creating...' : 'Create Post'}
-                    </Button>
-                </div>
+                <Button type="submit" disabled={editPost.isPending}>
+                    {editPost.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
             </form>
         </div>
-    );
-}
-
-export default function NewPostPage() {
-    return (
-        <Suspense
-            fallback={<div className="mx-auto max-w-4xl p-4">Loading...</div>}
-        >
-            <NewPostForm />
-        </Suspense>
     );
 }
