@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSession } from '@/server/auth/server';
-import { generatePresignedUploadUrl, validateImageFile } from '@/lib/r2';
+import { generatePresignedUploadUrl, validateAttachmentFile } from '@/lib/r2';
 import { TRPCError } from '@trpc/server';
 
 export async function GET(request: NextRequest) {
@@ -31,6 +31,20 @@ export async function GET(request: NextRequest) {
             return NextResponse.json(
                 { error: 'Invalid file key' },
                 { status: 403 },
+            );
+        }
+
+        // Validate file type (create a mock File object for validation)
+        const mockFile = {
+            type: contentType,
+            size: 0, // Size will be validated during actual upload
+        } as File;
+
+        const validation = validateAttachmentFile(mockFile);
+        if (!validation.valid) {
+            return NextResponse.json(
+                { error: validation.error },
+                { status: 400 },
             );
         }
 

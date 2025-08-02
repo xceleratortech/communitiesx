@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSession } from '@/server/auth/server';
 import { db } from '@/server/db';
-import { images } from '@/server/db/schema';
+import { attachments } from '@/server/db/schema';
 import { eq } from 'drizzle-orm';
 
 export async function POST(request: NextRequest) {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, url, postId, communityId } = body;
+        const { name, url, postId, communityId, mimetype, type } = body;
 
         if (!name || !url) {
             return NextResponse.json(
@@ -46,39 +46,47 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Save image metadata to database
+        // Determine attachment type and mimetype
+        const attachmentType = type || 'image'; // Default to image if not specified
+        const attachmentMimetype = mimetype || 'image/jpeg'; // Default to image/jpeg if not specified
+
+        // Save attachment metadata to database
         const insertData = {
             filename,
-            mimetype: 'image/jpeg', // Default, can be enhanced
+            mimetype: attachmentMimetype,
+            type: attachmentType,
             size: 0, // Will be updated if needed
             r2Key: name,
             r2Url: url,
-            publicUrl: `${process.env.R2_PUBLIC_URL}/${name}`, // Keep original for now
+            publicUrl: `${process.env.R2_PUBLIC_URL}/${name}`,
+            thumbnailUrl: null, // For video, can be set if available
             uploadedBy: session.user.id,
             postId: postId || null,
             communityId: communityId || null,
         };
 
-        const [imageRecord] = await db
-            .insert(images)
+        const [attachmentRecord] = await db
+            .insert(attachments)
             .values(insertData)
             .returning();
 
         // Update the publicUrl to use our API endpoint
         await db
-            .update(images)
-            .set({ publicUrl: `/api/images/${imageRecord.id}` })
-            .where(eq(images.id, imageRecord.id));
+            .update(attachments)
+            .set({ publicUrl: `/api/images/${attachmentRecord.id}` })
+            .where(eq(attachments.id, attachmentRecord.id));
 
         return NextResponse.json({
             message: 'success',
-            image: {
-                id: imageRecord.id,
-                filename: imageRecord.filename,
-                size: imageRecord.size,
-                mimetype: imageRecord.mimetype,
-                key: imageRecord.r2Key,
-                url: `/api/images/${imageRecord.id}`,
+            attachment: {
+                id: attachmentRecord.id,
+                filename: attachmentRecord.filename,
+                size: attachmentRecord.size,
+                mimetype: attachmentRecord.mimetype,
+                type: attachmentRecord.type,
+                key: attachmentRecord.r2Key,
+                url: `/api/images/${attachmentRecord.id}`,
+                thumbnailUrl: attachmentRecord.thumbnailUrl,
             },
         });
     } catch (error) {
