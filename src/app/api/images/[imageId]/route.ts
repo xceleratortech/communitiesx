@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSession } from '@/server/auth/server';
 import { db } from '@/server/db';
-import { images } from '@/server/db/schema';
+import { attachments } from '@/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
 
@@ -28,20 +28,20 @@ export async function GET(
             );
         }
 
-        // Get image record from database
-        const imageRecord = await db.query.images.findFirst({
-            where: eq(images.id, imageId),
+        // Get attachment record from database
+        const attachmentRecord = await db.query.attachments.findFirst({
+            where: eq(attachments.id, imageId),
         });
 
-        if (!imageRecord) {
+        if (!attachmentRecord) {
             return NextResponse.json(
-                { error: 'Image not found' },
+                { error: 'Attachment not found' },
                 { status: 404 },
             );
         }
 
         // Validate ownership (optional - you might want to allow public access)
-        if (imageRecord.uploadedBy !== session.user.id) {
+        if (attachmentRecord.uploadedBy !== session.user.id) {
             return NextResponse.json(
                 { error: 'Access denied' },
                 { status: 403 },
@@ -50,25 +50,25 @@ export async function GET(
 
         // Generate presigned download URL
         const downloadUrl = await generatePresignedDownloadUrl(
-            imageRecord.r2Key,
+            attachmentRecord.r2Key,
         );
 
         // Create proxy URL for download
         const proxyUrl = `https://edx-storage-proxy.xcelerator.co.in?proxyUrl=${encodeURIComponent(downloadUrl)}`;
 
-        // Fetch the image from R2 via proxy and serve it directly
-        const imageResponse = await fetch(proxyUrl);
+        // Fetch the file from R2 via proxy and serve it directly
+        const fileResponse = await fetch(proxyUrl);
 
-        if (!imageResponse.ok) {
-            throw new Error('Failed to fetch image from R2');
+        if (!fileResponse.ok) {
+            throw new Error('Failed to fetch file from storage');
         }
 
-        const imageBuffer = await imageResponse.arrayBuffer();
-
-        // Return the image with proper headers
-        return new NextResponse(imageBuffer, {
+        // Set correct content type
+        return new NextResponse(fileResponse.body, {
+            status: fileResponse.status,
             headers: {
-                'Content-Type': imageRecord.mimetype || 'image/jpeg',
+                'Content-Type':
+                    attachmentRecord.mimetype || 'application/octet-stream',
                 'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
             },
         });

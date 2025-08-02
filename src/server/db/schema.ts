@@ -297,7 +297,7 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     }),
     comments: many(comments),
     postTags: many(postTags),
-    images: many(images),
+    attachments: many(attachments), // was images
 }));
 
 export const postTagsRelations = relations(postTags, ({ one }) => ({
@@ -487,15 +487,17 @@ export const orgMembers = pgTable(
     },
 );
 
-// Images table for R2 storage
-export const images = pgTable('images', {
+// Attachments table for R2 storage (was images)
+export const attachments = pgTable('attachments', {
     id: serial('id').primaryKey(),
     filename: text('filename').notNull(),
     mimetype: text('mimetype').notNull(),
+    type: text('type').notNull(), // 'image' | 'video'
     size: integer('size').default(0),
     r2Key: text('r2_key').notNull(),
     r2Url: text('r2_url'),
     publicUrl: text('public_url'),
+    thumbnailUrl: text('thumbnail_url'), // for video preview, nullable
     uploadedBy: text('uploaded_by')
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),
@@ -509,18 +511,18 @@ export const images = pgTable('images', {
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-// Add images relations
-export const imagesRelations = relations(images, ({ one }) => ({
+// Add attachments relations
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
     uploadedBy: one(users, {
-        fields: [images.uploadedBy],
+        fields: [attachments.uploadedBy],
         references: [users.id],
     }),
     post: one(posts, {
-        fields: [images.postId],
+        fields: [attachments.postId],
         references: [posts.id],
     }),
     community: one(communities, {
-        fields: [images.communityId],
+        fields: [attachments.communityId],
         references: [communities.id],
     }),
 }));

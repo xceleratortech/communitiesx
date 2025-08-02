@@ -14,6 +14,7 @@ import {
     ListOrdered,
     Link as LinkIcon,
     Image as ImageIcon,
+    Video,
     Heading1,
     Heading2,
     Undo,
@@ -25,7 +26,7 @@ import {
     Upload,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { uploadImageWithPresignedFlow } from '@/lib/image-upload-utils';
+import { uploadAttachmentWithPresignedFlow } from '@/lib/image-upload-utils';
 import { useSession } from '@/server/auth/client';
 
 interface TipTapEditorProps {
@@ -225,15 +226,15 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         if (!file) return;
 
         if (!session?.user?.email) {
-            alert('You must be logged in to upload images');
+            alert('You must be logged in to upload files');
             return;
         }
 
         try {
             setIsUploading(true);
 
-            // Upload image using R2 presigned flow
-            const result = await uploadImageWithPresignedFlow(
+            // Upload file using R2 presigned flow
+            const result = await uploadAttachmentWithPresignedFlow(
                 file,
                 session.user.email,
                 {
@@ -243,14 +244,21 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 },
             );
 
-            // Insert image into editor
-            editor.chain().focus().setImage({ src: result.url }).run();
+            // Insert file into editor based on type
+            if (result.type === 'image') {
+                // Insert image into editor
+                editor.chain().focus().setImage({ src: result.url }).run();
+            } else if (result.type === 'video') {
+                // Insert a special video placeholder that will be replaced when displaying
+                const videoPlaceholder = `[VIDEO:${result.url}]`;
+                editor.chain().focus().insertContent(videoPlaceholder).run();
+            }
         } catch (error) {
-            console.error('Error uploading image:', error);
+            console.error('Error uploading file:', error);
             alert(
                 error instanceof Error
                     ? error.message
-                    : 'Failed to upload image. Please try again.',
+                    : 'Failed to upload file. Please try again.',
             );
         } finally {
             setIsUploading(false);
@@ -261,7 +269,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         }
     };
 
-    const addImage = () => {
+    const addFile = () => {
         // Trigger file input click
         fileInputRef.current?.click();
     };
@@ -328,11 +336,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 }
             }}
         >
-            {/* Hidden file input for image upload */}
+            {/* Hidden file input for file upload */}
             <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/*"
                 onChange={handleFileUpload}
                 className="hidden"
             />
@@ -502,11 +510,11 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        addImage();
+                        addFile();
                     }}
                     className={buttonClasses}
                     type="button"
-                    title="Upload Image"
+                    title="Upload File (Image/Video)"
                     disabled={isUploading}
                 >
                     {isUploading ? (

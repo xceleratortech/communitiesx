@@ -1,4 +1,4 @@
-import { generateImageKey, validateImageFile } from './r2';
+import { validateAttachmentFile, generateImageKey } from '@/lib/r2';
 
 export interface ImageUploadOptions {
     postId?: number;
@@ -15,13 +15,28 @@ export interface ImageUploadResult {
     url: string;
 }
 
-export async function uploadImageWithPresignedFlow(
+export interface UploadResult {
+    id: number;
+    filename: string;
+    size: number;
+    mimetype: string;
+    type: 'image' | 'video';
+    key: string;
+    url: string;
+    thumbnailUrl?: string | null;
+}
+
+export async function uploadAttachmentWithPresignedFlow(
     file: File,
     userEmail: string,
-    options: ImageUploadOptions = {},
-): Promise<ImageUploadResult> {
-    // Validate the image file
-    const validation = validateImageFile(file);
+    options?: {
+        postId?: number;
+        communityId?: number;
+        communitySlug?: string;
+    },
+): Promise<UploadResult> {
+    // Validate file
+    const validation = validateAttachmentFile(file);
     if (!validation.valid) {
         throw new Error(validation.error);
     }
@@ -30,8 +45,8 @@ export async function uploadImageWithPresignedFlow(
     const key = generateImageKey(
         userEmail,
         file.name,
-        options.communityId,
-        options.communitySlug,
+        options?.communityId,
+        options?.communitySlug,
     );
 
     // Get presigned URL
@@ -60,10 +75,10 @@ export async function uploadImageWithPresignedFlow(
 
     if (!uploadResponse.ok) {
         const error = await uploadResponse.text();
-        throw new Error(`Failed to upload image: ${error}`);
+        throw new Error(`Failed to upload file: ${error}`);
     }
 
-    // Confirm upload and save metadata
+    // Confirm upload
     const confirmResponse = await fetch('/api/images/confirm-upload', {
         method: 'POST',
         headers: {
@@ -72,8 +87,10 @@ export async function uploadImageWithPresignedFlow(
         body: JSON.stringify({
             name: key,
             url: presignedUrl,
-            postId: options.postId,
-            communityId: options.communityId,
+            postId: options?.postId,
+            communityId: options?.communityId,
+            mimetype: file.type,
+            type: validation.type,
         }),
     });
 
@@ -82,8 +99,27 @@ export async function uploadImageWithPresignedFlow(
         throw new Error(`Failed to confirm upload: ${error}`);
     }
 
-    const { image } = await confirmResponse.json();
-    return image;
+    const result = await confirmResponse.json();
+    return result.attachment;
+}
+
+// Keep the old function for backward compatibility
+export async function uploadImageWithPresignedFlow(
+    file: File,
+    userEmail: string,
+    options?: {
+        postId?: number;
+        communityId?: number;
+        communitySlug?: string;
+    },
+): Promise<UploadResult> {
+    // Validate that it's an image
+    const validation = validateAttachmentFile(file);
+    if (!validation.valid || validation.type !== 'image') {
+        throw new Error('Only image files are allowed');
+    }
+
+    return uploadAttachmentWithPresignedFlow(file, userEmail, options);
 }
 
 // React hook for image upload

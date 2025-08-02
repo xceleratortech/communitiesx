@@ -37,6 +37,8 @@ const purifyConfig = {
         'blockquote',
         // Images (with restrictions)
         'img',
+        // Videos
+        'video',
     ],
     ALLOWED_ATTRS: [
         // Links
@@ -49,6 +51,12 @@ const purifyConfig = {
         'title',
         'width',
         'height',
+        // Videos
+        'controls',
+        'autoplay',
+        'muted',
+        'loop',
+        'poster',
         // Basic styling (if needed)
         'class',
         'style',
@@ -227,7 +235,18 @@ export function SafeHtml({
     className?: string;
     [key: string]: any;
 }) {
-    const sanitizedHtml = sanitizeHtml(html);
+    // Replace video placeholders with actual video HTML
+    let processedHtml = html;
+    if (html.includes('[VIDEO:')) {
+        processedHtml = html.replace(
+            /\[VIDEO:([^\]]+)\]/g,
+            (match, videoUrl) => {
+                return `<video src="${videoUrl}" controls width="100%" style="max-width: 100%; border-radius: 0.375rem;"></video>`;
+            },
+        );
+    }
+
+    const sanitizedHtml = sanitizeHtml(processedHtml);
 
     return React.createElement('div', {
         className,
