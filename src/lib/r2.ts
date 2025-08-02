@@ -71,35 +71,82 @@ export async function generatePresignedDownloadUrl(
     });
 }
 
-// Validate image file
-export function validateImageFile(file: File): {
+// Validate attachment file (images and videos)
+export function validateAttachmentFile(file: File): {
     valid: boolean;
     error?: string;
+    type: 'image' | 'video';
 } {
-    const allowedTypes = [
+    const allowedImageTypes = [
         'image/jpeg',
         'image/jpg',
         'image/png',
         'image/gif',
         'image/webp',
     ];
-    const maxSize = 15 * 1024 * 1024; // 15MB
+    const allowedVideoTypes = [
+        'video/mp4',
+        'video/webm',
+        'video/quicktime', // .mov
+    ];
 
-    if (!allowedTypes.includes(file.type)) {
+    const maxImageSize = 15 * 1024 * 1024; // 15MB
+    const maxVideoSize = 50 * 1024 * 1024; // 50MB
+
+    // Check if it's an image
+    if (allowedImageTypes.includes(file.type)) {
+        if (file.size > maxImageSize) {
+            return {
+                valid: false,
+                error: 'Image file size too large. Maximum size is 15MB.',
+                type: 'image',
+            };
+        }
         return {
-            valid: false,
-            error: 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.',
+            valid: true,
+            type: 'image',
         };
     }
 
-    if (file.size > maxSize) {
+    // Check if it's a video
+    if (allowedVideoTypes.includes(file.type)) {
+        if (file.size > maxVideoSize) {
+            return {
+                valid: false,
+                error: 'Video file size too large. Maximum size is 50MB.',
+                type: 'video',
+            };
+        }
         return {
-            valid: false,
-            error: 'File size too large. Maximum size is 15MB.',
+            valid: true,
+            type: 'video',
         };
     }
 
-    return { valid: true };
+    // Invalid file type
+    return {
+        valid: false,
+        error: 'Invalid file type. Only JPEG, PNG, GIF, WebP images and MP4, WebM, MOV videos are allowed.',
+        type: 'image', // fallback
+    };
+}
+
+// Validate image file (keep for backward compatibility)
+export function validateImageFile(file: File): {
+    valid: boolean;
+    error?: string;
+} {
+    const result = validateAttachmentFile(file);
+    if (result.type !== 'image') {
+        return {
+            valid: false,
+            error: 'Invalid file type. Only images are allowed.',
+        };
+    }
+    return {
+        valid: result.valid,
+        error: result.error,
+    };
 }
 
 // Sanitize filename
