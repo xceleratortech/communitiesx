@@ -177,9 +177,16 @@ export default function CommunitiesPage() {
                 onValueChange={setActiveTab}
             >
                 <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center sm:gap-0">
-                    <TabsList className="w-full sm:w-auto">
-                        <TabsTrigger value="all">All Communities</TabsTrigger>
-                        <TabsTrigger value="my">My Communities</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-2 sm:flex sm:w-auto">
+                        <TabsTrigger
+                            value="all"
+                            className="flex-1 sm:flex-none"
+                        >
+                            All Communities
+                        </TabsTrigger>
+                        <TabsTrigger value="my" className="flex-1 sm:flex-none">
+                            My Communities
+                        </TabsTrigger>
                         {/* <TabsTrigger value="popular">Popular</TabsTrigger> */}
                     </TabsList>
                 </div>
