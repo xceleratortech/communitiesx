@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 function LoginForm() {
     const [email, setEmail] = useState('');
@@ -95,104 +96,131 @@ function LoginForm() {
 
     return (
         <div className="flex min-h-screen items-center justify-center p-4">
-            <Card className="w-full max-w-md">
-                <CardHeader>
-                    <CardTitle className="text-2xl">Sign In</CardTitle>
-                    <CardDescription>
-                        Enter your email and password to sign in to your account
-                    </CardDescription>
-                </CardHeader>
-                <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="email"
-                                className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                                Email
-                            </label>
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="name@example.com"
-                                value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <label
-                                htmlFor="password"
-                                className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                                Password
-                            </label>
-                            <Input
-                                id="password"
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-
-                        {error && (
-                            <div className="bg-destructive/15 text-destructive rounded-md p-3 text-sm">
-                                {error}
-                                {error.includes('email is not verified') && (
-                                    <div className="mt-2">
-                                        <Button
-                                            type="button"
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={handleVerifyEmail}
-                                            disabled={isVerifyingEmail}
-                                        >
-                                            {isVerifyingEmail ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Verifying...
-                                                </>
-                                            ) : (
-                                                'Verify Email Now'
-                                            )}
-                                        </Button>
-                                    </div>
-                                )}
+            <div className="w-full max-w-md space-y-6">
+                <div className="text-center">
+                    <div className="mb-6 flex justify-center">
+                        <Image
+                            src="/diamond-192.png"
+                            alt="CommunitiesX Logo"
+                            width={80}
+                            height={80}
+                            className="rounded-lg"
+                        />
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        CommunitiesX
+                    </h1>
+                    <p className="text-muted-foreground mt-2">
+                        Powered by Xcelerator
+                    </p>
+                </div>
+                <Card className="w-full">
+                    <CardHeader>
+                        <CardTitle className="text-2xl">Sign In</CardTitle>
+                        <CardDescription>
+                            Enter your email and password to sign in to your
+                            account
+                        </CardDescription>
+                    </CardHeader>
+                    <form onSubmit={handleSubmit}>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <label
+                                    htmlFor="email"
+                                    className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    Email
+                                </label>
+                                <Input
+                                    id="email"
+                                    type="email"
+                                    placeholder="name@example.com"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    required
+                                />
                             </div>
-                        )}
-
-                        {verificationSuccess && (
-                            <div className="rounded-md bg-green-100 p-3 text-sm text-green-800">
-                                Email verified successfully! You can now sign
-                                in.
+                            <div className="space-y-2">
+                                <label
+                                    htmlFor="password"
+                                    className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    Password
+                                </label>
+                                <Input
+                                    id="password"
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) =>
+                                        setPassword(e.target.value)
+                                    }
+                                    required
+                                />
                             </div>
-                        )}
-                    </CardContent>
-                    <CardFooter className="flex flex-col space-y-4">
-                        <Button
-                            type="submit"
-                            className="mt-4 w-full"
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Signing in...
-                                </>
-                            ) : (
-                                'Sign In'
+
+                            {error && (
+                                <div className="bg-destructive/15 text-destructive rounded-md p-3 text-sm">
+                                    {error}
+                                    {error.includes(
+                                        'email is not verified',
+                                    ) && (
+                                        <div className="mt-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleVerifyEmail}
+                                                disabled={isVerifyingEmail}
+                                            >
+                                                {isVerifyingEmail ? (
+                                                    <>
+                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                        Verifying...
+                                                    </>
+                                                ) : (
+                                                    'Verify Email Now'
+                                                )}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
                             )}
-                        </Button>
-                        <div className="text-center text-sm">
-                            Don't have an account?{' '}
-                            <Link href="/auth/register" className="underline">
-                                Sign up
-                            </Link>
-                        </div>
-                    </CardFooter>
-                </form>
-            </Card>
+
+                            {verificationSuccess && (
+                                <div className="rounded-md bg-green-100 p-3 text-sm text-green-800">
+                                    Email verified successfully! You can now
+                                    sign in.
+                                </div>
+                            )}
+                        </CardContent>
+                        <CardFooter className="flex flex-col space-y-4">
+                            <Button
+                                type="submit"
+                                className="mt-4 w-full"
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Signing in...
+                                    </>
+                                ) : (
+                                    'Sign In'
+                                )}
+                            </Button>
+                            <div className="text-center text-sm">
+                                Don't have an account?{' '}
+                                <Link
+                                    href="/auth/register"
+                                    className="underline"
+                                >
+                                    Sign up
+                                </Link>
+                            </div>
+                        </CardFooter>
+                    </form>
+                </Card>
+            </div>
         </div>
     );
 }

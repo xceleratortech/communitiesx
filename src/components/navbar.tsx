@@ -52,6 +52,11 @@ export function Navbar() {
         setMounted(true);
     }, []);
 
+    // Hide navbar on auth pages
+    if (pathname?.startsWith('/auth/')) {
+        return null;
+    }
+
     const handleSignOut = async () => {
         closeChat();
         setPopoverOpen(false);
