@@ -89,7 +89,7 @@ export function Navbar() {
     };
 
     return (
-        <nav className="bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
+        <nav className="relative z-50 bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex h-14 justify-between">
                     <div className="flex">
@@ -98,10 +98,7 @@ export function Navbar() {
                             className="flex items-center"
                         >
                             <span className="text-xl font-bold dark:text-white">
-                                Community-
-                                <span className="text-blue-600 dark:text-blue-400">
-                                    X
-                                </span>
+                                CommunityX
                             </span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
