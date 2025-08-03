@@ -62,6 +62,11 @@ function NewPostForm() {
     const isMember =
         !!userMembership && userMembership.membershipType === 'member';
 
+    // Check if user can create posts (admin-only restriction)
+    const canCreatePost =
+        isMember &&
+        (!community?.adminOnlyPosts || userMembership?.role === 'admin');
+
     // Get available tags for the community
     const availableTags = community?.tags || [];
 
@@ -76,15 +81,15 @@ function NewPostForm() {
         },
     });
 
-    // If community ID is provided but user is not a member, redirect back to community page
+    // If community ID is provided but user cannot create posts, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !isMember && !isLoadingCommunity) {
+        if (communityId && community && !canCreatePost && !isLoadingCommunity) {
             router.push(`/communities/${communitySlug}`);
         }
     }, [
         communityId,
         community,
-        isMember,
+        canCreatePost,
         communitySlug,
         router,
         isLoadingCommunity,
@@ -109,19 +114,29 @@ function NewPostForm() {
         return <Loading message="Loading community information..." />;
     }
 
-    // Show access denied if user is not a member of the community
-    if (communityId && !isMember) {
+    // Show access denied if user is not a member of the community or cannot create posts
+    if (communityId && !canCreatePost) {
+        let alertTitle = 'Membership Required';
+        let alertDescription = '';
+
+        if (!isMember) {
+            alertDescription =
+                community?.type === 'private'
+                    ? 'This is a private community. You must be a member to create posts, not just a follower.'
+                    : 'You must be a member of this community to create posts.';
+        } else if (community?.adminOnlyPosts) {
+            alertTitle = 'Admin Permission Required';
+            alertDescription =
+                'Only community admins can create posts in this community. Members can still comment and react to existing posts.';
+        }
+
         return (
             <div className="mx-auto max-w-4xl p-4">
                 <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
                 <Alert variant="destructive" className="mb-4">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Membership Required</AlertTitle>
-                    <AlertDescription>
-                        {community?.type === 'private'
-                            ? 'This is a private community. You must be a member to create posts, not just a follower.'
-                            : 'You must be a member of this community to create posts.'}
-                    </AlertDescription>
+                    <AlertTitle>{alertTitle}</AlertTitle>
+                    <AlertDescription>{alertDescription}</AlertDescription>
                 </Alert>
                 <Button asChild>
                     <Link href={`/communities/${communitySlug}`}>

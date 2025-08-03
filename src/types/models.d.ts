@@ -9,6 +9,7 @@ export interface Community {
     rules: string | null;
     banner: string | null;
     avatar: string | null;
+    adminOnlyPosts: boolean; // Whether only admins can create posts
     orgId?: string | null; // Optional for org-independent communities
     createdBy: string;
     createdAt: string | Date;

@@ -135,18 +135,30 @@ export const communityRouter = router({
                         }
 
                         // Check if user is a member, regardless of community type
-                        const isMember = community.members.some(
+                        const userMembership = community.members.find(
                             (m) =>
                                 m.membershipType === 'member' &&
                                 m.status === 'active',
                         );
 
-                        if (!isMember) {
+                        if (!userMembership) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
                                 message:
                                     'You must be a member to post in this community',
                             });
+                        }
+
+                        // If community restricts post creation to admins only, check if user is an admin
+                        if (community.adminOnlyPosts) {
+                            const isAdmin = userMembership.role === 'admin';
+                            if (!isAdmin) {
+                                throw new TRPCError({
+                                    code: 'FORBIDDEN',
+                                    message:
+                                        'Only community admins can create posts in this community',
+                                });
+                            }
                         }
 
                         // If tagIds are provided, verify they belong to the community
@@ -962,6 +974,7 @@ export const communityRouter = router({
                 rules: z.string().max(2000).nullable(),
                 avatar: z.string().nullable(),
                 banner: z.string().nullable(),
+                adminOnlyPosts: z.boolean().default(false), // Whether only admins can create posts
                 orgId: z.string().nullable().default(null), // Ensure orgId is string|null, never undefined
             }),
         )
@@ -1009,6 +1022,7 @@ export const communityRouter = router({
                         rules: input.rules,
                         avatar: input.avatar,
                         banner: input.banner,
+                        adminOnlyPosts: input.adminOnlyPosts,
                         orgId: input.orgId,
                         createdBy: ctx.session.user.id,
                         createdAt: new Date(),

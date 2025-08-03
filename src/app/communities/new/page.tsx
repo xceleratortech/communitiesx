@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Form,
     FormControl,
@@ -64,6 +65,7 @@ const formSchema = z.object({
     type: z.enum(['public', 'private'], {
         required_error: 'You must select a community type.',
     }),
+    adminOnlyPosts: z.boolean().default(false),
     rules: z
         .string()
         .max(2000, {
@@ -128,9 +130,11 @@ export default function NewCommunityPage() {
             slug: '',
             description: '',
             type: 'public',
+            adminOnlyPosts: false,
             rules: '',
             avatar: '',
             banner: '',
+            orgId: '',
         },
     });
 
@@ -370,6 +374,43 @@ export default function NewCommunityPage() {
                                                 </Label>
                                             </div>
                                         </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="adminOnlyPosts"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>
+                                        Post Creation Settings
+                                    </FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center space-x-3 rounded-md border p-4">
+                                            <Checkbox
+                                                id="adminOnlyPosts"
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                            <Label
+                                                htmlFor="adminOnlyPosts"
+                                                className="flex cursor-pointer flex-col gap-1"
+                                            >
+                                                <span className="font-medium">
+                                                    Restrict post creation to
+                                                    admins
+                                                </span>
+                                                <span className="text-muted-foreground text-sm">
+                                                    Only community admins will
+                                                    be able to create posts.
+                                                    Members can still comment
+                                                    and react.
+                                                </span>
+                                            </Label>
+                                        </div>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
