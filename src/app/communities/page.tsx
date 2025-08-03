@@ -27,6 +27,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
@@ -144,7 +145,7 @@ export default function CommunitiesPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoadingCommunities && communities.length === 0) {
-        return <CommunitiesPageSkeleton />;
+        return <Loading message="Loading communities..." />;
     }
 
     // Filter communities for "My Communities" tab

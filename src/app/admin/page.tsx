@@ -43,6 +43,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { Loading } from '@/components/ui/loading';
 import {
     Select,
     SelectContent,
@@ -320,12 +321,12 @@ export default function AdminDashboard() {
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
-        return <div>Loading...</div>;
+        return <Loading message="Initializing..." />;
     }
 
     // Check if user is admin
     if (session === undefined) {
-        return <div>Loading...</div>;
+        return <Loading message="Checking permissions..." />;
     }
 
     if (!session) {

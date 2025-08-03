@@ -24,6 +24,7 @@ import {
 import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loading } from '@/components/ui/loading';
 import {
     Select,
     SelectContent,
@@ -146,7 +147,15 @@ export default function EditCommunityPage() {
         }
     };
 
-    if (!isClient || isLoading) {
+    if (!isClient) {
+        return <Loading message="Initializing..." />;
+    }
+
+    if (isLoading) {
+        return <Loading message="Loading community..." />;
+    }
+
+    if (false) {
         return (
             <div className="container mx-auto px-4 py-8">
                 <Skeleton className="h-10 w-full" />

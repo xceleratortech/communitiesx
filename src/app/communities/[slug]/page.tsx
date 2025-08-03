@@ -32,6 +32,7 @@ import {
     Tag,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from '@/server/auth/client';
 import { toast } from 'sonner';
@@ -503,7 +504,7 @@ export default function CommunityDetailPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoading) {
-        return <CommunityDetailSkeleton />;
+        return <Loading message="Loading community..." />;
     }
 
     if (!community) {

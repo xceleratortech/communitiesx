@@ -4,6 +4,7 @@ import { usePermission } from '@/hooks/use-permission';
 import { useSession } from '@/server/auth/client';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
+import { Loading } from '@/components/ui/loading';
 
 export default function AdminLayout({
     children,
@@ -32,11 +33,7 @@ export default function AdminLayout({
     }, [session.isPending, session.data, router]);
 
     if (session.isPending) {
-        return (
-            <div className="flex h-screen items-center justify-center">
-                Loading...
-            </div>
-        );
+        return <Loading message="Authenticating..." />;
     }
 
     return <div className="bg-background min-h-screen">{children}</div>;

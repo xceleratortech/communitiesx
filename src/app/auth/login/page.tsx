@@ -16,6 +16,7 @@ import {
 import { Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Loading } from '@/components/ui/loading';
 
 function LoginForm() {
     const [email, setEmail] = useState('');
@@ -227,13 +228,7 @@ function LoginForm() {
 
 export default function LoginPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex min-h-screen items-center justify-center p-4">
-                    Loading...
-                </div>
-            }
-        >
+        <Suspense fallback={<Loading message="Loading login form..." />}>
             <LoginForm />
         </Suspense>
     );

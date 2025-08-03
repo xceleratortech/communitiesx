@@ -26,6 +26,7 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Loading } from '@/components/ui/loading';
 
 interface Tag {
     id: number;
@@ -105,12 +106,7 @@ function NewPostForm() {
 
     // Show loading state while checking community membership
     if (communityId && isLoadingCommunity) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-6 text-3xl font-bold">Create New Post</h1>
-                <p>Loading community information...</p>
-            </div>
-        );
+        return <Loading message="Loading community information..." />;
     }
 
     // Show access denied if user is not a member of the community

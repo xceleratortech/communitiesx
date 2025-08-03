@@ -13,6 +13,7 @@ import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
+import { Loading } from '@/components/ui/loading';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -144,7 +145,7 @@ export default function CommunityPostPage() {
     });
 
     if (!isClient) {
-        return <div className="p-4">Loading...</div>;
+        return <Loading message="Initializing..." />;
     }
 
     if (!session) {
@@ -164,7 +165,7 @@ export default function CommunityPostPage() {
     }
 
     if (isClient && isLoading) {
-        return <div className="p-4 dark:text-gray-300">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (isClient && !post) {

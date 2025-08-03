@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/popover';
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Loading } from '@/components/ui/loading';
 
 export default function EditPostPage() {
     const params = useParams();
@@ -112,7 +113,7 @@ export default function EditPostPage() {
     }
 
     if (isLoading) {
-        return <div className="p-4">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (!post) {

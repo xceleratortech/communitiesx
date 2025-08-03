@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/card';
 import { Loader2, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { Loading } from '@/components/ui/loading';
 
 function RegisterForm() {
     const router = useRouter();
@@ -445,13 +446,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="flex min-h-screen items-center justify-center p-4">
-                    Loading...
-                </div>
-            }
-        >
+        <Suspense fallback={<Loading message="Loading registration form..." />}>
             <RegisterForm />
         </Suspense>
     );

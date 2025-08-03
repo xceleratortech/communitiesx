@@ -10,6 +10,7 @@ import { useChat } from '@/providers/chat-provider';
 import { useSession } from '@/server/auth/client';
 import { trpc } from '@/providers/trpc-provider';
 import NewChatDialog from '@/components/chat/new-chat-dialog';
+import { Loading } from '@/components/ui/loading';
 
 export default function ChatPage() {
     const router = useRouter();
@@ -107,13 +108,7 @@ function ChatList({ searchQuery }: { searchQuery: string }) {
     const { data: threads, isLoading, error } = trpc.chat.getThreads.useQuery();
 
     if (isLoading) {
-        return (
-            <div className="flex flex-1 items-center justify-center">
-                <div className="text-muted-foreground text-center">
-                    Loading....
-                </div>
-            </div>
-        );
+        return <Loading message="Loading chats..." />;
     }
 
     if (error) {
@@ -300,13 +295,7 @@ function ChatThread({ threadId }: { threadId: number }) {
     }, [data?.messages?.length, paginatedMessages.length]);
 
     if (isLoading || !thread) {
-        return (
-            <div className="flex flex-1 items-center justify-center">
-                <div className="text-muted-foreground text-center">
-                    Loading...
-                </div>
-            </div>
-        );
+        return <Loading message="Loading messages..." />;
     }
 
     if (error) {

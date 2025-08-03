@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Loading } from '@/components/ui/loading';
 
 export default function JoinCommunityPage() {
     const params = useParams();
@@ -181,37 +182,12 @@ export default function JoinCommunityPage() {
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
-        return (
-            <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-16">
-                <Card className="w-full max-w-md">
-                    <CardHeader className="text-center">
-                        <CardTitle>Loading...</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex justify-center py-8">
-                        <Loader2 className="text-primary h-12 w-12 animate-spin" />
-                    </CardContent>
-                </Card>
-            </div>
-        );
+        return <Loading message="Initializing..." />;
     }
 
     // Loading state while checking session or validating invite
     if (validateInviteQuery.isLoading) {
-        return (
-            <div className="container mx-auto flex min-h-[60vh] flex-col items-center justify-center px-4 py-16">
-                <Card className="w-full max-w-md">
-                    <CardHeader className="text-center">
-                        <CardTitle>Checking invitation</CardTitle>
-                        <CardDescription>
-                            Please wait while we verify your invitation...
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-center py-8">
-                        <Loader2 className="text-primary h-12 w-12 animate-spin" />
-                    </CardContent>
-                </Card>
-            </div>
-        );
+        return <Loading message="Checking invitation..." />;
     }
 
     // Error state for invalid invite
