@@ -1,0 +1,1 @@
+ALTER TABLE "communities" RENAME COLUMN "admin_only_posts" TO "post_creation_min_role";
