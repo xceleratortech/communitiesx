@@ -19,6 +19,12 @@ export const auth = betterAuth({
         usePlural: true,
     }),
     selectUserFields: ['id', 'name', 'email', ['org_id', 'orgId'], 'role'],
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        },
+    },
     plugins: [
         nextCookies(),
         admin({
