@@ -62,10 +62,26 @@ function NewPostForm() {
     const isMember =
         !!userMembership && userMembership.membershipType === 'member';
 
-    // Check if user can create posts (admin-only restriction)
-    const canCreatePost =
-        isMember &&
-        (!community?.adminOnlyPosts || userMembership?.role === 'admin');
+    // Check if user can create posts based on role hierarchy
+    const canCreatePost = React.useMemo(() => {
+        if (!isMember || !userMembership) return false;
+
+        const roleHierarchy = {
+            member: 1,
+            moderator: 2,
+            admin: 3,
+        };
+
+        const userRoleLevel =
+            roleHierarchy[userMembership.role as keyof typeof roleHierarchy] ||
+            0;
+        const minRoleLevel =
+            roleHierarchy[
+                community?.postCreationMinRole as keyof typeof roleHierarchy
+            ] || 1;
+
+        return userRoleLevel >= minRoleLevel;
+    }, [isMember, userMembership, community?.postCreationMinRole]);
 
     // Get available tags for the community
     const availableTags = community?.tags || [];
@@ -124,10 +140,17 @@ function NewPostForm() {
                 community?.type === 'private'
                     ? 'This is a private community. You must be a member to create posts, not just a follower.'
                     : 'You must be a member of this community to create posts.';
-        } else if (community?.adminOnlyPosts) {
-            alertTitle = 'Admin Permission Required';
-            alertDescription =
-                'Only community admins can create posts in this community. Members can still comment and react to existing posts.';
+        } else {
+            const roleDisplay = {
+                member: 'All members',
+                moderator: 'Moderators and admins',
+                admin: 'Admins only',
+            };
+
+            const currentRequirement =
+                community?.postCreationMinRole || 'member';
+            alertTitle = 'Insufficient Permissions';
+            alertDescription = `This community restricts post creation to: ${roleDisplay[currentRequirement as keyof typeof roleDisplay]}. Members can still comment and react to existing posts.`;
         }
 
         return (

@@ -65,7 +65,7 @@ const formSchema = z.object({
     type: z.enum(['public', 'private'], {
         required_error: 'You must select a community type.',
     }),
-    adminOnlyPosts: z.boolean().default(false),
+    postCreationMinRole: z.enum(['member', 'moderator', 'admin']),
     rules: z
         .string()
         .max(2000, {
@@ -130,7 +130,7 @@ export default function NewCommunityPage() {
             slug: '',
             description: '',
             type: 'public',
-            adminOnlyPosts: false,
+            postCreationMinRole: 'member',
             rules: '',
             avatar: '',
             banner: '',
@@ -150,6 +150,7 @@ export default function NewCommunityPage() {
             slug: values.slug,
             description: values.description || null,
             type: values.type,
+            postCreationMinRole: values.postCreationMinRole,
             rules: values.rules || null,
             avatar: values.avatar || null,
             banner: values.banner || null,
@@ -382,35 +383,75 @@ export default function NewCommunityPage() {
 
                         <FormField
                             control={form.control}
-                            name="adminOnlyPosts"
+                            name="postCreationMinRole"
                             render={({ field }) => (
                                 <FormItem className="space-y-3">
                                     <FormLabel>
-                                        Post Creation Settings
+                                        Post Creation Permissions
                                     </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center space-x-3 rounded-md border p-4">
-                                            <Checkbox
-                                                id="adminOnlyPosts"
-                                                checked={field.value}
-                                                onCheckedChange={field.onChange}
-                                            />
-                                            <Label
-                                                htmlFor="adminOnlyPosts"
-                                                className="flex cursor-pointer flex-col gap-1"
-                                            >
-                                                <span className="font-medium">
-                                                    Restrict post creation to
-                                                    admins
-                                                </span>
-                                                <span className="text-muted-foreground text-sm">
-                                                    Only community admins will
-                                                    be able to create posts.
-                                                    Members can still comment
-                                                    and react.
-                                                </span>
-                                            </Label>
-                                        </div>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-3"
+                                        >
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="member"
+                                                    id="member"
+                                                />
+                                                <Label
+                                                    htmlFor="member"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        All members
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Any community member can
+                                                        create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="moderator"
+                                                    id="moderator"
+                                                />
+                                                <Label
+                                                    htmlFor="moderator"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Moderators and admins
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only moderators and
+                                                        admins can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="admin"
+                                                    id="admin"
+                                                />
+                                                <Label
+                                                    htmlFor="admin"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Admins only
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only community admins
+                                                        can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+                                        </RadioGroup>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

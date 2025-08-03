@@ -61,7 +61,9 @@ export const communities = pgTable('communities', {
     rules: text('rules'),
     banner: text('banner'),
     avatar: text('avatar'),
-    adminOnlyPosts: boolean('admin_only_posts').notNull().default(false), // Whether only admins can create posts
+    postCreationMinRole: text('post_creation_min_role')
+        .notNull()
+        .default('member'), // 'member' | 'moderator' | 'admin'
     orgId: text('org_id').references(() => orgs.id), // <-- Make orgId nullable
     createdBy: text('created_by')
         .notNull()
