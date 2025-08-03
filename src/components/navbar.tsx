@@ -153,6 +153,9 @@ export function Navbar() {
                                 <div className="flex sm:hidden">
                                     <ViewNotificationButton />
                                 </div>
+                                <div className="flex sm:hidden">
+                                    <ThemeToggle variant="toggle" />
+                                </div>
                             </>
                         )}
 
@@ -162,6 +165,7 @@ export function Navbar() {
                                     <div className="hidden items-center space-x-4 sm:flex">
                                         <ChatButton />
                                         <ViewNotificationButton />
+                                        <ThemeToggle variant="toggle" />
 
                                         <Popover
                                             open={popoverOpen}
@@ -520,7 +524,7 @@ export function Navbar() {
                                 </>
                             ) : (
                                 <div className="flex items-center space-x-4">
-                                    <ThemeToggle />
+                                    <ThemeToggle variant="toggle" />
                                     <Button asChild className="hidden sm:flex">
                                         <Link
                                             href="/auth/login"
