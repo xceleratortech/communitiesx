@@ -61,7 +61,7 @@ export function Navbar() {
         closeChat();
         setPopoverOpen(false);
         await signOut();
-        router.push('/');
+        router.push('/auth/login');
     };
 
     const isActive = (path: string) => {

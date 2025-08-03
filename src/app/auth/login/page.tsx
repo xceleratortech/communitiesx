@@ -26,7 +26,7 @@ function LoginForm() {
     const [verificationSuccess, setVerificationSuccess] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get('callbackUrl') || '/';
+    const callbackUrl = searchParams.get('callbackUrl') || '/posts';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
