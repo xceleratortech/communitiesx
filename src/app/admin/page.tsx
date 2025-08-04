@@ -43,6 +43,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
+import { Loading } from '@/components/ui/loading';
 import {
     Select,
     SelectContent,
@@ -73,6 +74,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/invite-user-dialog';
 import { usePermission } from '@/hooks/use-permission';
+import { BadgeManagement } from '@/components/badge-management';
 
 type User = {
     id: string;
@@ -320,12 +322,12 @@ export default function AdminDashboard() {
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
-        return <div>Loading...</div>;
+        return <Loading message="Initializing..." />;
     }
 
     // Check if user is admin
     if (session === undefined) {
-        return <div>Loading...</div>;
+        return <Loading message="Checking permissions..." />;
     }
 
     if (!session) {
@@ -362,6 +364,7 @@ export default function AdminDashboard() {
                     <TabsTrigger value="organizations">
                         Organizations
                     </TabsTrigger>
+                    <TabsTrigger value="badges">Badges</TabsTrigger>
                     <TabsTrigger value="tools">Admin Tools</TabsTrigger>
                 </TabsList>
                 <TabsContent value="users">
@@ -877,6 +880,59 @@ export default function AdminDashboard() {
                                         ))}
                                     </TableBody>
                                 </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+                <TabsContent value="badges">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Badge Management</CardTitle>
+                            <CardDescription>
+                                Manage badges for organizations. Select an
+                                organization to view and manage its badges.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {organizations && organizations.length > 0 ? (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                        {organizations.map((org) => (
+                                            <Card
+                                                key={org.id}
+                                                className="hover:bg-muted/50 cursor-pointer"
+                                            >
+                                                <CardHeader className="pb-3">
+                                                    <CardTitle className="text-lg">
+                                                        {org.name}
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        ID: {org.id}
+                                                    </CardDescription>
+                                                </CardHeader>
+                                                <CardContent>
+                                                    <Link
+                                                        href={`/admin/badges/${org.id}`}
+                                                    >
+                                                        <Button
+                                                            variant="outline"
+                                                            className="w-full"
+                                                        >
+                                                            Manage Badges
+                                                        </Button>
+                                                    </Link>
+                                                </CardContent>
+                                            </Card>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="py-8 text-center">
+                                    <p className="text-muted-foreground">
+                                        No organizations found. Create an
+                                        organization first to manage badges.
+                                    </p>
+                                </div>
                             )}
                         </CardContent>
                     </Card>

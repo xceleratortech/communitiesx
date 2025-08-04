@@ -27,6 +27,7 @@ import {
     Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
@@ -144,7 +145,7 @@ export default function CommunitiesPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoadingCommunities && communities.length === 0) {
-        return <CommunitiesPageSkeleton />;
+        return <Loading message="Loading communities..." />;
     }
 
     // Filter communities for "My Communities" tab
@@ -176,9 +177,16 @@ export default function CommunitiesPage() {
                 onValueChange={setActiveTab}
             >
                 <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-center sm:gap-0">
-                    <TabsList className="w-full sm:w-auto">
-                        <TabsTrigger value="all">All Communities</TabsTrigger>
-                        <TabsTrigger value="my">My Communities</TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-2 sm:flex sm:w-auto">
+                        <TabsTrigger
+                            value="all"
+                            className="flex-1 sm:flex-none"
+                        >
+                            All Communities
+                        </TabsTrigger>
+                        <TabsTrigger value="my" className="flex-1 sm:flex-none">
+                            My Communities
+                        </TabsTrigger>
                         {/* <TabsTrigger value="popular">Popular</TabsTrigger> */}
                     </TabsList>
                 </div>

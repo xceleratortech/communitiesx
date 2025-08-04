@@ -9,6 +9,7 @@ export interface Community {
     rules: string | null;
     banner: string | null;
     avatar: string | null;
+    postCreationMinRole: 'member' | 'moderator' | 'admin'; // Minimum role required to create posts
     orgId?: string | null; // Optional for org-independent communities
     createdBy: string;
     createdAt: string | Date;

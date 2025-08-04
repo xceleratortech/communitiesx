@@ -6,6 +6,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
+import Youtube from '@tiptap/extension-youtube';
 import { Button } from '@/components/ui/button';
 import {
     Bold,
@@ -24,6 +25,7 @@ import {
     Strikethrough,
     Pilcrow,
     Upload,
+    Youtube as YoutubeIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { uploadAttachmentWithPresignedFlow } from '@/lib/image-upload-utils';
@@ -53,6 +55,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     const { data: session } = useSession();
 
     const editor = useEditor({
+        immediatelyRender: false,
         extensions: [
             StarterKit.configure({
                 heading: {
@@ -93,6 +96,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 showOnlyCurrent: false,
             }),
             Image.configure({
+                HTMLAttributes: {
+                    class: 'max-w-full rounded-md',
+                },
+            }),
+            Youtube.configure({
+                width: 640,
+                height: 480,
                 HTMLAttributes: {
                     class: 'max-w-full rounded-md',
                 },
@@ -205,6 +215,16 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     .dark .tiptap-editor-content:hover {
                         background-color: rgba(255, 255, 255, 0.01);
                     }
+                    /* YouTube embed styles */
+                    .tiptap-editor-content div[data-youtube-video] {
+                        margin: 1rem 0;
+                        max-width: 100%;
+                    }
+                    .tiptap-editor-content div[data-youtube-video] iframe {
+                        max-width: 100%;
+                        height: auto;
+                        aspect-ratio: 16/9;
+                    }
                 `;
                 document.head.appendChild(style);
 
@@ -296,6 +316,30 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             .extendMarkRange('link')
             .setLink({ href: url })
             .run();
+    };
+
+    const addYoutubeVideo = () => {
+        const url = prompt('Enter YouTube URL:');
+
+        // cancelled
+        if (url === null) {
+            return;
+        }
+
+        // empty
+        if (url === '') {
+            return;
+        }
+
+        // add youtube video
+        editor.commands.setYoutubeVideo({
+            src: url,
+            width: Math.max(320, Math.min(640, window.innerWidth - 100)),
+            height: Math.max(
+                180,
+                Math.min(480, (window.innerWidth - 100) * 0.5625),
+            ),
+        });
     };
 
     /* -------------------------------------------------------------------------------------------------
@@ -522,6 +566,17 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     ) : (
                         <Upload className="h-4 w-4" />
                     )}
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        addYoutubeVideo();
+                    }}
+                    className={buttonClasses}
+                    type="button"
+                    title="Add YouTube Video"
+                >
+                    <YoutubeIcon className="h-4 w-4" />
                 </button>
                 <button
                     onClick={(e) => {

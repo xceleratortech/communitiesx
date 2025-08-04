@@ -2,8 +2,14 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
-import { eq, and, inArray } from 'drizzle-orm';
-import { users, orgs, communityMembers, communities } from '@/server/db/schema';
+import { eq, and, inArray, desc } from 'drizzle-orm';
+import {
+    users,
+    orgs,
+    communityMembers,
+    communities,
+    userBadgeAssignments,
+} from '@/server/db/schema';
 import { getUserPermission } from '../services/user-service';
 
 export const usersRouter = router({
@@ -45,6 +51,24 @@ export const usersRouter = router({
                     },
                 });
 
+                // Get user badges separately
+                const userBadges = await db.query.userBadgeAssignments.findMany(
+                    {
+                        where: eq(userBadgeAssignments.userId, input.userId),
+                        with: {
+                            badge: true,
+                            assignedBy: {
+                                columns: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: [desc(userBadgeAssignments.assignedAt)],
+                    },
+                );
+
                 return {
                     id: user.id,
                     name: user.name,
@@ -54,6 +78,7 @@ export const usersRouter = router({
                     orgName: organization?.name,
                     appRole: user.appRole,
                     orgRole: user.role,
+                    badges: userBadges || [],
                 };
             } catch (error) {
                 console.error('Error fetching user profile:', error);

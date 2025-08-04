@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/popover';
 import { Check, ChevronsUpDown, X, ArrowLeft, Home, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Loading } from '@/components/ui/loading';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -122,7 +123,7 @@ export default function EditCommunityPostPage() {
     }
 
     if (isLoading) {
-        return <div className="p-4">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (!post) {

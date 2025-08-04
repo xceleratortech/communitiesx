@@ -52,11 +52,16 @@ export function Navbar() {
         setMounted(true);
     }, []);
 
+    // Hide navbar on auth pages
+    if (pathname?.startsWith('/auth/')) {
+        return null;
+    }
+
     const handleSignOut = async () => {
         closeChat();
         setPopoverOpen(false);
         await signOut();
-        router.push('/');
+        router.push('/auth/login');
     };
 
     const isActive = (path: string) => {
@@ -89,7 +94,7 @@ export function Navbar() {
     };
 
     return (
-        <nav className="bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
+        <nav className="relative z-50 bg-white shadow-sm dark:bg-gray-800 dark:shadow-gray-800">
             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div className="flex h-14 justify-between">
                     <div className="flex">
@@ -98,10 +103,7 @@ export function Navbar() {
                             className="flex items-center"
                         >
                             <span className="text-xl font-bold dark:text-white">
-                                Community-
-                                <span className="text-blue-600 dark:text-blue-400">
-                                    X
-                                </span>
+                                CommunityX
                             </span>
                         </Link>
                         <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
@@ -156,6 +158,9 @@ export function Navbar() {
                                 <div className="flex sm:hidden">
                                     <ViewNotificationButton />
                                 </div>
+                                <div className="flex sm:hidden">
+                                    <ThemeToggle variant="toggle" />
+                                </div>
                             </>
                         )}
 
@@ -165,6 +170,7 @@ export function Navbar() {
                                     <div className="hidden items-center space-x-4 sm:flex">
                                         <ChatButton />
                                         <ViewNotificationButton />
+                                        <ThemeToggle variant="toggle" />
 
                                         <Popover
                                             open={popoverOpen}
@@ -523,7 +529,7 @@ export function Navbar() {
                                 </>
                             ) : (
                                 <div className="flex items-center space-x-4">
-                                    <ThemeToggle />
+                                    <ThemeToggle variant="toggle" />
                                     <Button asChild className="hidden sm:flex">
                                         <Link
                                             href="/auth/login"

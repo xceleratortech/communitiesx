@@ -48,6 +48,15 @@ The project requires environment variables for database connections and applicat
 
     ```env
     DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE_NAME"
+
+    # Google OAuth (required for Google sign-in)
+    # Get these from: https://console.developers.google.com/
+    # 1. Create a new project or select existing
+    # 2. Enable Google+ API
+    # 3. Create OAuth 2.0 credentials
+    # 4. Add authorized redirect URIs: http://localhost:3000/api/auth/callback/google
+    GOOGLE_CLIENT_ID="your-google-client-id.googleusercontent.com"
+    GOOGLE_CLIENT_SECRET="your-google-client-secret"
     NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
     # Example for a local PostgreSQL setup:

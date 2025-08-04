@@ -135,17 +135,50 @@ export const communityRouter = router({
                         }
 
                         // Check if user is a member, regardless of community type
-                        const isMember = community.members.some(
+                        const userMembership = community.members.find(
                             (m) =>
                                 m.membershipType === 'member' &&
                                 m.status === 'active',
                         );
 
-                        if (!isMember) {
+                        if (!userMembership) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
                                 message:
                                     'You must be a member to post in this community',
+                            });
+                        }
+
+                        // Check if user's role meets the minimum requirement for post creation
+                        const userRole = userMembership.role;
+                        const minRole = community.postCreationMinRole;
+
+                        // Define role hierarchy (higher number = higher privilege)
+                        const roleHierarchy = {
+                            member: 1,
+                            moderator: 2,
+                            admin: 3,
+                        };
+
+                        const userRoleLevel =
+                            roleHierarchy[
+                                userRole as keyof typeof roleHierarchy
+                            ] || 0;
+                        const minRoleLevel =
+                            roleHierarchy[
+                                minRole as keyof typeof roleHierarchy
+                            ] || 1;
+
+                        if (userRoleLevel < minRoleLevel) {
+                            const roleDisplay = {
+                                member: 'members',
+                                moderator: 'moderators and admins',
+                                admin: 'admins',
+                            };
+
+                            throw new TRPCError({
+                                code: 'FORBIDDEN',
+                                message: `Only ${roleDisplay[minRole as keyof typeof roleDisplay]} can create posts in this community`,
                             });
                         }
 
@@ -962,6 +995,9 @@ export const communityRouter = router({
                 rules: z.string().max(2000).nullable(),
                 avatar: z.string().nullable(),
                 banner: z.string().nullable(),
+                postCreationMinRole: z
+                    .enum(['member', 'moderator', 'admin'])
+                    .default('member'), // Minimum role required to create posts
                 orgId: z.string().nullable().default(null), // Ensure orgId is string|null, never undefined
             }),
         )
@@ -1009,6 +1045,7 @@ export const communityRouter = router({
                         rules: input.rules,
                         avatar: input.avatar,
                         banner: input.banner,
+                        postCreationMinRole: input.postCreationMinRole,
                         orgId: input.orgId,
                         createdBy: ctx.session.user.id,
                         createdAt: new Date(),

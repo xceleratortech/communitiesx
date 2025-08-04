@@ -26,6 +26,7 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Loading } from '@/components/ui/loading';
 
 interface Tag {
     id: number;
@@ -61,6 +62,27 @@ function NewPostForm() {
     const isMember =
         !!userMembership && userMembership.membershipType === 'member';
 
+    // Check if user can create posts based on role hierarchy
+    const canCreatePost = React.useMemo(() => {
+        if (!isMember || !userMembership) return false;
+
+        const roleHierarchy = {
+            member: 1,
+            moderator: 2,
+            admin: 3,
+        };
+
+        const userRoleLevel =
+            roleHierarchy[userMembership.role as keyof typeof roleHierarchy] ||
+            0;
+        const minRoleLevel =
+            roleHierarchy[
+                community?.postCreationMinRole as keyof typeof roleHierarchy
+            ] || 1;
+
+        return userRoleLevel >= minRoleLevel;
+    }, [isMember, userMembership, community?.postCreationMinRole]);
+
     // Get available tags for the community
     const availableTags = community?.tags || [];
 
@@ -75,15 +97,15 @@ function NewPostForm() {
         },
     });
 
-    // If community ID is provided but user is not a member, redirect back to community page
+    // If community ID is provided but user cannot create posts, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !isMember && !isLoadingCommunity) {
+        if (communityId && community && !canCreatePost && !isLoadingCommunity) {
             router.push(`/communities/${communitySlug}`);
         }
     }, [
         communityId,
         community,
-        isMember,
+        canCreatePost,
         communitySlug,
         router,
         isLoadingCommunity,
@@ -105,27 +127,39 @@ function NewPostForm() {
 
     // Show loading state while checking community membership
     if (communityId && isLoadingCommunity) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-6 text-3xl font-bold">Create New Post</h1>
-                <p>Loading community information...</p>
-            </div>
-        );
+        return <Loading message="Loading community information..." />;
     }
 
-    // Show access denied if user is not a member of the community
-    if (communityId && !isMember) {
+    // Show access denied if user is not a member of the community or cannot create posts
+    if (communityId && !canCreatePost) {
+        let alertTitle = 'Membership Required';
+        let alertDescription = '';
+
+        if (!isMember) {
+            alertDescription =
+                community?.type === 'private'
+                    ? 'This is a private community. You must be a member to create posts, not just a follower.'
+                    : 'You must be a member of this community to create posts.';
+        } else {
+            const roleDisplay = {
+                member: 'All members',
+                moderator: 'Moderators and admins',
+                admin: 'Admins only',
+            };
+
+            const currentRequirement =
+                community?.postCreationMinRole || 'member';
+            alertTitle = 'Insufficient Permissions';
+            alertDescription = `This community restricts post creation to: ${roleDisplay[currentRequirement as keyof typeof roleDisplay]}. Members can still comment and react to existing posts.`;
+        }
+
         return (
             <div className="mx-auto max-w-4xl p-4">
                 <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
                 <Alert variant="destructive" className="mb-4">
                     <AlertCircle className="h-4 w-4" />
-                    <AlertTitle>Membership Required</AlertTitle>
-                    <AlertDescription>
-                        {community?.type === 'private'
-                            ? 'This is a private community. You must be a member to create posts, not just a follower.'
-                            : 'You must be a member of this community to create posts.'}
-                    </AlertDescription>
+                    <AlertTitle>{alertTitle}</AlertTitle>
+                    <AlertDescription>{alertDescription}</AlertDescription>
                 </Alert>
                 <Button asChild>
                     <Link href={`/communities/${communitySlug}`}>

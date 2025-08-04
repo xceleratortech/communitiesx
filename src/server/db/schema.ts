@@ -61,6 +61,9 @@ export const communities = pgTable('communities', {
     rules: text('rules'),
     banner: text('banner'),
     avatar: text('avatar'),
+    postCreationMinRole: text('post_creation_min_role')
+        .notNull()
+        .default('member'), // 'member' | 'moderator' | 'admin'
     orgId: text('org_id').references(() => orgs.id), // <-- Make orgId nullable
     createdBy: text('created_by')
         .notNull()
@@ -338,6 +341,14 @@ export const extendedUsersRelations = relations(users, ({ many }) => ({
     // Push & Notifications
     pushSubscriptions: many(pushSubscriptions),
     notifications: many(notifications),
+    // Badge relations
+    badgeAssignments: many(userBadgeAssignments, {
+        relationName: 'userBadges',
+    }),
+    createdBadges: many(userBadges, { relationName: 'badgeCreator' }),
+    assignedBadges: many(userBadgeAssignments, {
+        relationName: 'badgeAssigner',
+    }),
 }));
 
 export const extendedOrgsRelations = relations(orgs, ({ many }) => ({
@@ -526,3 +537,76 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
         references: [communities.id],
     }),
 }));
+
+// User badges schema
+export const userBadges = pgTable('user_badges', {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    icon: text('icon'), // Icon name or URL
+    color: text('color').notNull().default('#3B82F6'), // Hex color code
+    orgId: text('org_id')
+        .notNull()
+        .references(() => orgs.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by')
+        .notNull()
+        .references(() => users.id),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const userBadgeAssignments = pgTable(
+    'user_badge_assignments',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        badgeId: integer('badge_id')
+            .notNull()
+            .references(() => userBadges.id, { onDelete: 'cascade' }),
+        assignedBy: text('assigned_by')
+            .notNull()
+            .references(() => users.id),
+        assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+        note: text('note'), // Optional note about why badge was assigned
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.userId, table.badgeId] }),
+        };
+    },
+);
+
+// Badge relations
+export const userBadgesRelations = relations(userBadges, ({ one, many }) => ({
+    organization: one(orgs, {
+        fields: [userBadges.orgId],
+        references: [orgs.id],
+    }),
+    createdBy: one(users, {
+        fields: [userBadges.createdBy],
+        references: [users.id],
+        relationName: 'badgeCreator',
+    }),
+    assignments: many(userBadgeAssignments),
+}));
+
+export const userBadgeAssignmentsRelations = relations(
+    userBadgeAssignments,
+    ({ one }) => ({
+        user: one(users, {
+            fields: [userBadgeAssignments.userId],
+            references: [users.id],
+            relationName: 'userBadges',
+        }),
+        badge: one(userBadges, {
+            fields: [userBadgeAssignments.badgeId],
+            references: [userBadges.id],
+        }),
+        assignedBy: one(users, {
+            fields: [userBadgeAssignments.assignedBy],
+            references: [users.id],
+            relationName: 'badgeAssigner',
+        }),
+    }),
+);

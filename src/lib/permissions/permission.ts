@@ -28,6 +28,13 @@ export const permissions = {
             'edit_tag',
             'delete_tag',
             'view_tag',
+
+            'create_badge',
+            'edit_badge',
+            'delete_badge',
+            'view_badge',
+            'assign_badge',
+            'unassign_badge',
         ] as const,
 
         member: [
