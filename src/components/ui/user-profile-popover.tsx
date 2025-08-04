@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, Building, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { UserBadgeDisplay } from './user-badge-display';
 
 interface UserProfilePopoverProps {
     userId: string;
@@ -157,6 +158,20 @@ export function UserProfilePopover({
                             </div>
                         </div>
 
+                        {/* User badges */}
+                        {userData.badges && userData.badges.length > 0 && (
+                            <div className="px-4">
+                                <h4 className="mb-2 text-sm font-medium">
+                                    Badges
+                                </h4>
+                                <UserBadgeDisplay
+                                    badges={userData.badges}
+                                    compact={false}
+                                    maxDisplay={6}
+                                />
+                            </div>
+                        )}
+
                         {/* User details */}
                         <div className="space-y-2 px-4">
                             {userData.orgName && (
@@ -211,7 +226,7 @@ export function UserProfilePopover({
                         </div>
 
                         {/* Actions */}
-                        <div className="flex justify-end border-t p-4">
+                        {/* <div className="flex justify-end border-t p-4">
                             <Button
                                 size="sm"
                                 onClick={startChat}
@@ -225,7 +240,7 @@ export function UserProfilePopover({
                                     ? 'Opening...'
                                     : 'Message'}
                             </Button>
-                        </div>
+                        </div> */}
                     </div>
                 ) : (
                     <div className="p-4 text-center">

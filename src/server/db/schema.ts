@@ -22,6 +22,35 @@ export const hello = pgTable('hello', {
     greeting: text('greeting').notNull(),
 });
 
+export const tags = pgTable('tags', {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    communityId: integer('community_id')
+        .notNull()
+        .references(() => communities.id, { onDelete: 'cascade' }),
+});
+
+export const postTags = pgTable(
+    'post_tags',
+    {
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        tagId: integer('tag_id')
+            .notNull()
+            .references(() => tags.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.postId, table.tagId] }),
+        };
+    },
+);
+
 // Communities schema
 export const communities = pgTable('communities', {
     id: serial('id').primaryKey(),
@@ -32,6 +61,10 @@ export const communities = pgTable('communities', {
     rules: text('rules'),
     banner: text('banner'),
     avatar: text('avatar'),
+    postCreationMinRole: text('post_creation_min_role')
+        .notNull()
+        .default('member'), // 'member' | 'moderator' | 'admin'
+    orgId: text('org_id').references(() => orgs.id), // <-- Make orgId nullable
     createdBy: text('created_by')
         .notNull()
         .references(() => users.id),
@@ -174,6 +207,7 @@ export const communitiesRelations = relations(communities, ({ one, many }) => ({
     allowedOrgs: many(communityAllowedOrgs),
     invites: many(communityInvites),
     memberRequests: many(communityMemberRequests),
+    tags: many(tags), // <-- Add this line to relate tags to communities
 }));
 
 export const communityMembersRelations = relations(
@@ -265,6 +299,19 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
         references: [communities.id],
     }),
     comments: many(comments),
+    postTags: many(postTags),
+    attachments: many(attachments), // was images
+}));
+
+export const postTagsRelations = relations(postTags, ({ one }) => ({
+    post: one(posts, {
+        fields: [postTags.postId],
+        references: [posts.id],
+    }),
+    tag: one(tags, {
+        fields: [postTags.tagId],
+        references: [tags.id],
+    }),
 }));
 
 export const commentsRelations = relations(comments, ({ one }) => ({
@@ -294,6 +341,14 @@ export const extendedUsersRelations = relations(users, ({ many }) => ({
     // Push & Notifications
     pushSubscriptions: many(pushSubscriptions),
     notifications: many(notifications),
+    // Badge relations
+    badgeAssignments: many(userBadgeAssignments, {
+        relationName: 'userBadges',
+    }),
+    createdBadges: many(userBadges, { relationName: 'badgeCreator' }),
+    assignedBadges: many(userBadgeAssignments, {
+        relationName: 'badgeAssigner',
+    }),
 }));
 
 export const extendedOrgsRelations = relations(orgs, ({ many }) => ({
@@ -412,3 +467,146 @@ export const notifications = pgTable('notifications', {
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// Add tags relations
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+    community: one(communities, {
+        fields: [tags.communityId],
+        references: [communities.id],
+    }),
+    postTags: many(postTags),
+}));
+
+export const orgMembers = pgTable(
+    'org_members',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        orgId: text('org_id')
+            .notNull()
+            .references(() => orgs.id, { onDelete: 'cascade' }),
+        role: text('role').notNull().default('user'), // 'admin' | 'moderator' | 'user'
+        status: text('status').notNull().default('active'), // 'active' | 'pending'
+        joinedAt: timestamp('joined_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.userId, table.orgId] }),
+        };
+    },
+);
+
+// Attachments table for R2 storage (was images)
+export const attachments = pgTable('attachments', {
+    id: serial('id').primaryKey(),
+    filename: text('filename').notNull(),
+    mimetype: text('mimetype').notNull(),
+    type: text('type').notNull(), // 'image' | 'video'
+    size: integer('size').default(0),
+    r2Key: text('r2_key').notNull(),
+    r2Url: text('r2_url'),
+    publicUrl: text('public_url'),
+    thumbnailUrl: text('thumbnail_url'), // for video preview, nullable
+    uploadedBy: text('uploaded_by')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    postId: integer('post_id').references(() => posts.id, {
+        onDelete: 'cascade',
+    }),
+    communityId: integer('community_id').references(() => communities.id, {
+        onDelete: 'cascade',
+    }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+// Add attachments relations
+export const attachmentsRelations = relations(attachments, ({ one }) => ({
+    uploadedBy: one(users, {
+        fields: [attachments.uploadedBy],
+        references: [users.id],
+    }),
+    post: one(posts, {
+        fields: [attachments.postId],
+        references: [posts.id],
+    }),
+    community: one(communities, {
+        fields: [attachments.communityId],
+        references: [communities.id],
+    }),
+}));
+
+// User badges schema
+export const userBadges = pgTable('user_badges', {
+    id: serial('id').primaryKey(),
+    name: text('name').notNull(),
+    description: text('description'),
+    icon: text('icon'), // Icon name or URL
+    color: text('color').notNull().default('#3B82F6'), // Hex color code
+    orgId: text('org_id')
+        .notNull()
+        .references(() => orgs.id, { onDelete: 'cascade' }),
+    createdBy: text('created_by')
+        .notNull()
+        .references(() => users.id),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const userBadgeAssignments = pgTable(
+    'user_badge_assignments',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        badgeId: integer('badge_id')
+            .notNull()
+            .references(() => userBadges.id, { onDelete: 'cascade' }),
+        assignedBy: text('assigned_by')
+            .notNull()
+            .references(() => users.id),
+        assignedAt: timestamp('assigned_at').notNull().defaultNow(),
+        note: text('note'), // Optional note about why badge was assigned
+    },
+    (table) => {
+        return {
+            pk: primaryKey({ columns: [table.userId, table.badgeId] }),
+        };
+    },
+);
+
+// Badge relations
+export const userBadgesRelations = relations(userBadges, ({ one, many }) => ({
+    organization: one(orgs, {
+        fields: [userBadges.orgId],
+        references: [orgs.id],
+    }),
+    createdBy: one(users, {
+        fields: [userBadges.createdBy],
+        references: [users.id],
+        relationName: 'badgeCreator',
+    }),
+    assignments: many(userBadgeAssignments),
+}));
+
+export const userBadgeAssignmentsRelations = relations(
+    userBadgeAssignments,
+    ({ one }) => ({
+        user: one(users, {
+            fields: [userBadgeAssignments.userId],
+            references: [users.id],
+            relationName: 'userBadges',
+        }),
+        badge: one(userBadges, {
+            fields: [userBadgeAssignments.badgeId],
+            references: [userBadges.id],
+        }),
+        assignedBy: one(users, {
+            fields: [userBadgeAssignments.assignedBy],
+            references: [users.id],
+            relationName: 'badgeAssigner',
+        }),
+    }),
+);
