@@ -32,6 +32,7 @@ import {
     Tag,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useSession } from '@/server/auth/client';
 import { toast } from 'sonner';
@@ -143,10 +144,36 @@ export default function CommunityDetailPage() {
     const [selectedTagFilters, setSelectedTagFilters] = useState<number[]>([]);
 
     const { checkCommunityPermission } = usePermission();
-    const canCreatePost = checkCommunityPermission(
-        community?.id?.toString() ?? '',
-        PERMISSIONS.CREATE_POST,
-    );
+
+    // Check if user can create posts based on role hierarchy
+    const canCreatePost = useMemo(() => {
+        if (!session?.user?.id || !community) return false;
+
+        const userMembership = community.members?.find(
+            (m) =>
+                m.userId === session.user.id &&
+                m.membershipType === 'member' &&
+                m.status === 'active',
+        );
+
+        if (!userMembership) return false;
+
+        const roleHierarchy = {
+            member: 1,
+            moderator: 2,
+            admin: 3,
+        };
+
+        const userRoleLevel =
+            roleHierarchy[userMembership.role as keyof typeof roleHierarchy] ||
+            0;
+        const minRoleLevel =
+            roleHierarchy[
+                community.postCreationMinRole as keyof typeof roleHierarchy
+            ] || 1;
+
+        return userRoleLevel >= minRoleLevel;
+    }, [session?.user?.id, community]);
     const canEditPost = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.EDIT_POST,
@@ -503,7 +530,7 @@ export default function CommunityDetailPage() {
 
     // Only show loading state on client after hydration
     if (isClient && isLoading) {
-        return <CommunityDetailSkeleton />;
+        return <Loading message="Loading community..." />;
     }
 
     if (!community) {
@@ -1346,19 +1373,64 @@ export default function CommunityDetailPage() {
                             </>
                         )}
 
-                        {!isMember && isFollower && (
+                        {/* Show create post hint for users who can't create posts */}
+                        {session && community && !canCreatePost && (
                             <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
-                                <p className="text-muted-foreground mb-2">
-                                    You need to be a member to create posts
-                                </p>
-                                <Button
-                                    onClick={handleJoinCommunity}
-                                    disabled={isActionInProgress}
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Join Community'}
-                                </Button>
+                                {(() => {
+                                    const userMembership =
+                                        community.members?.find(
+                                            (m) =>
+                                                m.userId === session.user.id &&
+                                                m.membershipType === 'member' &&
+                                                m.status === 'active',
+                                        );
+
+                                    if (!userMembership) {
+                                        return (
+                                            <>
+                                                <p className="text-muted-foreground mb-2">
+                                                    You need to be a member to
+                                                    create posts
+                                                </p>
+                                                <Button
+                                                    onClick={
+                                                        handleJoinCommunity
+                                                    }
+                                                    disabled={
+                                                        isActionInProgress
+                                                    }
+                                                >
+                                                    {isActionInProgress
+                                                        ? 'Processing...'
+                                                        : 'Join Community'}
+                                                </Button>
+                                            </>
+                                        );
+                                    }
+
+                                    const roleDisplay = {
+                                        member: 'All members',
+                                        moderator: 'Moderators and admins',
+                                        admin: 'Admins only',
+                                    };
+
+                                    const currentRequirement =
+                                        community.postCreationMinRole ||
+                                        'member';
+
+                                    return (
+                                        <p className="text-muted-foreground">
+                                            Post creation is restricted to:{' '}
+                                            <span className="font-medium">
+                                                {
+                                                    roleDisplay[
+                                                        currentRequirement as keyof typeof roleDisplay
+                                                    ]
+                                                }
+                                            </span>
+                                        </p>
+                                    );
+                                })()}
                             </div>
                         )}
 

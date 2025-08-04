@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface ThemeToggleProps {
-    variant?: 'popover' | 'default';
+    variant?: 'popover' | 'default' | 'toggle';
 }
 
 export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
@@ -46,6 +46,25 @@ export function ThemeToggle({ variant = 'default' }: ThemeToggleProps) {
                 return 'System';
         }
     };
+
+    const handleToggle = () => {
+        if (!mounted) return;
+        setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+    };
+
+    if (variant === 'toggle') {
+        return (
+            <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={handleToggle}
+                aria-label={`Switch to ${resolvedTheme === 'dark' ? 'light' : 'dark'} mode`}
+            >
+                {getThemeIcon()}
+            </Button>
+        );
+    }
 
     if (variant === 'popover') {
         return (

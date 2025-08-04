@@ -21,6 +21,7 @@ import {
     Trash2,
     Users,
     Building2,
+    Award,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -34,6 +35,7 @@ import {
 import { InviteUserDialog } from '@/components/invite-user-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { BadgeManagement } from '@/components/badge-management';
 
 export default function OrganizationCommunitiesPage() {
     const params = useParams();
@@ -126,6 +128,7 @@ export default function OrganizationCommunitiesPage() {
     const canDeleteCommunity = checkOrgPermission(PERMISSIONS.DELETE_COMMUNITY);
     const canManageMembers = checkOrgPermission(PERMISSIONS.MANAGE_ORG_MEMBERS);
     const canInviteMembers = checkOrgPermission(PERMISSIONS.INVITE_ORG_MEMBERS);
+    const canManageBadges = checkOrgPermission('view_badge');
 
     if (isLoading) return <div>Loading...</div>;
     if (!orgData) return <div>Organization not found</div>;
@@ -137,7 +140,8 @@ export default function OrganizationCommunitiesPage() {
                     {orgData.name}
                 </h1>
                 <p className="text-muted-foreground">
-                    Manage communities and members for this organization.
+                    Manage communities, members, and badges for this
+                    organization.
                 </p>
             </div>
 
@@ -160,6 +164,15 @@ export default function OrganizationCommunitiesPage() {
                             <Users className="h-4 w-4" />
                             <span className="hidden sm:inline">Members</span>
                         </TabsTrigger>
+                        {canManageBadges && (
+                            <TabsTrigger
+                                value="badges"
+                                className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                            >
+                                <Award className="h-4 w-4" />
+                                <span className="hidden sm:inline">Badges</span>
+                            </TabsTrigger>
+                        )}
                     </TabsList>
                 </div>
 
@@ -425,6 +438,12 @@ export default function OrganizationCommunitiesPage() {
                             </Table>
                         </div>
                     </TabsContent>
+
+                    {canManageBadges && (
+                        <TabsContent value="badges" className="mt-0 space-y-6">
+                            <BadgeManagement orgId={orgData.id} />
+                        </TabsContent>
+                    )}
                 </div>
             </Tabs>
         </div>

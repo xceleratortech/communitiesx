@@ -39,6 +39,8 @@ const purifyConfig = {
         'img',
         // Videos
         'video',
+        // iframes for trusted embeds (YouTube)
+        'iframe',
     ],
     ALLOWED_ATTRS: [
         // Links
@@ -57,6 +59,11 @@ const purifyConfig = {
         'muted',
         'loop',
         'poster',
+        // iframe attributes for YouTube embeds
+        'frameborder',
+        'allowfullscreen',
+        'allow',
+        'data-youtube-video',
         // Basic styling (if needed)
         'class',
         'style',
@@ -65,7 +72,6 @@ const purifyConfig = {
         /^(?:(?:(?:f|ht)tps?|mailto|tel|callto|cid|xmpp):|[^a-z]|[a-z+\.\-]+(?:[^a-z+\.\-:]|$))/i,
     FORBID_TAGS: [
         'script',
-        'iframe',
         'object',
         'embed',
         'form',
@@ -202,8 +208,63 @@ export function sanitizeHtml(html: string): string {
     }
 
     try {
+        // Add a hook to only allow YouTube iframes
+        DOMPurify.addHook(
+            'beforeSanitizeElements',
+            function (node: any, data: any) {
+                // Check if node and data exist and are valid
+                if (!node || !data || typeof data.tagName !== 'string') {
+                    return;
+                }
+
+                if (data.tagName === 'iframe') {
+                    // Type assertion for Element methods
+                    const element = node as Element;
+                    const src = element.getAttribute?.('src');
+                    if (!src) {
+                        try {
+                            element.remove?.();
+                        } catch (e) {
+                            // Fallback: mark for removal by parent
+                            if (element.parentNode) {
+                                element.parentNode.removeChild(element);
+                            }
+                        }
+                        return;
+                    }
+
+                    // Only allow YouTube and YouTube-nocookie domains
+                    const allowedDomains = [
+                        'https://www.youtube.com',
+                        'https://youtube.com',
+                        'https://www.youtube-nocookie.com',
+                        'https://youtube-nocookie.com',
+                    ];
+
+                    const isAllowed = allowedDomains.some((domain) =>
+                        src.startsWith(domain + '/embed/'),
+                    );
+
+                    if (!isAllowed) {
+                        try {
+                            element.remove?.();
+                        } catch (e) {
+                            // Fallback: mark for removal by parent
+                            if (element.parentNode) {
+                                element.parentNode.removeChild(element);
+                            }
+                        }
+                    }
+                }
+            },
+        );
+
         // Sanitize the HTML content
         const sanitized = DOMPurify.sanitize(html, purifyConfig);
+
+        // Remove the hook after sanitization
+        DOMPurify.removeHook('beforeSanitizeElements');
+
         if (!sanitized && html.trim() !== '') {
             // If sanitizer stripped everything, log a warning and return original for debugging
             console.warn(
@@ -215,6 +276,8 @@ export function sanitizeHtml(html: string): string {
         return sanitized;
     } catch (error) {
         console.error('Error sanitizing HTML:', error);
+        // Remove the hook in case of error
+        DOMPurify.removeHook('beforeSanitizeElements');
         // Return original string if sanitization fails
         return html;
     }
