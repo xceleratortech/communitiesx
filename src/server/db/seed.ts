@@ -13,6 +13,10 @@ import {
     communityMemberRequests,
 } from '@/server/db/schema';
 import { addDays } from 'date-fns';
+import { config } from 'dotenv';
+
+// Attempt to load .env.local first (non-fatal if it doesn't exist)
+config({ path: '.env.local', override: false });
 
 // Parse command-line arguments for demo mode
 const args = process.argv.slice(2);
@@ -47,6 +51,8 @@ async function seed() {
                 .values({
                     id: orgId,
                     name: 'Xcelerator',
+                    slug: 'xcelerator',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -57,6 +63,8 @@ async function seed() {
                 .values({
                     id: org2Id,
                     name: 'TechCorp',
+                    slug: 'techcorp',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -500,6 +508,8 @@ async function seed() {
             .values({
                 id: orgId,
                 name: 'Xcelerator',
+                slug: 'xcelerator',
+                createdAt: new Date(),
             })
             .returning();
         // Create admin user
@@ -509,7 +519,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: adminId,
-                name: 'Admin User',
+                name: 'IT Admin',
                 email: 'it@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,
@@ -535,7 +545,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: userId,
-                name: 'Regular User',
+                name: 'Rajesh',
                 email: 'raj@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,

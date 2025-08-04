@@ -8,6 +8,7 @@ import type { users } from '@/server/db/schema'; // Assuming UserFromDb is simil
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
 
 type SessionData = ReturnType<typeof useSession>['data'];
 
@@ -75,7 +76,6 @@ const CommentItem: React.FC<CommentItemProps> = ({
 }) => {
     const shouldAutoExpand = autoExpandedComments.has(comment.id);
     const [isExpanded, setIsExpanded] = useState(shouldAutoExpand);
-    // const [isExpanded, setIsExpanded] = useState(false); // Default to collapsed
     const isEditingThisComment = editingCommentId === comment.id;
     const isReplyingToThisComment = replyingToCommentId === comment.id;
     const canEdit =
@@ -93,274 +93,267 @@ const CommentItem: React.FC<CommentItemProps> = ({
         }
     }, [autoExpandedComments, comment.id, isExpanded]);
 
-    // Function to get background color based on depth
-    const getBackgroundColor = (depth: number) => {
-        // Limit the darkness to a maximum depth of 3
-        const clampedDepth = Math.min(depth, 3);
-        switch (clampedDepth) {
-            case 0:
-                return 'bg-gray-50 dark:bg-gray-800';
-            case 1:
-                return 'bg-gray-100 dark:bg-gray-700';
-            case 2:
-                return 'bg-gray-200 dark:bg-gray-600';
-            case 3:
-            default:
-                return 'bg-gray-300 dark:bg-gray-500';
-        }
-    };
-
     // Function to handle expand/collapse
     const toggleExpanded = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevent event bubbling
+        e.stopPropagation();
         const newExpandedState = !isExpanded;
         setIsExpanded(!isExpanded);
         onExpansionChange(comment.id, newExpandedState);
     };
 
-    // Calculate indentation with a smaller step size
-    const getIndentation = (depth: number) => {
-        // Limit the maximum indentation to prevent excessive nesting
-        const maxIndent = 6; // Reduced maximum levels
-        const indentSize = 8; // Further reduced pixels per level
-        const clampedDepth = Math.min(depth, maxIndent);
-        return clampedDepth * indentSize;
-    };
+    // Calculate left margin for thread indentation
+    const leftMargin = depth * 12; // 12px per level (more compact)
 
     return (
-        <div
-            style={{ marginLeft: `${getIndentation(depth)}px` }}
-            className="min-w-0 py-1"
-        >
+        <div className="relative">
+            {/* Thread line for nested comments */}
+            {depth > 0 && (
+                <div
+                    className="bg-border/40 hover:bg-border/60 absolute top-0 w-px transition-colors"
+                    style={{
+                        left: `${leftMargin - 6}px`,
+                        height: '100%',
+                    }}
+                />
+            )}
+
             <div
-                className={`rounded p-3 ${getBackgroundColor(depth)} group relative min-w-0`}
+                className="hover:bg-muted/10 group relative px-2 py-1.5 transition-colors"
+                style={{ marginLeft: `${leftMargin}px` }}
             >
-                {depth > 0 && (
-                    <div className="absolute top-0 bottom-0 -left-[1px] w-[1px] bg-gray-300/50 transition-colors group-hover:bg-gray-400/70 dark:bg-gray-500/70 dark:group-hover:bg-gray-400/80" />
-                )}
-                {isEditingThisComment ? (
-                    <div className="space-y-2">
-                        <TipTapEditor
-                            content={editedCommentContent}
-                            onChange={onSetEditedContent}
-                            placeholder="Edit your comment..."
-                            variant="compact"
-                        />
-                        <div className="flex justify-end space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={onCancelEdit}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={() => onSaveEdit(comment.id)}
-                                disabled={
-                                    updateCommentMutationPending ||
-                                    !editedCommentContent.trim()
+                <div className="flex gap-1.5">
+                    {/* Collapse/Expand button */}
+                    <div className="flex w-4 flex-shrink-0 justify-center">
+                        {hasReplies && (
+                            <button
+                                onClick={toggleExpanded}
+                                className="hover:bg-muted text-muted-foreground hover:text-foreground flex h-3 w-3 items-center justify-center rounded-sm transition-colors"
+                                title={
+                                    isExpanded
+                                        ? 'Collapse thread'
+                                        : 'Expand thread'
                                 }
                             >
-                                {updateCommentMutationPending
-                                    ? 'Saving...'
-                                    : 'Save'}
-                            </Button>
-                        </div>
+                                {isExpanded ? (
+                                    <Minus className="h-2.5 w-2.5" />
+                                ) : (
+                                    <Plus className="h-2.5 w-2.5" />
+                                )}
+                            </button>
+                        )}
                     </div>
-                ) : (
-                    <>
-                        <div className="flex min-w-0 flex-col space-y-2">
-                            <div className="flex min-w-0 items-start gap-2">
-                                <div className="flex-shrink-0">
-                                    {hasReplies && (
-                                        <button
-                                            onClick={toggleExpanded}
-                                            className="mt-1 p-1 text-gray-500 hover:text-gray-700 focus:outline-none dark:text-gray-300 dark:hover:text-white"
-                                            title={
-                                                isExpanded
-                                                    ? 'Collapse replies'
-                                                    : 'Expand replies'
-                                            }
+
+                    {/* Comment content */}
+                    <div className="min-w-0 flex-1">
+                        {isEditingThisComment ? (
+                            <div className="space-y-2">
+                                <TipTapEditor
+                                    content={editedCommentContent}
+                                    onChange={onSetEditedContent}
+                                    placeholder="Edit your comment..."
+                                    variant="compact"
+                                    postId={comment.postId}
+                                />
+                                <div className="flex justify-end gap-1.5">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={onCancelEdit}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() => onSaveEdit(comment.id)}
+                                        disabled={
+                                            updateCommentMutationPending ||
+                                            !editedCommentContent.trim()
+                                        }
+                                    >
+                                        {updateCommentMutationPending
+                                            ? 'Saving...'
+                                            : 'Save'}
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Comment metadata */}
+                                <div className="text-muted-foreground mb-1 flex items-center gap-1 text-xs">
+                                    {comment.author?.id ? (
+                                        <UserProfilePopover
+                                            userId={comment.author.id}
                                         >
-                                            {isExpanded ? (
-                                                <Minus className="h-3 w-3" />
-                                            ) : (
-                                                <Plus className="h-3 w-3" />
-                                            )}
-                                        </button>
+                                            <span className="text-foreground cursor-pointer text-xs font-medium hover:underline">
+                                                {comment.author.name ||
+                                                    'Unknown'}
+                                            </span>
+                                        </UserProfilePopover>
+                                    ) : (
+                                        <span className="text-foreground text-xs font-medium">
+                                            Unknown
+                                        </span>
+                                    )}
+                                    <span>•</span>
+                                    <span className="text-xs">
+                                        {new Date(
+                                            comment.createdAt,
+                                        ).toLocaleString(undefined, {
+                                            month: 'short',
+                                            day: 'numeric',
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                        })}
+                                    </span>
+                                    {comment.createdAt !==
+                                        comment.updatedAt && (
+                                        <>
+                                            <span>•</span>
+                                            <span className="text-xs italic">
+                                                edited
+                                            </span>
+                                        </>
                                     )}
                                 </div>
-                                <div className="min-w-0 flex-1">
+
+                                {/* Comment content */}
+                                <div className="mb-1.5">
                                     {comment.isDeleted ? (
-                                        <p className="mb-2 break-words text-gray-500 italic dark:text-gray-300">
+                                        <p className="text-muted-foreground text-sm italic">
                                             [Comment deleted]
                                         </p>
                                     ) : (
-                                        <div
-                                            className="prose prose-sm dark:prose-invert dark:prose-headings:text-gray-100 dark:prose-a:text-blue-400 mb-2 max-w-none break-words whitespace-pre-wrap dark:text-gray-100"
-                                            dangerouslySetInnerHTML={{
-                                                __html: comment.content,
-                                            }}
+                                        <SafeHtml
+                                            html={comment.content}
+                                            className="prose prose-sm dark:prose-invert max-w-none text-sm leading-normal"
                                         />
                                     )}
                                 </div>
-                                <div className="flex flex-shrink-0 items-start space-x-1">
+
+                                {/* Comment actions */}
+                                <div className="flex items-center gap-1.5">
+                                    {canReply && !comment.isDeleted && (
+                                        <button
+                                            onClick={() =>
+                                                onStartReply(comment.id)
+                                            }
+                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors"
+                                        >
+                                            <Reply className="h-2.5 w-2.5" />
+                                            <span>Reply</span>
+                                        </button>
+                                    )}
+
+                                    {hasReplies && (
+                                        <button
+                                            onClick={toggleExpanded}
+                                            className="text-muted-foreground hover:text-foreground hover:bg-muted rounded px-1.5 py-0.5 text-xs transition-colors"
+                                        >
+                                            {replies.length}{' '}
+                                            {replies.length === 1
+                                                ? 'reply'
+                                                : 'replies'}
+                                        </button>
+                                    )}
+
                                     {canEdit && (
                                         <button
                                             onClick={() => onStartEdit(comment)}
-                                            className="p-1 text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white"
+                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
                                             title="Edit comment"
                                         >
-                                            <Edit className="h-4 w-4" />
+                                            <Edit className="h-2.5 w-2.5" />
+                                            <span>Edit</span>
                                         </button>
                                     )}
+
                                     {canDelete && (
                                         <button
                                             onClick={() =>
                                                 onDeleteComment(comment.id)
                                             }
-                                            className="p-1 text-gray-500 hover:text-red-600 dark:text-gray-300 dark:hover:text-red-400"
+                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
                                             title="Delete comment"
                                             disabled={deleteCommentPending}
                                         >
-                                            <Trash2 className="h-4 w-4" />
+                                            <Trash2 className="h-2.5 w-2.5" />
+                                            <span>Delete</span>
                                         </button>
                                     )}
                                 </div>
-                            </div>
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="min-w-0 text-sm break-words text-gray-500 dark:text-gray-300">
-                                    {comment.isDeleted ? (
-                                        <span className="italic">
-                                            Deleted comment
-                                        </span>
-                                    ) : (
-                                        <>
-                                            {comment.author?.id ? (
-                                                <UserProfilePopover
-                                                    userId={comment.author.id}
-                                                >
-                                                    <span className="cursor-pointer font-medium hover:underline dark:text-gray-100">
-                                                        {comment.author.name ||
-                                                            'Unknown'}
-                                                    </span>
-                                                </UserProfilePopover>
-                                            ) : (
-                                                <span className="font-medium dark:text-gray-100">
-                                                    Unknown
-                                                </span>
-                                            )}{' '}
-                                            •{' '}
-                                            {new Date(
-                                                comment.createdAt,
-                                            ).toLocaleString(undefined, {
-                                                year: 'numeric',
-                                                month: 'long',
-                                                day: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            })}
-                                            {hasReplies && (
-                                                <>
-                                                    {' '}
-                                                    •{' '}
-                                                    <button
-                                                        onClick={toggleExpanded}
-                                                        className="text-gray-400 hover:text-gray-600 focus:outline-none dark:text-gray-300 dark:hover:text-white"
-                                                    >
-                                                        {replies.length}{' '}
-                                                        {replies.length === 1
-                                                            ? 'reply'
-                                                            : 'replies'}
-                                                    </button>
-                                                </>
-                                            )}
-                                        </>
-                                    )}
-                                </div>
-                                {!comment.isDeleted && canReply && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-auto px-2 py-1 text-xs dark:text-gray-200 dark:hover:bg-gray-700 dark:hover:text-white"
-                                        onClick={() => onStartReply(comment.id)}
-                                    >
-                                        Reply
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    </>
-                )}
+                            </>
+                        )}
 
-                {/* Reply Form */}
-                {isReplyingToThisComment && (
-                    <div className="mt-3 space-y-2">
-                        <TipTapEditor
-                            content={replyContent}
-                            onChange={onSetReplyContent}
-                            placeholder="Write your reply..."
-                            variant="compact"
-                        />
-                        <div className="flex justify-end space-x-2">
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={onCancelReply}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={() => onSubmitReply(comment.id)}
-                                disabled={
-                                    replyMutationPending || !replyContent.trim()
-                                }
-                            >
-                                {replyMutationPending
-                                    ? 'Posting...'
-                                    : 'Post Reply'}
-                            </Button>
-                        </div>
+                        {/* Reply form */}
+                        {isReplyingToThisComment && (
+                            <div className="mt-2 space-y-2">
+                                <TipTapEditor
+                                    content={replyContent}
+                                    onChange={onSetReplyContent}
+                                    placeholder="Write your reply..."
+                                    variant="compact"
+                                    postId={comment.postId}
+                                />
+                                <div className="flex justify-end gap-1.5">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={onCancelReply}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() =>
+                                            onSubmitReply(comment.id)
+                                        }
+                                        disabled={
+                                            replyMutationPending ||
+                                            !replyContent.trim()
+                                        }
+                                    >
+                                        {replyMutationPending
+                                            ? 'Posting...'
+                                            : 'Post Reply'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
             </div>
 
+            {/* Nested replies */}
             {hasReplies && isExpanded && (
-                <div className="relative mt-1 pl-4">
-                    <div className="absolute top-0 bottom-0 left-0 w-[1px] bg-gray-200 transition-colors group-hover:bg-gray-300 dark:bg-gray-500 dark:group-hover:bg-gray-400" />
-                    <div className="absolute top-0 left-0 h-3 w-4 rounded-bl border-b-[1px] border-l-[1px] border-gray-200 transition-colors group-hover:border-gray-300 dark:border-gray-500 dark:group-hover:border-gray-400" />
-                    <div className="space-y-1">
-                        {replies.map((reply) => (
-                            <CommentItem
-                                key={reply.id}
-                                comment={reply}
-                                session={session}
-                                onStartEdit={onStartEdit}
-                                onCancelEdit={onCancelEdit}
-                                onSaveEdit={onSaveEdit}
-                                editingCommentId={editingCommentId}
-                                editedCommentContent={editedCommentContent}
-                                onSetEditedContent={onSetEditedContent}
-                                updateCommentMutationPending={
-                                    updateCommentMutationPending
-                                }
-                                replyingToCommentId={replyingToCommentId}
-                                replyContent={replyContent}
-                                onStartReply={onStartReply}
-                                onCancelReply={onCancelReply}
-                                onSetReplyContent={onSetReplyContent}
-                                onSubmitReply={onSubmitReply}
-                                replyMutationPending={replyMutationPending}
-                                onDeleteComment={onDeleteComment}
-                                deleteCommentPending={deleteCommentPending}
-                                depth={depth + 1}
-                                autoExpandedComments={autoExpandedComments}
-                                onExpansionChange={onExpansionChange}
-                            />
-                        ))}
-                    </div>
+                <div>
+                    {replies.map((reply) => (
+                        <CommentItem
+                            key={reply.id}
+                            comment={reply}
+                            session={session}
+                            onStartEdit={onStartEdit}
+                            onCancelEdit={onCancelEdit}
+                            onSaveEdit={onSaveEdit}
+                            editingCommentId={editingCommentId}
+                            editedCommentContent={editedCommentContent}
+                            onSetEditedContent={onSetEditedContent}
+                            updateCommentMutationPending={
+                                updateCommentMutationPending
+                            }
+                            replyingToCommentId={replyingToCommentId}
+                            replyContent={replyContent}
+                            onStartReply={onStartReply}
+                            onCancelReply={onCancelReply}
+                            onSetReplyContent={onSetReplyContent}
+                            onSubmitReply={onSubmitReply}
+                            replyMutationPending={replyMutationPending}
+                            onDeleteComment={onDeleteComment}
+                            deleteCommentPending={deleteCommentPending}
+                            depth={depth + 1}
+                            autoExpandedComments={autoExpandedComments}
+                            onExpansionChange={onExpansionChange}
+                        />
+                    ))}
                 </div>
             )}
         </div>

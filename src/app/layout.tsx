@@ -2,11 +2,13 @@ import React from 'react';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { cn } from '@/lib/utils';
+import NextTopLoader from 'nextjs-toploader';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
 import { ChatProvider } from '@/providers/chat-provider';
 import { Navbar } from '@/components/navbar';
 import { ChatContainer } from '@/components/chat/chat-container';
+import { Toaster } from '@/components/ui/sonner';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -19,8 +21,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-    title: 'Community App',
-    description: 'A place to share and discuss with the community',
+    title: 'AU NEP',
+    description: 'Namma Educators Parishad | Atria University',
 };
 
 export default function RootLayout({
@@ -39,15 +41,16 @@ export default function RootLayout({
             >
                 <ThemeProvider
                     attribute="class"
-                    defaultTheme="system"
-                    enableSystem
+                    defaultTheme="light"
                     disableTransitionOnChange
                 >
                     <TRPCProvider>
                         <ChatProvider>
                             <Navbar />
                             <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                <NextTopLoader />
                                 <main>{children}</main>
+                                <Toaster />
                             </div>
                             <ChatContainer />
                         </ChatProvider>

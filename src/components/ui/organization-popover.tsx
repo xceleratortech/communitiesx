@@ -16,6 +16,7 @@ import {
     ShieldCheck,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Org } from '@/types/models';
 
 interface OrganizationPopoverProps {
     orgId: string;

@@ -78,9 +78,17 @@ To maintain consistency and quality throughout the project lifecycle, all team m
     - Implement proper CSRF protection for all form submissions
 
 2. **Data Handling**:
+
     - ALWAYS sanitize user inputs server-side
     - NEVER trust client-side validation alone
     - Use content security policies to prevent XSS
+
+3. **HTML Content Security**:
+    - **NEVER use `dangerouslySetInnerHTML` directly**
+    - **ALWAYS use the `SafeHtml` component for rendering user-generated HTML content**
+    - **ALWAYS sanitize HTML content server-side before storing in database**
+    - Use the `sanitizeHtml()` function from `@/lib/sanitize` for server-side sanitization
+    - Use the `SafeHtml` component from `@/lib/sanitize` for client-side rendering
 
 ### Performance Rules
 

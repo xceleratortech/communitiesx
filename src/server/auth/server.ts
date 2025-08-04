@@ -1,13 +1,13 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { admin } from 'better-auth/plugins';
+import { admin, customSession } from 'better-auth/plugins';
 import { sendEmail } from '@/lib/email';
 import {
     createVerificationEmail,
     createResetPasswordEmail,
 } from '@/lib/email-templates';
-import { db } from '@/server/db';
+import { db, getUser } from '@/server/db';
 
 if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
@@ -19,11 +19,30 @@ export const auth = betterAuth({
         usePlural: true,
     }),
     selectUserFields: ['id', 'name', 'email', ['org_id', 'orgId'], 'role'],
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID!,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+        },
+    },
     plugins: [
         nextCookies(),
         admin({
             defaultRole: 'user',
             impersonationSessionDuration: 60 * 60 * 24,
+        }),
+        customSession(async ({ session, user }) => {
+            // Custom session logic can be added here
+            const userData = await getUser(user.id);
+            return {
+                appRole: userData?.appRole || 'user',
+                user: {
+                    ...user,
+                    orgId: userData?.orgId, // Ensure orgId is always set from userData
+                    appRole: userData?.appRole || 'user',
+                },
+                session,
+            };
         }),
     ],
     cors: {
@@ -41,15 +60,7 @@ export const auth = betterAuth({
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     },
-    emailVerification: {
-        sendVerificationEmail: async ({ user, url }) => {
-            const { subject, html } = createVerificationEmail(url);
-            await sendEmail({ to: user.email, subject, html });
-        },
-        sendOnSignUp: true,
-        autoSignInAfterVerification: true,
-        expiresIn: 3600,
-    },
+    emailVerification: undefined,
     emailAndPassword: {
         enabled: true,
         disableSignUp: false,
@@ -96,6 +107,25 @@ export const auth = betterAuth({
                     }
 
                     return { data: userData };
+                },
+            },
+        },
+        session: {
+            create: {
+                after: async (session, ctx) => {
+                    // Insert a login event on successful session creation
+                    const { db } = await import('@/server/db');
+                    const { loginEvents } = await import(
+                        '@/server/db/auth-schema'
+                    );
+                    const { nanoid } = await import('nanoid');
+                    await db.insert(loginEvents).values({
+                        id: nanoid(),
+                        userId: session.userId,
+                        createdAt: new Date(),
+                        ipAddress: session.ipAddress,
+                        userAgent: session.userAgent,
+                    });
                 },
             },
         },

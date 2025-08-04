@@ -12,6 +12,8 @@ import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
+import { Loading } from '@/components/ui/loading';
 
 type User = {
     id: string;
@@ -147,7 +149,7 @@ export default function PostPage() {
     }
 
     if (isClient && isLoading) {
-        return <div className="p-4 dark:text-gray-300">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (isClient && !post) {
@@ -251,141 +253,116 @@ export default function PostPage() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl p-4">
-            <div className="mb-8">
-                <div className="mb-4 flex items-start justify-between">
-                    <div>
-                        <h1 className="mb-2 text-3xl font-bold dark:text-white">
-                            {postData.isDeleted ? '[Deleted]' : postData.title}
-                        </h1>
-                        <div className="mb-2 text-sm text-gray-500 dark:text-gray-300">
-                            Posted by{' '}
-                            {postData.author?.id ? (
-                                <UserProfilePopover userId={postData.author.id}>
-                                    <span className="cursor-pointer hover:underline">
-                                        {postData.author.name || 'Unknown'}
-                                    </span>
-                                </UserProfilePopover>
-                            ) : (
-                                'Unknown'
-                            )}{' '}
-                            on {new Date(postData.createdAt).toLocaleString()}
+        <div className="mx-auto mt-4 max-w-7xl px-0 py-4 sm:px-6 lg:px-0">
+            <div className="mx-auto">
+                <div className="mb-8">
+                    <div className="mb-2 flex items-start justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold dark:text-white">
+                                {postData.isDeleted
+                                    ? '[Deleted]'
+                                    : postData.title}
+                            </h1>
                         </div>
                     </div>
-                    {session.user.id === postData.authorId &&
-                        !postData.isDeleted && (
-                            <div className="flex space-x-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() =>
-                                        router.push(
-                                            `/posts/${postData.id}/edit`,
-                                        )
-                                    }
-                                    className="flex items-center gap-2 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
-                                >
-                                    <Edit className="h-4 w-4" />
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleDeletePost}
-                                    className="flex items-center gap-2 text-red-600 hover:bg-red-50 dark:border-gray-600 dark:text-red-400 dark:hover:bg-red-900/20"
-                                    disabled={deletePostMutation.isPending}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                    Delete
-                                </Button>
+                    <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none">
+                        {postData.isDeleted ? (
+                            <div className="space-y-2">
+                                <span className="block text-gray-500 italic dark:text-gray-300">
+                                    [Content deleted]
+                                </span>
+                                <span className="block text-sm text-gray-400 dark:text-gray-400">
+                                    Removed on{' '}
+                                    {new Date(
+                                        postData.updatedAt,
+                                    ).toLocaleString()}
+                                </span>
                             </div>
+                        ) : (
+                            <SafeHtml
+                                html={postData.content}
+                                className="whitespace-pre-wrap"
+                            />
                         )}
-                </div>
-                <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none rounded-lg bg-white p-6 shadow-sm dark:bg-gray-800 dark:text-gray-100 dark:shadow-gray-900">
-                    {postData.isDeleted ? (
-                        <div className="space-y-2">
-                            <span className="block text-gray-500 italic dark:text-gray-300">
-                                [Content deleted]
-                            </span>
-                            <span className="block text-sm text-gray-400 dark:text-gray-400">
-                                Removed on{' '}
-                                {new Date(postData.updatedAt).toLocaleString()}
-                            </span>
-                        </div>
-                    ) : (
-                        <div
-                            className="whitespace-pre-wrap"
-                            dangerouslySetInnerHTML={{
-                                __html: postData.content,
-                            }}
-                        />
-                    )}
-                </div>
-            </div>
-
-            <div className="mb-8">
-                <h2 className="mb-4 text-2xl font-bold dark:text-white">
-                    Comments
-                </h2>
-                {session && !postData.isDeleted && (
-                    <form onSubmit={handleSubmitComment} className="mb-6">
-                        <TipTapEditor
-                            content={comment}
-                            onChange={setComment}
-                            placeholder="Write a comment..."
-                            variant="compact"
-                        />
-                        <Button
-                            type="submit"
-                            disabled={createComment.isPending}
-                            className="mt-2"
-                        >
-                            {createComment.isPending
-                                ? 'Posting...'
-                                : 'Post Comment'}
-                        </Button>
-                    </form>
-                )}
-
-                {postData.isDeleted && (
-                    <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                        <p>
-                            This post has been deleted. New comments are
-                            disabled, but existing comments are still visible.
-                        </p>
                     </div>
-                )}
+                </div>
 
-                <div className="space-y-4">
-                    {postData.comments?.map((comment: CommentWithReplies) => (
-                        <CommentItem
-                            key={comment.id}
-                            comment={comment}
-                            session={session}
-                            onStartEdit={handleStartEdit}
-                            onCancelEdit={handleCancelEdit}
-                            onSaveEdit={handleSaveEdit}
-                            editingCommentId={editingCommentId}
-                            editedCommentContent={editedCommentContent}
-                            onSetEditedContent={setEditedCommentContent}
-                            updateCommentMutationPending={
-                                updateCommentMutation.isPending
-                            }
-                            replyingToCommentId={replyingToCommentId}
-                            replyContent={replyContent}
-                            onStartReply={handleStartReply}
-                            onCancelReply={handleCancelReply}
-                            onSetReplyContent={setReplyContent}
-                            onSubmitReply={handleSubmitReply}
-                            replyMutationPending={createComment.isPending}
-                            onDeleteComment={handleDeleteComment}
-                            deleteCommentPending={
-                                deleteCommentMutation.isPending
-                            }
-                            autoExpandedComments={autoExpandedComments}
-                            onExpansionChange={handleCommentExpansionChange}
-                        />
-                    ))}
+                <div className="mb-8">
+                    <h2 className="mb-4 text-2xl font-bold dark:text-white">
+                        Comments
+                    </h2>
+                    {session && !postData.isDeleted && (
+                        <form onSubmit={handleSubmitComment} className="mb-6">
+                            <TipTapEditor
+                                content={comment}
+                                onChange={setComment}
+                                placeholder="Write a comment..."
+                                variant="compact"
+                                postId={postId}
+                                communityId={post?.communityId || undefined}
+                                communitySlug={
+                                    post?.community?.slug || undefined
+                                }
+                            />
+                            <Button
+                                type="submit"
+                                disabled={createComment.isPending}
+                                className="mt-2"
+                            >
+                                {createComment.isPending
+                                    ? 'Posting...'
+                                    : 'Post Comment'}
+                            </Button>
+                        </form>
+                    )}
+
+                    {postData.isDeleted && (
+                        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                            <p>
+                                This post has been deleted. New comments are
+                                disabled, but existing comments are still
+                                visible.
+                            </p>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        {postData.comments?.map(
+                            (comment: CommentWithReplies) => (
+                                <CommentItem
+                                    key={comment.id}
+                                    comment={comment}
+                                    session={session}
+                                    onStartEdit={handleStartEdit}
+                                    onCancelEdit={handleCancelEdit}
+                                    onSaveEdit={handleSaveEdit}
+                                    editingCommentId={editingCommentId}
+                                    editedCommentContent={editedCommentContent}
+                                    onSetEditedContent={setEditedCommentContent}
+                                    updateCommentMutationPending={
+                                        updateCommentMutation.isPending
+                                    }
+                                    replyingToCommentId={replyingToCommentId}
+                                    replyContent={replyContent}
+                                    onStartReply={handleStartReply}
+                                    onCancelReply={handleCancelReply}
+                                    onSetReplyContent={setReplyContent}
+                                    onSubmitReply={handleSubmitReply}
+                                    replyMutationPending={
+                                        createComment.isPending
+                                    }
+                                    onDeleteComment={handleDeleteComment}
+                                    deleteCommentPending={
+                                        deleteCommentMutation.isPending
+                                    }
+                                    autoExpandedComments={autoExpandedComments}
+                                    onExpansionChange={
+                                        handleCommentExpansionChange
+                                    }
+                                />
+                            ),
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
