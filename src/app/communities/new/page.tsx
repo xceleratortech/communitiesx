@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
 
 // Form schema
 const formSchema = z.object({
@@ -89,11 +90,16 @@ const formSchema = z.object({
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function NewCommunityPage() {
+// Separate component that uses useSearchParams
+function NewCommunityForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const sessionData = useSession();
     const session = sessionData.data;
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Get orgId from URL params if provided
+    const orgIdFromUrl = searchParams.get('orgId');
 
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
@@ -122,7 +128,7 @@ export default function NewCommunityPage() {
             },
         );
 
-    // Initialize form
+    // Initialize form with orgId if provided
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -134,9 +140,23 @@ export default function NewCommunityPage() {
             rules: '',
             avatar: '',
             banner: '',
-            orgId: '',
+            orgId: orgIdFromUrl || '', // Pre-fill with orgId from URL
         },
     });
+
+    // Update form when orgIdFromUrl changes
+    useEffect(() => {
+        if (orgIdFromUrl) {
+            console.log('Setting orgId from URL:', orgIdFromUrl);
+            form.setValue('orgId', orgIdFromUrl);
+        }
+    }, [orgIdFromUrl, form]);
+
+    // Debug: Log current form values
+    useEffect(() => {
+        console.log('Current form orgId:', form.watch('orgId'));
+        console.log('Available organizations:', organizations);
+    }, [form.watch('orgId'), organizations]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {
@@ -251,6 +271,7 @@ export default function NewCommunityPage() {
                                     <FormControl>
                                         <div className="w-full">
                                             <Select
+                                                key={field.value} // Force re-render when value changes
                                                 value={field.value}
                                                 onValueChange={field.onChange}
                                                 disabled={isLoadingOrgs}
@@ -345,8 +366,8 @@ export default function NewCommunityPage() {
                                                             Public
                                                         </p>
                                                         <p className="text-muted-foreground text-sm">
-                                                            Anyone can view,
-                                                            post, and comment
+                                                            Anyone can view and
+                                                            join this community
                                                         </p>
                                                     </div>
                                                 </Label>
@@ -367,9 +388,8 @@ export default function NewCommunityPage() {
                                                             Private
                                                         </p>
                                                         <p className="text-muted-foreground text-sm">
-                                                            Only approved
-                                                            members can view and
-                                                            post
+                                                            Only invited members
+                                                            can view and join
                                                         </p>
                                                     </div>
                                                 </Label>
@@ -542,65 +562,29 @@ export default function NewCommunityPage() {
     );
 }
 
+// Main component with Suspense boundary
+export default function NewCommunityPage() {
+    return (
+        <Suspense fallback={<NewCommunityPageSkeleton />}>
+            <NewCommunityForm />
+        </Suspense>
+    );
+}
+
 // Skeleton loader for the new community page
 function NewCommunityPageSkeleton() {
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
                 <Skeleton className="mb-2 h-8 w-64" />
                 <Skeleton className="h-4 w-96" />
             </div>
-
-            <div className="mx-auto max-w-2xl">
-                <div className="space-y-6">
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-48" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-72" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-24 w-full" />
-                        <Skeleton className="h-4 w-60" />
-                    </div>
-
-                    <div className="space-y-3">
-                        <Skeleton className="h-5 w-32" />
-                        <div className="space-y-3">
-                            <Skeleton className="h-20 w-full" />
-                            <Skeleton className="h-20 w-full" />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-32 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="pt-4">
-                        <Skeleton className="h-10 w-full" />
-                    </div>
-                </div>
+            <div className="space-y-6">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
             </div>
         </div>
     );
