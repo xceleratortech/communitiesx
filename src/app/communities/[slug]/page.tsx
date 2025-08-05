@@ -499,7 +499,7 @@ export default function CommunityDetailPage() {
             await deletePostMutation.mutateAsync({ postId });
         } catch (error) {
             console.error('Error deleting post:', error);
-            toast.error('Failed to delete post');
+            alert('Failed to delete post');
         }
     };
 
