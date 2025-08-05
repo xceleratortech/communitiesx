@@ -21,9 +21,7 @@ export const users = pgTable('users', {
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').notNull(),
     image: text('image'),
-    orgId: text('org_id')
-        .notNull()
-        .references(() => orgs.id),
+    orgId: text('org_id').references(() => orgs.id),
     role: text('role').notNull().default('user'), // 'admin' | 'user'
     appRole: text('app_role').notNull().default('user'),
     createdAt: timestamp('created_at').notNull(),

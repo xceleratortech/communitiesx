@@ -19,11 +19,13 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
     const [editingBadge, setEditingBadge] = useState<any>(null);
     const [managingBadge, setManagingBadge] = useState<any>(null);
 
-    const { checkOrgPermission } = usePermission();
-    const canCreateBadge = checkOrgPermission('create_badge');
-    const canEditBadge = checkOrgPermission('edit_badge');
-    const canDeleteBadge = checkOrgPermission('delete_badge');
-    const canAssignBadge = checkOrgPermission('assign_badge');
+    const { checkOrgPermission, isAppAdmin } = usePermission();
+
+    // Super admins can perform all badge operations
+    const canCreateBadge = isAppAdmin() || checkOrgPermission('create_badge');
+    const canEditBadge = isAppAdmin() || checkOrgPermission('edit_badge');
+    const canDeleteBadge = isAppAdmin() || checkOrgPermission('delete_badge');
+    const canAssignBadge = isAppAdmin() || checkOrgPermission('assign_badge');
 
     // TRPC Queries
     const {

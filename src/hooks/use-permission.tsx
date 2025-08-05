@@ -12,7 +12,7 @@ import {
 interface CommunityRoleRecord {
     communityId: string;
     role: string;
-    orgId: string;
+    orgId: string | null;
 }
 
 interface UserDetails {
@@ -20,7 +20,7 @@ interface UserDetails {
     name: string;
     email: string;
     role: string;
-    orgId: string;
+    orgId: string | null;
 }
 
 interface PermissionData {
@@ -74,13 +74,18 @@ export function usePermission() {
     const checkAppPermission = (action: PermissionAction) =>
         isAppAdmin() || hasPermission('app', data.appRole, action);
 
-    const checkOrgPermission = (action: PermissionAction) =>
-        isAppAdmin() || hasPermission('org', data.orgRole, action);
+    const checkOrgPermission = (action: PermissionAction) => {
+        // Super admins can perform any org action
+        if (isAppAdmin()) return true;
+
+        return hasPermission('org', data.orgRole, action);
+    };
 
     const checkCommunityPermission = (
         communityId: string,
         action: PermissionAction,
     ): boolean => {
+        // Super admins can perform any community action
         if (isAppAdmin()) return true;
 
         const record = data.communityRoles.find(

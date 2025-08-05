@@ -21,6 +21,7 @@ import {
     X,
     Building,
     Users,
+    User,
     Tag,
 } from 'lucide-react';
 
@@ -43,6 +44,7 @@ type FilterState = {
     communities: number[];
     tags: number[];
     showOrgOnly: boolean;
+    showMyPosts: boolean;
 };
 
 interface PostsFilterProps {
@@ -62,6 +64,7 @@ export function PostsFilter({
         communities: [],
         tags: [],
         showOrgOnly: false,
+        showMyPosts: false,
     });
 
     const [isOpen, setIsOpen] = useState(false);
@@ -93,6 +96,15 @@ export function PostsFilter({
         setFilters((prev) => ({
             ...prev,
             showOrgOnly: !prev.showOrgOnly,
+            showMyPosts: false, // Clear My Posts when All Posts is selected
+        }));
+    };
+
+    const handleMyPostsToggle = () => {
+        setFilters((prev) => ({
+            ...prev,
+            showMyPosts: !prev.showMyPosts,
+            showOrgOnly: false, // Clear All Posts when My Posts is selected
         }));
     };
 
@@ -101,6 +113,7 @@ export function PostsFilter({
             communities: [],
             tags: [],
             showOrgOnly: false,
+            showMyPosts: false,
         });
     };
 
@@ -108,7 +121,8 @@ export function PostsFilter({
         return (
             filters.communities.length +
             filters.tags.length +
-            (filters.showOrgOnly ? 1 : 0)
+            (filters.showOrgOnly ? 1 : 0) +
+            (filters.showMyPosts ? 1 : 0)
         );
     };
 
@@ -163,6 +177,23 @@ export function PostsFilter({
                             <Building className="h-4 w-4" />
                             <span>All Posts</span>
                             {filters.showOrgOnly && (
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-2 text-xs"
+                                >
+                                    Active
+                                </Badge>
+                            )}
+                        </DropdownMenuItem>
+
+                        {/* My Posts Filter */}
+                        <DropdownMenuItem
+                            onClick={handleMyPostsToggle}
+                            className="flex items-center space-x-2 py-2"
+                        >
+                            <User className="h-4 w-4" />
+                            <span>My Posts</span>
+                            {filters.showMyPosts && (
                                 <Badge
                                     variant="secondary"
                                     className="ml-2 text-xs"
@@ -309,6 +340,19 @@ export function PostsFilter({
                             Organization Only
                             <button
                                 onClick={handleOrgToggle}
+                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    )}
+
+                    {filters.showMyPosts && (
+                        <Badge variant="secondary" className="gap-1">
+                            <Users className="h-3 w-3" />
+                            My Posts
+                            <button
+                                onClick={handleMyPostsToggle}
                                 className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
                             >
                                 <X className="h-3 w-3" />
