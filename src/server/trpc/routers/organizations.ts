@@ -515,8 +515,6 @@ export const organizationsRouter = router({
                 .where(eq(users.id, input.userId))
                 .returning();
 
-            console.log('Remove member result:', result);
-
             return {
                 success: true,
                 message:

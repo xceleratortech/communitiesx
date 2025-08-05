@@ -147,16 +147,9 @@ function NewCommunityForm() {
     // Update form when orgIdFromUrl changes
     useEffect(() => {
         if (orgIdFromUrl) {
-            console.log('Setting orgId from URL:', orgIdFromUrl);
             form.setValue('orgId', orgIdFromUrl);
         }
     }, [orgIdFromUrl, form]);
-
-    // Debug: Log current form values
-    useEffect(() => {
-        console.log('Current form orgId:', form.watch('orgId'));
-        console.log('Available organizations:', organizations);
-    }, [form.watch('orgId'), organizations]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {

@@ -1688,14 +1688,6 @@ export const communityRouter = router({
                         `,
                     });
 
-                    // Add detailed logging for email sending results
-                    console.log('Email invitation result:', {
-                        email,
-                        success: emailResult.success,
-                        error: emailResult.error,
-                        data: emailResult.data,
-                    });
-
                     results.push({
                         email,
                         invite,

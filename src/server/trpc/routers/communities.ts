@@ -30,7 +30,6 @@ export const communitiesRouter = router({
 
             // orgId is included in the user object via selectUserFields and customSession in better-auth config
             const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
-            console.log('DEBUG: session orgId', orgId);
             if (!orgId) {
                 return { items: [], nextCursor: undefined };
             }
