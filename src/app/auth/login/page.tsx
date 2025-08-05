@@ -109,7 +109,7 @@ function LoginForm() {
                         />
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight">
-                        CommunitiesX
+                        CommunityX
                     </h1>
                     <p className="text-muted-foreground mt-2">
                         Powered by Xcelerator
