@@ -936,7 +936,8 @@ export const communityRouter = router({
             return {
                 totalUsers,
                 totalPosts,
-                totalCommunities, // global
+                totalCommunities: orgCommunityCount,
+                // totalCommunities, // global
                 orgCommunityCount, // org-specific
             };
         } catch (error) {
