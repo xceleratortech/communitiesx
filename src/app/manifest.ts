@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'AU NEP',
-        short_name: 'AU NEP',
-        description: 'Namma Educators Parishad | Atria University',
+        name: 'Community-X',
+        short_name: 'Community-X',
+        description:
+            'Community to connect and engage yourself for your interests',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
