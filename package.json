@@ -10,7 +10,7 @@
         "format": "prettier --write .",
         "prepare": "husky install",
         "db:generate": "drizzle-kit generate --config=drizzle.config.ts",
-        "db:push": "echo $DATABASE_URL && drizzle-kit push --config=drizzle.config.ts",
+        "db:push": "drizzle-kit push --config=drizzle.config.ts",
         "db:auth:generate": "pnpm dlx @better-auth/cli generate --output src/server/db/auth-schema.ts -y",
         "db:seed": "pnpm dlx tsx --env-file .env.local src/server/db/seed.ts",
         "update:community-roles": "pnpm dlx tsx --env-file .env.local scripts/update-community-roles.ts",
