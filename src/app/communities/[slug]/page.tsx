@@ -477,6 +477,32 @@ export default function CommunityDetailPage() {
         setCurrentMembersPage(1);
     };
 
+    const deletePostMutation = trpc.community.deletePost.useMutation({
+        onSuccess: () => {
+            refetch();
+        },
+    });
+
+    const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (
+            !confirm(
+                'Are you sure you want to delete this post? The comments will still be visible.',
+            )
+        ) {
+            return;
+        }
+
+        try {
+            await deletePostMutation.mutateAsync({ postId });
+        } catch (error) {
+            console.error('Error deleting post:', error);
+            alert('Failed to delete post');
+        }
+    };
+
     // Filter posts by selected tags
     const filteredPosts = useMemo(() => {
         if (!community?.posts) return [];
@@ -1311,14 +1337,12 @@ export default function CommunityDetailPage() {
                                                                             type="button"
                                                                             onClick={(
                                                                                 e,
-                                                                            ) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                // Add your delete logic here, e.g. open a dialog or call a mutation
-                                                                                toast.info(
-                                                                                    'Delete post clicked',
-                                                                                );
-                                                                            }}
+                                                                            ) =>
+                                                                                handleDeletePost(
+                                                                                    post.id,
+                                                                                    e,
+                                                                                )
+                                                                            }
                                                                             className="text-muted-foreground hover:bg-accent hover:text-destructive rounded-full p-1.5"
                                                                         >
                                                                             <Trash2 className="h-4 w-4" />
