@@ -99,7 +99,10 @@ export function NotificationButton({
                 throw new Error('VAPID key not configured');
             }
 
-            const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+            // const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+            const applicationServerKey = new Uint8Array(
+                urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
+            );
 
             let subscription = await registration.pushManager.getSubscription();
 
