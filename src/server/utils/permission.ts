@@ -149,6 +149,20 @@ export class ServerPermissions {
     getCommunityRoles() {
         return this.permissionData.communityRoles;
     }
+    // getCommunityPermissions(communityId: string): string[] {
+    //     if (this.isAppAdmin()) return ['*'];
+
+    //     const rec = this.permissionData.communityRoles.find(
+    //         (c) => c.communityId === communityId,
+    //     );
+    //     if (!rec) return [];
+
+    //     const perms = new Set<string>([
+    //         ...getAllPermissions('community', [rec.role]),
+    //         ...getAllPermissions('org', [this.permissionData.orgRole]),
+    //     ]);
+    //     return [...perms];
+    // }
     async getCommunityPermissions(communityId: string): Promise<string[]> {
         if (this.isAppAdmin()) return ['*'];
 

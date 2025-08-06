@@ -93,6 +93,7 @@ export function usePermission() {
             (c) => c.communityId === communityId,
         );
 
+        // Check if user has explicit community permissions via membership
         if (record) {
             const communityPerms = getAllPermissions('community', [
                 record.role,
@@ -107,34 +108,18 @@ export function usePermission() {
             ) {
                 return true;
             }
-
-            // --- ORG ADMIN GETS FULL COMMUNITY ADMIN POWERS ---
-            // If user is org admin and community belongs to their org,
-            // give them all community admin permissions
-            if (
-                data.orgRole === 'admin' &&
-                data.userDetails?.orgId &&
-                record.orgId === data.userDetails.orgId
-            ) {
-                // Check if community admin role would have this permission
-                const communityAdminPerms = getAllPermissions('community', [
-                    'admin',
-                ]);
-                return (
-                    communityAdminPerms.includes(action) ||
-                    communityAdminPerms.includes('*')
-                );
-            }
         }
 
-        // --- ORG ADMIN OVERRIDE FOR COMMUNITIES WITHOUT EXPLICIT RECORDS ---
-        // If user is org admin, give them community admin powers
-        // (Server should validate that community belongs to their org)
+        // --- ORG ADMIN OVERRIDE LOGIC ---
+        // If user is org admin, give them community admin powers for all communities
+        // (Server will validate that community belongs to their org or is accessible)
         if (data.orgRole === 'admin' && data.userDetails?.orgId) {
-            // Grant all community admin permissions
+            // Check if community admin role would have this permission
             const communityAdminPerms = getAllPermissions('community', [
                 'admin',
             ]);
+
+            // If user has org admin role, grant all community admin permissions
             return (
                 communityAdminPerms.includes(action) ||
                 communityAdminPerms.includes('*')
@@ -166,6 +151,42 @@ export function usePermission() {
         }
     };
 
+    const getCommunityPermissions = (communityId: string): string[] => {
+        if (isAppAdmin()) return ['*'];
+
+        const rec = data.communityRoles.find(
+            (c) => c.communityId === communityId,
+        );
+
+        // If org admin, always include community admin permissions
+        if (data.orgRole === 'admin' && data.userDetails?.orgId) {
+            const orgPermissions = getAllPermissions('org', [data.orgRole]);
+            const communityAdminPermissions = getAllPermissions('community', [
+                'admin',
+            ]);
+            const memberPermissions = rec
+                ? getAllPermissions('community', [rec.role])
+                : [];
+
+            const allPermissions = new Set([
+                ...orgPermissions,
+                ...communityAdminPermissions,
+                ...memberPermissions,
+            ]);
+
+            return [...allPermissions];
+        }
+
+        // Regular user - only their explicit permissions
+        if (!rec) return [];
+
+        const union = new Set([
+            ...getAllPermissions('community', [rec.role]),
+            ...getAllPermissions('org', [data.orgRole]),
+        ]);
+        return [...union];
+    };
+
     return {
         ...data,
         isAppAdmin,
@@ -176,17 +197,6 @@ export function usePermission() {
         getCommunityRole: (communityId: string) =>
             data.communityRoles.find((c) => c.communityId === communityId)
                 ?.role ?? null,
-        getCommunityPermissions: (communityId: string) => {
-            if (isAppAdmin()) return ['*'];
-            const rec = data.communityRoles.find(
-                (c) => c.communityId === communityId,
-            );
-            if (!rec) return [];
-            const union = new Set([
-                ...getAllPermissions('community', [rec.role]),
-                ...getAllPermissions('org', [data.orgRole]),
-            ]);
-            return [...union];
-        },
+        getCommunityPermissions,
     };
 }
