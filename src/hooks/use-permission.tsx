@@ -89,16 +89,16 @@ export function usePermission() {
         // Super admins can perform any community action
         if (isAppAdmin()) return true;
 
+        // Find the user's community membership record (call find only once)
+        const record = data.communityRoles.find(
+            (c) => c.communityId === communityId,
+        );
+
         // --- ORG ADMIN OVERRIDE LOGIC ---
         // Org admins can perform any community action for communities in their org
-        if (data.orgRole === 'admin' && data.userDetails?.orgId) {
-            // Check if this community belongs to the user's org
-            const record = data.communityRoles.find(
-                (c) => c.communityId === communityId,
-            );
-
+        if (data.orgRole === 'admin' && data.userDetails?.orgId && record) {
             // If we have a record and it belongs to the user's org, or if we're org admin
-            if (record && record.orgId === data.userDetails.orgId) {
+            if (record.orgId === data.userDetails.orgId) {
                 // Org admin gets all community admin permissions for their org's communities
                 const communityAdminPerms = getAllPermissions('community', [
                     'admin',
@@ -114,10 +114,7 @@ export function usePermission() {
             }
         }
 
-        // Find the user's community membership record
-        const record = data.communityRoles.find(
-            (c) => c.communityId === communityId,
-        );
+        // Regular permission check using the found record
         if (record) {
             const communityPerms = getAllPermissions('community', [
                 record.role,

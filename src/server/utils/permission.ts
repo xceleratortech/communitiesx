@@ -71,19 +71,20 @@ export class ServerPermissions {
         // Super admins can perform any community action
         if (this.isAppAdmin()) return true;
 
+        // Find the user's community membership record (call find only once)
+        const rec = this.permissionData.communityRoles.find(
+            (c) => c.communityId === communityId,
+        );
+
         // --- ORG ADMIN OVERRIDE LOGIC ---
         // Org admins can perform any community action for communities in their org
         if (
             this.permissionData.orgRole === 'admin' &&
-            this.permissionData.userDetails?.orgId
+            this.permissionData.userDetails?.orgId &&
+            rec
         ) {
-            // Check if this community belongs to the user's org
-            const rec = this.permissionData.communityRoles.find(
-                (c) => c.communityId === communityId,
-            );
-
             // If we have a record and it belongs to the user's org
-            if (rec && rec.orgId === this.permissionData.userDetails.orgId) {
+            if (rec.orgId === this.permissionData.userDetails.orgId) {
                 const allowed = new Set<string>([
                     ...getAllPermissions('community', ['admin']),
                     ...getAllPermissions('org', [this.permissionData.orgRole]),
@@ -92,10 +93,7 @@ export class ServerPermissions {
             }
         }
 
-        // Find the user's community membership record
-        const rec = this.permissionData.communityRoles.find(
-            (c) => c.communityId === communityId,
-        );
+        // Regular permission check using the found record
         if (rec) {
             const allowed = new Set<string>([
                 ...getAllPermissions('community', [rec.role]),
