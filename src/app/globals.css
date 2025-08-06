@@ -231,3 +231,35 @@
 .dark .prose a:hover {
     color: #93c5fd;
 }
+
+/* Mobile-friendly video styles */
+video {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.375rem;
+    display: block;
+    margin: 1rem 0;
+}
+
+/* Ensure videos work properly on mobile devices */
+@media (max-width: 768px) {
+    video {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 50vh;
+    }
+
+    /* Prevent videos from being too tall on mobile */
+    video[style*='height'] {
+        height: auto !important;
+    }
+}
+
+/* Fix for iOS Safari video playback */
+video::-webkit-media-controls {
+    display: flex !important;
+}
+
+video::-webkit-media-controls-panel {
+    display: flex !important;
+}

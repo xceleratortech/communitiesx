@@ -8,6 +8,7 @@ import {
     PermissionAction,
     PermissionContext,
 } from '@/lib/permissions/permission';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 interface CommunityRoleRecord {
     communityId: string;
@@ -92,14 +93,11 @@ export function usePermission() {
         const record = data.communityRoles.find(
             (c) => c.communityId === communityId,
         );
-
-        // Check if user has explicit community permissions via membership
         if (record) {
             const communityPerms = getAllPermissions('community', [
                 record.role,
             ]);
             const orgPerms = getAllPermissions('org', [data.orgRole]);
-
             if (
                 communityPerms.includes(action) ||
                 orgPerms.includes(action) ||

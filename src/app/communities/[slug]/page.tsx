@@ -72,6 +72,7 @@ import { Badge } from '@/components/ui/badge';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { SafeHtml } from '@/lib/sanitize';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 // Function to calculate relative time
 function getRelativeTime(date: Date): string {
@@ -150,19 +151,18 @@ export default function CommunityDetailPage() {
 
     const { checkCommunityPermission } = usePermission();
 
+    // Check if user is org admin for this community
+    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+        session?.user,
+        community?.orgId,
+    );
+
     // Check if user can create posts based on role hierarchy
     const canCreatePost = useMemo(() => {
         if (!session?.user?.id || !community) return false;
 
-        // Check if user is org admin for this community
-        const isOrgAdminForCommunity =
-            session.user.role === 'admin' &&
-            (session.user as any).orgId &&
-            community.orgId &&
-            (session.user as any).orgId === community.orgId;
-
         // If org admin, allow post creation
-        if (isOrgAdminForCommunity) return true;
+        if (isOrgAdminForCommunityCheck) return true;
 
         const userMembership = community.members?.find(
             (m) =>
@@ -254,10 +254,7 @@ export default function CommunityDetailPage() {
                             (m.role === 'admin' || m.role === 'moderator'),
                     ) ||
                         // Allow org admins to see pending requests
-                        (session.user.role === 'admin' &&
-                            (session.user as any).orgId &&
-                            community.orgId &&
-                            (session.user as any).orgId === community.orgId)),
+                        isOrgAdminForCommunityCheck),
             },
         );
 
@@ -616,14 +613,9 @@ export default function CommunityDetailPage() {
     const userMembership = community.members?.find(
         (m) => m.userId === session.user.id,
     );
-    const isOrgAdminForCommunity =
-        session.user.role === 'admin' &&
-        (session.user as any).orgId &&
-        community.orgId &&
-        (session.user as any).orgId === community.orgId;
     const isMember =
         (!!userMembership && userMembership.membershipType === 'member') ||
-        isOrgAdminForCommunity;
+        isOrgAdminForCommunityCheck;
     const isFollower =
         !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';

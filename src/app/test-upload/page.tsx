@@ -68,7 +68,7 @@ export default function TestUploadPage() {
                 <div className="space-y-4">
                     <input
                         type="file"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         onChange={handleFileUpload}
                         disabled={isUploading}
                         className="block w-full text-sm text-gray-500 file:mr-4 file:rounded-full file:border-0 file:bg-blue-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-blue-700 hover:file:bg-blue-100"
@@ -92,10 +92,45 @@ export default function TestUploadPage() {
             </div>
 
             <div className="mb-6">
+                <h2 className="mb-4 text-xl font-semibold">Video Test:</h2>
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                        Test video playback on mobile devices. Upload a video
+                        file and check if it plays correctly on mobile.
+                    </p>
+                    <div className="rounded-lg border p-4">
+                        <h3 className="mb-2 font-semibold">
+                            Test Video (Mobile Compatibility):
+                        </h3>
+                        <video
+                            controls
+                            playsInline
+                            preload="metadata"
+                            muted
+                            width="100%"
+                            style={{
+                                maxWidth: '100%',
+                                borderRadius: '0.375rem',
+                                display: 'block',
+                                margin: '1rem 0',
+                            }}
+                        >
+                            <source
+                                src="https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4"
+                                type="video/mp4"
+                            />
+                            Your browser does not support the video tag.
+                        </video>
+                    </div>
+                </div>
+            </div>
+
+            <div className="mb-6">
                 <h2 className="mb-4 text-xl font-semibold">Instructions:</h2>
                 <ul className="list-disc space-y-2 pl-6">
                     <li>Make sure you're logged in first</li>
-                    <li>Select an image file to test the upload</li>
+                    <li>Select an image or video file to test the upload</li>
+                    <li>Test video playback on mobile devices</li>
                     <li>Check the browser console for any error messages</li>
                     <li>Check the server console for debugging logs</li>
                 </ul>

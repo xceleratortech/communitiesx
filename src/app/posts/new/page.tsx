@@ -27,6 +27,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Loading } from '@/components/ui/loading';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 interface Tag {
     id: number;
@@ -59,19 +60,18 @@ function NewPostForm() {
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
     );
-    const isOrgAdminForCommunity =
-        session?.user?.role === 'admin' &&
-        (session.user as any).orgId &&
-        community?.orgId &&
-        (session.user as any).orgId === community.orgId;
+    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+        session?.user,
+        community?.orgId,
+    );
     const isMember =
         (!!userMembership && userMembership.membershipType === 'member') ||
-        isOrgAdminForCommunity;
+        isOrgAdminForCommunityCheck;
 
     // Check if user can create posts based on role hierarchy
     const canCreatePost = React.useMemo(() => {
         // If org admin, allow post creation
-        if (isOrgAdminForCommunity) return true;
+        if (isOrgAdminForCommunityCheck) return true;
 
         if (!isMember || !userMembership) return false;
 
@@ -94,7 +94,7 @@ function NewPostForm() {
         isMember,
         userMembership,
         community?.postCreationMinRole,
-        isOrgAdminForCommunity,
+        isOrgAdminForCommunityCheck,
     ]);
 
     // Get available tags for the community
