@@ -12,14 +12,14 @@ interface UserPermissionData {
     communityRoles: Array<{
         communityId: string;
         role: string;
-        orgId: string;
+        orgId: string | null;
     }>;
     userDetails: {
         id: string;
         name: string;
         email: string;
         role: string;
-        orgId: string;
+        orgId: string | null;
     } | null;
 }
 
@@ -57,16 +57,17 @@ export class ServerPermissions {
     }
 
     checkOrgPermission(action: PermissionAction): boolean {
-        return (
-            this.isAppAdmin() ||
-            hasPermission('org', this.permissionData.orgRole, action)
-        );
+        // Super admins can perform any org action
+        if (this.isAppAdmin()) return true;
+
+        return hasPermission('org', this.permissionData.orgRole, action);
     }
 
     checkCommunityPermission(
         communityId: string,
         action: PermissionAction,
     ): boolean {
+        // Super admins can perform any community action
         if (this.isAppAdmin()) return true;
 
         const rec = this.permissionData.communityRoles.find(

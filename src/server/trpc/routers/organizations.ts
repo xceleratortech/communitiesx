@@ -10,6 +10,20 @@ import {
     comments,
     communities,
     communityAllowedOrgs,
+    communityMembers,
+    communityMemberRequests,
+    communityInvites,
+    directMessages,
+    chatThreads,
+    notifications,
+    reactions,
+    attachments,
+    userBadgeAssignments,
+    userBadges,
+    pushSubscriptions,
+    loginEvents,
+    sessions,
+    accounts,
 } from '@/server/db/schema';
 import type { Org, OrgMember } from '@/types/models';
 
@@ -283,23 +297,33 @@ export const organizationsRouter = router({
                     message: 'You must be logged in to view organizations',
                 });
             }
-            // Only return orgs where the user is admin
-            const adminOrgs = await db.query.orgs.findMany({
-                where: (orgs, { eq }) =>
-                    eq(
-                        orgs.id,
-                        db
-                            .select({ orgId: users.orgId })
-                            .from(users)
-                            .where(eq(users.id, input.userId)),
-                    ),
+
+            // Check if current user is super admin
+            const currentUser = await db.query.users.findFirst({
+                where: eq(users.id, ctx.session.user.id),
+                columns: { appRole: true },
             });
-            // Filter by admin role
-            const user = await db.query.users.findFirst({
-                where: eq(users.id, input.userId),
-            });
-            // if (!user || user.role !== 'admin') return [];
-            return adminOrgs.map((org) => ({ id: org.id, name: org.name }));
+
+            const isSuperAdmin = currentUser?.appRole === 'admin';
+
+            if (isSuperAdmin) {
+                // Super admins can create communities for any organization
+                const allOrgs = await db.query.orgs.findMany();
+                return allOrgs.map((org) => ({ id: org.id, name: org.name }));
+            } else {
+                // Regular users can only create communities for orgs where they are admin
+                const adminOrgs = await db.query.orgs.findMany({
+                    where: (orgs, { eq }) =>
+                        eq(
+                            orgs.id,
+                            db
+                                .select({ orgId: users.orgId })
+                                .from(users)
+                                .where(eq(users.id, input.userId)),
+                        ),
+                });
+                return adminOrgs.map((org) => ({ id: org.id, name: org.name }));
+            }
         }),
 
     makeOrgAdmin: publicProcedure
@@ -345,6 +369,26 @@ export const organizationsRouter = router({
                 });
             }
 
+            // Check if user has permission to remove members
+            const currentUser = await db.query.users.findFirst({
+                where: eq(users.id, ctx.session.user.id),
+                columns: { orgId: true, appRole: true },
+            });
+
+            // Super admins can remove members from any organization
+            const isSuperAdmin = currentUser?.appRole === 'admin';
+
+            if (
+                !isSuperAdmin &&
+                (!currentUser || currentUser.orgId !== input.orgId)
+            ) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'You can only remove members from your own organization',
+                });
+            }
+
             // Check if the user exists in the organization
             const user = await db.query.users.findFirst({
                 where: and(
@@ -360,14 +404,121 @@ export const organizationsRouter = router({
                 });
             }
 
-            // Remove the user from the organization
+            // Prevent removing yourself
+            if (input.userId === ctx.session.user.id) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You cannot remove yourself from the organization',
+                });
+            }
+
+            // Delete all related data first, then delete the user
+            // This handles foreign key constraints by deleting in the correct order
+
+            // Delete user badge assignments
             await db
-                .update(users)
-                .set({ orgId: undefined, role: undefined })
-                .where(eq(users.id, input.userId));
+                .delete(userBadgeAssignments)
+                .where(eq(userBadgeAssignments.userId, input.userId));
+
+            // Delete push subscriptions
+            await db
+                .delete(pushSubscriptions)
+                .where(eq(pushSubscriptions.userId, input.userId));
+
+            // Delete login events
+            await db
+                .delete(loginEvents)
+                .where(eq(loginEvents.userId, input.userId));
+
+            // Delete sessions
+            await db.delete(sessions).where(eq(sessions.userId, input.userId));
+
+            // Delete accounts
+            await db.delete(accounts).where(eq(accounts.userId, input.userId));
+
+            // Delete reactions
+            await db
+                .delete(reactions)
+                .where(eq(reactions.userId, input.userId));
+
+            // Delete notifications
+            await db
+                .delete(notifications)
+                .where(eq(notifications.recipientId, input.userId));
+
+            // Delete direct messages
+            await db
+                .delete(directMessages)
+                .where(
+                    or(
+                        eq(directMessages.senderId, input.userId),
+                        eq(directMessages.recipientId, input.userId),
+                    ),
+                );
+
+            // Delete chat threads
+            await db
+                .delete(chatThreads)
+                .where(
+                    or(
+                        eq(chatThreads.user1Id, input.userId),
+                        eq(chatThreads.user2Id, input.userId),
+                    ),
+                );
+
+            // Delete community member requests
+            await db
+                .delete(communityMemberRequests)
+                .where(eq(communityMemberRequests.userId, input.userId));
+
+            // Delete community members
+            await db
+                .delete(communityMembers)
+                .where(eq(communityMembers.userId, input.userId));
+
+            // Delete comments
+            await db
+                .delete(comments)
+                .where(eq(comments.authorId, input.userId));
+
+            // Delete posts
+            await db.delete(posts).where(eq(posts.authorId, input.userId));
+
+            // Delete attachments
+            await db
+                .delete(attachments)
+                .where(eq(attachments.uploadedBy, input.userId));
+
+            // Delete community invites (where user is the creator or user)
+            await db
+                .delete(communityInvites)
+                .where(
+                    or(
+                        eq(communityInvites.createdBy, input.userId),
+                        eq(communityInvites.usedBy, input.userId),
+                    ),
+                );
+
+            // Delete community allowed orgs (where user is the adder)
+            await db
+                .delete(communityAllowedOrgs)
+                .where(eq(communityAllowedOrgs.addedBy, input.userId));
+
+            // Delete user badges (where user is the creator)
+            await db
+                .delete(userBadges)
+                .where(eq(userBadges.createdBy, input.userId));
+
+            // Finally delete the user
+            const result = await db
+                .delete(users)
+                .where(eq(users.id, input.userId))
+                .returning();
+
             return {
                 success: true,
-                message: 'User has been removed from the organization',
+                message:
+                    'User has been permanently removed from the organization',
             };
         }),
 });
