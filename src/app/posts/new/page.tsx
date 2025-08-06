@@ -59,11 +59,20 @@ function NewPostForm() {
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
     );
+    const isOrgAdminForCommunity =
+        session?.user?.role === 'admin' &&
+        (session.user as any).orgId &&
+        community?.orgId &&
+        (session.user as any).orgId === community.orgId;
     const isMember =
-        !!userMembership && userMembership.membershipType === 'member';
+        (!!userMembership && userMembership.membershipType === 'member') ||
+        isOrgAdminForCommunity;
 
     // Check if user can create posts based on role hierarchy
     const canCreatePost = React.useMemo(() => {
+        // If org admin, allow post creation
+        if (isOrgAdminForCommunity) return true;
+
         if (!isMember || !userMembership) return false;
 
         const roleHierarchy = {
@@ -81,7 +90,12 @@ function NewPostForm() {
             ] || 1;
 
         return userRoleLevel >= minRoleLevel;
-    }, [isMember, userMembership, community?.postCreationMinRole]);
+    }, [
+        isMember,
+        userMembership,
+        community?.postCreationMinRole,
+        isOrgAdminForCommunity,
+    ]);
 
     // Get available tags for the community
     const availableTags = community?.tags || [];
