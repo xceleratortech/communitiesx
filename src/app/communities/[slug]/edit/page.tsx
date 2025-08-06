@@ -25,6 +25,8 @@ import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
+import { usePermission } from '@/hooks/use-permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import {
     Select,
     SelectContent,
@@ -191,16 +193,18 @@ export default function EditCommunityPage() {
         );
     }
 
-    // Permission logic: allow if user is community admin, or org admin for this org
-    const isOrgAdminForCommunity =
-        session?.user?.role === 'admin' &&
-        session?.user &&
-        community?.orgId &&
-        (session.user as any).orgId === community.orgId;
-    // TODO: If you have a more granular community admin check, add it here
-    // For now, allow edit if org admin for this org
+    const { checkCommunityPermission, isAppAdmin } = usePermission();
 
-    if (!isOrgAdminForCommunity) {
+    // Check if user has permission to edit this community
+    const canEditCommunity =
+        isAppAdmin() ||
+        (community?.id &&
+            checkCommunityPermission(
+                community.id.toString(),
+                PERMISSIONS.EDIT_COMMUNITY,
+            ));
+
+    if (!canEditCommunity) {
         return (
             <div className="container mx-auto px-4 py-16 text-center">
                 <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>

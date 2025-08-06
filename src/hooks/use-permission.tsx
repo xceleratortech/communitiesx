@@ -89,6 +89,31 @@ export function usePermission() {
         // Super admins can perform any community action
         if (isAppAdmin()) return true;
 
+        // --- ORG ADMIN OVERRIDE LOGIC ---
+        // Org admins can perform any community action for communities in their org
+        if (data.orgRole === 'admin' && data.userDetails?.orgId) {
+            // Check if this community belongs to the user's org
+            const record = data.communityRoles.find(
+                (c) => c.communityId === communityId,
+            );
+
+            // If we have a record and it belongs to the user's org, or if we're org admin
+            if (record && record.orgId === data.userDetails.orgId) {
+                // Org admin gets all community admin permissions for their org's communities
+                const communityAdminPerms = getAllPermissions('community', [
+                    'admin',
+                ]);
+                const orgPerms = getAllPermissions('org', [data.orgRole]);
+
+                return (
+                    communityAdminPerms.includes(action) ||
+                    orgPerms.includes(action) ||
+                    communityAdminPerms.includes('*') ||
+                    orgPerms.includes('*')
+                );
+            }
+        }
+
         // Find the user's community membership record
         const record = data.communityRoles.find(
             (c) => c.communityId === communityId,
@@ -98,29 +123,12 @@ export function usePermission() {
                 record.role,
             ]);
             const orgPerms = getAllPermissions('org', [data.orgRole]);
-            if (
+
+            return (
                 communityPerms.includes(action) ||
                 orgPerms.includes(action) ||
                 communityPerms.includes('*') ||
                 orgPerms.includes('*')
-            ) {
-                return true;
-            }
-        }
-
-        // --- ORG ADMIN OVERRIDE LOGIC ---
-        // If user is org admin, give them community admin powers for all communities
-        // (Server will validate that community belongs to their org or is accessible)
-        if (data.orgRole === 'admin' && data.userDetails?.orgId) {
-            // Check if community admin role would have this permission
-            const communityAdminPerms = getAllPermissions('community', [
-                'admin',
-            ]);
-
-            // If user has org admin role, grant all community admin permissions
-            return (
-                communityAdminPerms.includes(action) ||
-                communityAdminPerms.includes('*')
             );
         }
 
@@ -156,23 +164,27 @@ export function usePermission() {
             (c) => c.communityId === communityId,
         );
 
-        // If org admin, always include community admin permissions
+        // If org admin, check if this community belongs to their org
         if (data.orgRole === 'admin' && data.userDetails?.orgId) {
-            const orgPermissions = getAllPermissions('org', [data.orgRole]);
-            const communityAdminPermissions = getAllPermissions('community', [
-                'admin',
-            ]);
-            const memberPermissions = rec
-                ? getAllPermissions('community', [rec.role])
-                : [];
+            // Check if this community belongs to the user's org
+            if (rec && rec.orgId === data.userDetails.orgId) {
+                const orgPermissions = getAllPermissions('org', [data.orgRole]);
+                const communityAdminPermissions = getAllPermissions(
+                    'community',
+                    ['admin'],
+                );
+                const memberPermissions = rec
+                    ? getAllPermissions('community', [rec.role])
+                    : [];
 
-            const allPermissions = new Set([
-                ...orgPermissions,
-                ...communityAdminPermissions,
-                ...memberPermissions,
-            ]);
+                const allPermissions = new Set([
+                    ...orgPermissions,
+                    ...communityAdminPermissions,
+                    ...memberPermissions,
+                ]);
 
-            return [...allPermissions];
+                return [...allPermissions];
+            }
         }
 
         // Regular user - only their explicit permissions
