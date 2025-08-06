@@ -92,11 +92,13 @@ export function usePermission() {
         const record = data.communityRoles.find(
             (c) => c.communityId === communityId,
         );
+
         if (record) {
             const communityPerms = getAllPermissions('community', [
                 record.role,
             ]);
             const orgPerms = getAllPermissions('org', [data.orgRole]);
+
             if (
                 communityPerms.includes(action) ||
                 orgPerms.includes(action) ||
@@ -105,18 +107,38 @@ export function usePermission() {
             ) {
                 return true;
             }
+
+            // --- ORG ADMIN GETS FULL COMMUNITY ADMIN POWERS ---
+            // If user is org admin and community belongs to their org,
+            // give them all community admin permissions
+            if (
+                data.orgRole === 'admin' &&
+                data.userDetails?.orgId &&
+                record.orgId === data.userDetails.orgId
+            ) {
+                // Check if community admin role would have this permission
+                const communityAdminPerms = getAllPermissions('community', [
+                    'admin',
+                ]);
+                return (
+                    communityAdminPerms.includes(action) ||
+                    communityAdminPerms.includes('*')
+                );
+            }
         }
 
-        // --- ORG ADMIN OVERRIDE LOGIC ---
-        // If user is org admin, check if the community belongs to their org
-
-        if (
-            data.orgRole === 'admin' &&
-            data.userDetails?.orgId &&
-            record?.orgId === data.userDetails.orgId
-        ) {
-            // Only allow if the community's orgId matches the user's orgId
-            return hasPermission('org', data.orgRole, action);
+        // --- ORG ADMIN OVERRIDE FOR COMMUNITIES WITHOUT EXPLICIT RECORDS ---
+        // If user is org admin, give them community admin powers
+        // (Server should validate that community belongs to their org)
+        if (data.orgRole === 'admin' && data.userDetails?.orgId) {
+            // Grant all community admin permissions
+            const communityAdminPerms = getAllPermissions('community', [
+                'admin',
+            ]);
+            return (
+                communityAdminPerms.includes(action) ||
+                communityAdminPerms.includes('*')
+            );
         }
 
         return false;
@@ -126,6 +148,7 @@ export function usePermission() {
         context: PermissionContext,
         action: PermissionAction,
         resourceId?: string,
+        resourceOrgId?: string | null,
     ): boolean => {
         switch (context) {
             case 'app':

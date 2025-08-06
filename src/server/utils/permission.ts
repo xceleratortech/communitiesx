@@ -5,6 +5,7 @@ import {
     PermissionContext,
 } from '@/lib/permissions/permission';
 import { getUserPermission } from '../trpc/services/user-service';
+import { eq } from 'drizzle-orm';
 
 interface UserPermissionData {
     appRole: string | null;
@@ -148,12 +149,65 @@ export class ServerPermissions {
     getCommunityRoles() {
         return this.permissionData.communityRoles;
     }
-    getCommunityPermissions(communityId: string): string[] {
+    // getCommunityPermissions(communityId: string): string[] {
+    //     if (this.isAppAdmin()) return ['*'];
+
+    //     const rec = this.permissionData.communityRoles.find(
+    //         (c) => c.communityId === communityId,
+    //     );
+    //     if (!rec) return [];
+
+    //     const perms = new Set<string>([
+    //         ...getAllPermissions('community', [rec.role]),
+    //         ...getAllPermissions('org', [this.permissionData.orgRole]),
+    //     ]);
+    //     return [...perms];
+    // }
+    async getCommunityPermissions(communityId: string): Promise<string[]> {
         if (this.isAppAdmin()) return ['*'];
 
         const rec = this.permissionData.communityRoles.find(
             (c) => c.communityId === communityId,
         );
+
+        // If org admin, check if they should get community admin permissions
+        if (
+            this.permissionData.orgRole === 'admin' &&
+            this.permissionData.userDetails?.orgId
+        ) {
+            let belongsToOrg = false;
+
+            // Check via existing record first
+            if (rec && rec.orgId === this.permissionData.userDetails.orgId) {
+                belongsToOrg = true;
+            } else if (!rec) {
+                // If no record, check via database lookup
+                const { db } = await import('@/server/db');
+                const { communities } = await import('@/server/db/schema');
+
+                // Convert string communityId to number
+                const communityIdNum = parseInt(communityId, 10);
+                if (!isNaN(communityIdNum)) {
+                    const community = await db.query.communities.findFirst({
+                        where: eq(communities.id, communityIdNum),
+                    });
+
+                    belongsToOrg =
+                        community?.orgId ===
+                        this.permissionData.userDetails.orgId;
+                }
+            }
+
+            if (belongsToOrg) {
+                const perms = new Set<string>([
+                    ...getAllPermissions('org', [this.permissionData.orgRole]),
+                    ...getAllPermissions('community', ['admin']),
+                    ...(rec ? getAllPermissions('community', [rec.role]) : []),
+                ]);
+                return [...perms];
+            }
+        }
+
         if (!rec) return [];
 
         const perms = new Set<string>([
@@ -162,6 +216,7 @@ export class ServerPermissions {
         ]);
         return [...perms];
     }
+
     hasCommunityRole(cid: string) {
         return this.permissionData.communityRoles.some(
             (c) => c.communityId === cid,
