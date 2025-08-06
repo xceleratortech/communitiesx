@@ -288,7 +288,7 @@ export const communitiesRouter = router({
                     };
                 }
 
-                // Load posts with authors and tags
+                // Load posts with authors, tags, and comments
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
@@ -301,14 +301,16 @@ export const communitiesRouter = router({
                                 tag: true,
                             },
                         },
+                        comments: true, // <-- include comments
                     },
                     orderBy: desc(posts.createdAt),
                 });
 
-                // Transform posts to include tags array
+                // Transform posts to include tags array and comments array
                 const postsWithTags = postsWithAuthors.map((post) => ({
                     ...post,
                     tags: post.postTags.map((pt) => pt.tag),
+                    comments: post.comments?.filter((c) => !c.isDeleted) || [],
                 }));
 
                 // Return the community with posts that include author information and tags
