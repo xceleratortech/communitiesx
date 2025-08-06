@@ -601,8 +601,14 @@ export default function CommunityDetailPage() {
     const userMembership = community.members?.find(
         (m) => m.userId === session.user.id,
     );
+    const isOrgAdminForCommunity =
+        session.user.role === 'admin' &&
+        (session.user as any).orgId &&
+        community.orgId &&
+        (session.user as any).orgId === community.orgId;
     const isMember =
-        !!userMembership && userMembership.membershipType === 'member';
+        (!!userMembership && userMembership.membershipType === 'member') ||
+        isOrgAdminForCommunity;
     const isFollower =
         !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
