@@ -108,13 +108,13 @@ export default function OrganizationCommunitiesPage() {
             { orgId: orgData.id, userId: userId },
             {
                 onSuccess: () => {
-                    toast.success('Member removed successfully');
+                    toast.success('Member deleted permanently');
                     utils.organizations.getOrganizationWithCommunities.invalidate(
                         { slug: params.slug as string },
                     );
                 },
                 onError: (err) => {
-                    toast.error('Failed to remove member', {
+                    toast.error('Failed to delete member', {
                         description: err.message,
                     });
                 },

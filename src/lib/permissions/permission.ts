@@ -1,6 +1,6 @@
 export const permissions = {
     app: {
-        admin: ['*'] as const,
+        admin: ['*'] as const, // Super admin has all permissions
         user: [] as const,
     },
 

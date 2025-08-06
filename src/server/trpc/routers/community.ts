@@ -936,7 +936,8 @@ export const communityRouter = router({
             return {
                 totalUsers,
                 totalPosts,
-                totalCommunities, // global
+                totalCommunities: orgCommunityCount,
+                // totalCommunities, // global
                 orgCommunityCount, // org-specific
             };
         } catch (error) {
@@ -1685,14 +1686,6 @@ export const communityRouter = router({
                             <p><strong>If you don't have an account yet, you'll be able to create one when you accept the invitation.</strong></p>
                             <p>This invitation will expire in 7 days.</p>
                         `,
-                    });
-
-                    // Add detailed logging for email sending results
-                    console.log('Email invitation result:', {
-                        email,
-                        success: emailResult.success,
-                        error: emailResult.error,
-                        data: emailResult.data,
                     });
 
                     results.push({

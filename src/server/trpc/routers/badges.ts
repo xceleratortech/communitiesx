@@ -21,13 +21,19 @@ export const badgesRouter = router({
         )
         .query(async ({ input, ctx }) => {
             try {
-                // Check if user has permission to view badges and is in the same org
+                // Check if user has permission to view badges
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== input.orgId) {
+                // Super admins can view badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== input.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -41,7 +47,7 @@ export const badgesRouter = router({
                     'view_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to view badges',
@@ -88,25 +94,28 @@ export const badgesRouter = router({
     createBadge: authProcedure
         .input(
             z.object({
-                name: z.string().min(1).max(50),
+                name: z.string().min(1),
                 description: z.string().optional(),
                 icon: z.string().optional(),
-                color: z
-                    .string()
-                    .regex(/^#[0-9A-F]{6}$/i)
-                    .default('#3B82F6'),
+                color: z.string().regex(/^#[0-9A-F]{6}$/i),
                 orgId: z.string(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
             try {
-                // Check if user has permission to create badges and is in the same org
+                // Check if user has permission to create badges
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== input.orgId) {
+                // Super admins can create badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== input.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -120,7 +129,7 @@ export const badgesRouter = router({
                     'create_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to create badges',
@@ -193,10 +202,16 @@ export const badgesRouter = router({
                 // Check if user has permission to edit badges and is in the same org
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== badge.orgId) {
+                // Super admins can edit badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== badge.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -210,7 +225,7 @@ export const badgesRouter = router({
                     'edit_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to edit badges',
@@ -280,10 +295,16 @@ export const badgesRouter = router({
                 // Check if user has permission to delete badges and is in the same org
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== badge.orgId) {
+                // Super admins can delete badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== badge.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -297,7 +318,7 @@ export const badgesRouter = router({
                     'delete_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to delete badges',
@@ -346,10 +367,16 @@ export const badgesRouter = router({
                 // Check if user has permission to assign badges and is in the same org
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== badge.orgId) {
+                // Super admins can assign badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== badge.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -363,7 +390,7 @@ export const badgesRouter = router({
                     'assign_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to assign badges',
@@ -452,10 +479,16 @@ export const badgesRouter = router({
                 // Check if user has permission to unassign badges and is in the same org
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== badge.orgId) {
+                // Super admins can unassign badges for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== badge.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -469,7 +502,7 @@ export const badgesRouter = router({
                     'unassign_badge',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'Insufficient permissions to unassign badges',
@@ -524,10 +557,16 @@ export const badgesRouter = router({
                 // Check if user has permission to view org users and is in the same org
                 const currentUser = await db.query.users.findFirst({
                     where: eq(users.id, ctx.session.user.id),
-                    columns: { orgId: true },
+                    columns: { orgId: true, appRole: true },
                 });
 
-                if (!currentUser || currentUser.orgId !== input.orgId) {
+                // Super admins can view org users for any organization
+                const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                if (
+                    !isSuperAdmin &&
+                    (!currentUser || currentUser.orgId !== input.orgId)
+                ) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -541,7 +580,7 @@ export const badgesRouter = router({
                     'view_org',
                 );
 
-                if (!hasPermission) {
+                if (!hasPermission && !isSuperAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:

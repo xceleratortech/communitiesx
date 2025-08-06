@@ -74,6 +74,7 @@ type FilterState = {
     communities: number[];
     tags: number[];
     showOrgOnly: boolean;
+    showMyPosts: boolean;
 };
 
 // Post skeleton component for loading state
@@ -162,6 +163,7 @@ export default function PostsPage() {
         communities: [],
         tags: [],
         showOrgOnly: false,
+        showMyPosts: false,
     });
 
     // Fixed search state - separate input value from search term
@@ -389,6 +391,13 @@ export default function PostsPage() {
             );
         }
 
+        // Filter by My Posts (posts by the current user)
+        if (activeFilters.showMyPosts) {
+            filtered = filtered.filter(
+                (post: PostDisplay) => post.author?.id === session?.user?.id,
+            );
+        }
+
         // Filter by communities
         if (activeFilters.communities.length > 0) {
             filtered = filtered.filter(
@@ -410,7 +419,7 @@ export default function PostsPage() {
         }
 
         return filtered;
-    }, [posts, activeFilters]);
+    }, [posts, activeFilters, session?.user?.id]);
 
     const handleFilterChange = (filters: FilterState) => {
         setActiveFilters(filters);
@@ -490,7 +499,8 @@ export default function PostsPage() {
                             ? `No posts found for "${searchInputValue}"`
                             : activeFilters.communities.length > 0 ||
                                 activeFilters.tags.length > 0 ||
-                                activeFilters.showOrgOnly
+                                activeFilters.showOrgOnly ||
+                                activeFilters.showMyPosts
                               ? 'No posts match your current filters.'
                               : 'No posts found. Join or follow more communities to see posts here.'}
                     </p>
@@ -505,13 +515,15 @@ export default function PostsPage() {
                         </Button>
                     ) : activeFilters.communities.length > 0 ||
                       activeFilters.tags.length > 0 ||
-                      activeFilters.showOrgOnly ? (
+                      activeFilters.showOrgOnly ||
+                      activeFilters.showMyPosts ? (
                         <Button
                             onClick={() =>
                                 setActiveFilters({
                                     communities: [],
                                     tags: [],
                                     showOrgOnly: false,
+                                    showMyPosts: false,
                                 })
                             }
                         >

@@ -45,7 +45,7 @@ export const usersRouter = router({
 
                 // Then, get the organization name separately
                 const organization = await db.query.orgs.findFirst({
-                    where: eq(orgs.id, user.orgId),
+                    where: user.orgId ? eq(orgs.id, user.orgId) : undefined,
                     columns: {
                         name: true,
                     },
