@@ -1,11 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, BellOff } from 'lucide-react';
+import { Bell, BellOff, ChevronRight } from 'lucide-react';
 import { trpc } from '@/providers/trpc-provider';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-export function NotificationButton() {
+interface NotificationButtonProps {
+    variant?: 'popover' | 'default';
+}
+
+export function NotificationButton({
+    variant = 'default',
+}: NotificationButtonProps) {
     const [isSupported, setIsSupported] = useState(false);
 
     const { data: subscriptionStatus, refetch: refetchStatus } =
@@ -85,15 +98,17 @@ export function NotificationButton() {
                 throw new Error('VAPID key not configured');
             }
 
-            const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+            // const applicationServerKey = urlBase64ToUint8Array(vapidKey);
+            const applicationServerKey = new Uint8Array(
+                urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
+            );
 
             let subscription = await registration.pushManager.getSubscription();
 
             if (!subscription) {
                 subscription = await registration.pushManager.subscribe({
                     userVisibleOnly: true,
-                    applicationServerKey:
-                        applicationServerKey.buffer as ArrayBuffer,
+                    applicationServerKey: applicationServerKey,
                 });
             }
 
@@ -139,38 +154,93 @@ export function NotificationButton() {
         }
     };
 
-    const handleClick = () => {
-        if (subscriptionStatus?.isSubscribed) {
-            handleUnsubscribe();
-        } else {
-            handleSubscribe();
-        }
+    const getNotificationIcon = () => {
+        return subscriptionStatus?.isSubscribed ? (
+            <BellOff className="h-4 w-4" />
+        ) : (
+            <Bell className="h-4 w-4" />
+        );
     };
+
+    const getNotificationLabel = () => {
+        return subscriptionStatus?.isSubscribed ? 'On' : 'Off';
+    };
+
+    const isLoading =
+        subscribeMutation.isPending || unsubscribeMutation.isPending;
 
     if (!isSupported) {
         return null;
     }
 
-    const isLoading =
-        subscribeMutation.isPending || unsubscribeMutation.isPending;
+    if (variant === 'popover') {
+        return (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        className="flex w-full items-center justify-between space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                        disabled={isLoading}
+                    >
+                        <div className="flex items-center space-x-2">
+                            {getNotificationIcon()}
+                            <span>Notifications: {getNotificationLabel()}</span>
+                        </div>
+                        <ChevronRight className="h-4 w-4" />
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="right">
+                    <DropdownMenuItem
+                        onClick={handleSubscribe}
+                        disabled={isLoading || subscriptionStatus?.isSubscribed}
+                    >
+                        <Bell className="mr-2 h-4 w-4" />
+                        Turn On
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                        onClick={handleUnsubscribe}
+                        disabled={
+                            isLoading || !subscriptionStatus?.isSubscribed
+                        }
+                    >
+                        <BellOff className="mr-2 h-4 w-4" />
+                        Turn Off
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+        );
+    }
 
     return (
-        <button
-            onClick={handleClick}
-            disabled={isLoading}
-            className="hover:bg-muted rounded-md p-2 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-            title={
-                subscriptionStatus?.isSubscribed
-                    ? 'Disable notifications'
-                    : 'Enable notifications'
-            }
-        >
-            {subscriptionStatus?.isSubscribed ? (
-                <BellOff className="text-muted-foreground h-4 w-4" />
-            ) : (
-                <Bell className="text-muted-foreground h-4 w-4" />
-            )}
-        </button>
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                    disabled={isLoading}
+                >
+                    {getNotificationIcon()}
+                    <span>{getNotificationLabel()}</span>
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                    onClick={handleSubscribe}
+                    disabled={isLoading || subscriptionStatus?.isSubscribed}
+                >
+                    <Bell className="mr-2 h-4 w-4" />
+                    Turn On
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                    onClick={handleUnsubscribe}
+                    disabled={isLoading || !subscriptionStatus?.isSubscribed}
+                >
+                    <BellOff className="mr-2 h-4 w-4" />
+                    Turn Off
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }
 

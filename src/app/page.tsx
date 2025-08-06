@@ -25,8 +25,8 @@ export default function Home() {
     }, [session, router]);
 
     return (
-        <div className="relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center overflow-hidden text-center">
-            <div className="fixed inset-0 top-16 h-[calc(100vh-4rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
+        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden pt-14 text-center">
+            <div className="fixed inset-0 top-0 h-screen w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
@@ -53,7 +53,7 @@ export default function Home() {
                 <div className="flex flex-col justify-center space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4">
                     <Button asChild size="lg">
                         <a
-                            href="/posts"
+                            href={mounted && session ? '/posts' : '/auth/login'}
                             className="rounded-lg px-8 py-3 text-lg font-semibold shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         >
                             Explore Posts

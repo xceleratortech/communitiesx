@@ -12,6 +12,8 @@ import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
+import { Loading } from '@/components/ui/loading';
 
 type User = {
     id: string;
@@ -147,7 +149,7 @@ export default function PostPage() {
     }
 
     if (isClient && isLoading) {
-        return <div className="p-4 dark:text-gray-300">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (isClient && !post) {
@@ -251,140 +253,81 @@ export default function PostPage() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl px-3 py-3">
-            {/* Post container */}
-            <div className="mb-4">
-                {/* Post header */}
-                <div className="border-border/20 border-b px-1 py-1">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-                            <span>Posted by</span>
-                            {postData.author?.id ? (
-                                <UserProfilePopover userId={postData.author.id}>
-                                    <span className="cursor-pointer font-medium hover:underline">
-                                        u/{postData.author.name || 'Unknown'}
-                                    </span>
-                                </UserProfilePopover>
-                            ) : (
-                                <span className="font-medium">u/Unknown</span>
-                            )}
-                            <span>•</span>
-                            <span>
-                                {new Date(
-                                    postData.createdAt,
-                                ).toLocaleDateString()}
-                            </span>
+        <div className="mx-auto mt-4 max-w-7xl px-0 py-4 sm:px-6 lg:px-0">
+            <div className="mx-auto">
+                <div className="mb-8">
+                    <div className="mb-2 flex items-start justify-between">
+                        <div>
+                            <h1 className="text-3xl font-bold dark:text-white">
+                                {postData.isDeleted
+                                    ? '[Deleted]'
+                                    : postData.title}
+                            </h1>
                         </div>
-                        {session.user.id === postData.authorId &&
-                            !postData.isDeleted && (
-                                <div className="flex gap-1 self-end sm:self-auto">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                            router.push(
-                                                `/posts/${postData.id}/edit`,
-                                            )
-                                        }
-                                        className="h-6 px-1.5 text-xs"
-                                    >
-                                        <Edit className="mr-1 h-3 w-3" />
-                                        <span className="hidden sm:inline">
-                                            Edit
-                                        </span>
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={handleDeletePost}
-                                        className="h-6 px-1.5 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                                        disabled={deletePostMutation.isPending}
-                                    >
-                                        <Trash2 className="mr-1 h-3 w-3" />
-                                        <span className="hidden sm:inline">
-                                            Delete
-                                        </span>
-                                    </Button>
-                                </div>
-                            )}
                     </div>
-                </div>
-
-                {/* Post content */}
-                <div className="px-1 py-2">
-                    <h1 className="text-foreground mb-2 text-lg leading-tight font-semibold">
-                        {postData.isDeleted ? '[Deleted]' : postData.title}
-                    </h1>
-
-                    <div className="text-sm leading-normal">
+                    <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none">
                         {postData.isDeleted ? (
-                            <div className="text-muted-foreground italic">
-                                <p>[Content deleted]</p>
-                                <p className="mt-2 text-xs">
+                            <div className="space-y-2">
+                                <span className="block text-gray-500 italic dark:text-gray-300">
+                                    [Content deleted]
+                                </span>
+                                <span className="block text-sm text-gray-400 dark:text-gray-400">
                                     Removed on{' '}
                                     {new Date(
                                         postData.updatedAt,
                                     ).toLocaleString()}
-                                </p>
+                                </span>
                             </div>
                         ) : (
-                            <div
-                                className="prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{
-                                    __html: postData.content,
-                                }}
+                            <SafeHtml
+                                html={postData.content}
+                                className="whitespace-pre-wrap"
                             />
                         )}
                     </div>
                 </div>
-            </div>
 
-            {/* Comments section */}
-            <div>
-                <div className="mb-3">
-                    <h2 className="text-foreground text-base font-medium">
-                        Comments ({postData.comments?.length || 0})
+                <div className="mb-8">
+                    <h2 className="mb-4 text-2xl font-bold dark:text-white">
+                        Comments
                     </h2>
-                </div>
-
-                {session && !postData.isDeleted && (
-                    <div className="mb-4">
-                        <form onSubmit={handleSubmitComment}>
+                    {session && !postData.isDeleted && (
+                        <form onSubmit={handleSubmitComment} className="mb-6">
                             <TipTapEditor
                                 content={comment}
                                 onChange={setComment}
-                                placeholder="What are your thoughts?"
+                                placeholder="Write a comment..."
                                 variant="compact"
+                                postId={postId}
+                                communityId={post?.communityId || undefined}
+                                communitySlug={
+                                    post?.community?.slug || undefined
+                                }
                             />
-                            <div className="mt-2 flex justify-end">
-                                <Button
-                                    type="submit"
-                                    disabled={
-                                        createComment.isPending ||
-                                        !comment.trim()
-                                    }
-                                    size="sm"
-                                    className="w-full sm:w-auto"
-                                >
-                                    {createComment.isPending
-                                        ? 'Posting...'
-                                        : 'Comment'}
-                                </Button>
-                            </div>
+                            <Button
+                                type="submit"
+                                disabled={createComment.isPending}
+                                className="mt-2"
+                            >
+                                {createComment.isPending
+                                    ? 'Posting...'
+                                    : 'Post Comment'}
+                            </Button>
                         </form>
-                    </div>
-                )}
+                    )}
 
-                {postData.isDeleted && (
-                    <div className="bg-muted/30 text-muted-foreground mb-4 rounded p-2 text-xs">
-                        This post has been deleted. New comments are disabled,
-                        but existing comments are still visible.
-                    </div>
-                )}
+                    {postData.isDeleted && (
+                        <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 p-4 text-gray-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300">
+                            <p>
+                                This post has been deleted. New comments are
+                                disabled, but existing comments are still
+                                visible.
+                            </p>
+                        </div>
+                    )}
 
-                {postData.comments && postData.comments.length > 0 ? (
-                    <div className="divide-border/20 space-y-0 divide-y">
-                        {postData.comments.map(
+                    <div className="space-y-4">
+                        {postData.comments?.map(
                             (comment: CommentWithReplies) => (
                                 <CommentItem
                                     key={comment.id}
@@ -420,11 +363,7 @@ export default function PostPage() {
                             ),
                         )}
                     </div>
-                ) : (
-                    <div className="text-muted-foreground py-4 text-center text-sm">
-                        No comments yet. Be the first to comment!
-                    </div>
-                )}
+                </div>
             </div>
         </div>
     );

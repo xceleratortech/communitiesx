@@ -32,10 +32,14 @@ async function seedFromBackup() {
             {
                 id: 'org-935fb015-1621-4514-afcf-8cf8c759ec27',
                 name: 'Xcelerator',
+                createdAt: new Date('2025-05-20 11:09:55.569'),
+                slug: 'xcelerator',
             },
             {
                 id: 'THWrGxwfA0F3PpjULmmXp',
-                name: 'Atria University',
+                name: 'Xcelerator (Test)',
+                createdAt: new Date('2025-05-23 07:57:18.984'),
+                slug: 'xcelerator-test',
             },
         ]);
 

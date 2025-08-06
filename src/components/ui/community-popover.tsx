@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Building, Users, MessageSquare, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Community } from '@/types/models';
 
 interface CommunityPopoverProps {
     communityId: number;

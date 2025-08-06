@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
@@ -13,14 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Form,
     FormControl,
@@ -33,6 +26,14 @@ import {
 import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
 
 // Form schema
 const formSchema = z.object({
@@ -65,6 +66,7 @@ const formSchema = z.object({
     type: z.enum(['public', 'private'], {
         required_error: 'You must select a community type.',
     }),
+    postCreationMinRole: z.enum(['member', 'moderator', 'admin']),
     rules: z
         .string()
         .max(2000, {
@@ -83,15 +85,21 @@ const formSchema = z.object({
         .or(z.literal(''))
         .optional()
         .nullable(),
+    orgId: z.string().min(1, { message: 'Please select an organization.' }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function NewCommunityPage() {
+// Separate component that uses useSearchParams
+function NewCommunityForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const sessionData = useSession();
     const session = sessionData.data;
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Get orgId from URL params if provided
+    const orgIdFromUrl = searchParams.get('orgId');
 
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
@@ -111,7 +119,16 @@ export default function NewCommunityPage() {
         },
     });
 
-    // Initialize form
+    // Fetch organizations for the select
+    const { data: organizations, isLoading: isLoadingOrgs } =
+        trpc.organizations.getOrganizationsForCommunityCreate.useQuery(
+            { userId: session?.user?.id! },
+            {
+                enabled: !!session?.user?.id,
+            },
+        );
+
+    // Initialize form with orgId if provided
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -119,11 +136,20 @@ export default function NewCommunityPage() {
             slug: '',
             description: '',
             type: 'public',
+            postCreationMinRole: 'member',
             rules: '',
             avatar: '',
             banner: '',
+            orgId: orgIdFromUrl || '', // Pre-fill with orgId from URL
         },
     });
+
+    // Update form when orgIdFromUrl changes
+    useEffect(() => {
+        if (orgIdFromUrl) {
+            form.setValue('orgId', orgIdFromUrl);
+        }
+    }, [orgIdFromUrl, form]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {
@@ -131,16 +157,17 @@ export default function NewCommunityPage() {
             toast.error('You must be signed in to create a community');
             return;
         }
-
         setIsSubmitting(true);
         createCommunity.mutate({
             name: values.name,
             slug: values.slug,
             description: values.description || null,
             type: values.type,
+            postCreationMinRole: values.postCreationMinRole,
             rules: values.rules || null,
             avatar: values.avatar || null,
             banner: values.banner || null,
+            orgId: values.orgId,
         });
     };
 
@@ -193,336 +220,365 @@ export default function NewCommunityPage() {
     }
 
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
-                <Button variant="ghost" size="sm" asChild className="mb-4">
-                    <Link href="/communities">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Communities
-                    </Link>
-                </Button>
-                <h1 className="text-center text-3xl font-bold tracking-tight">
+                <h1 className="text-3xl font-bold tracking-tight">
                     Create a New Community
                 </h1>
-                <p className="text-muted-foreground mt-2 text-center">
+                <p className="text-muted-foreground mt-2">
                     Set up your community space where people can gather to
                     discuss and share content
                 </p>
             </div>
 
-            <Card className="mx-auto max-w-2xl">
-                <CardHeader>
-                    <CardTitle>Community Details</CardTitle>
-                    <CardDescription>
-                        Fill out the information below to create your community
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Form {...form}>
-                        <form
-                            onSubmit={form.handleSubmit(onSubmit)}
-                            className="space-y-6"
-                        >
-                            <FormField
-                                control={form.control}
-                                name="name"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Community Name</FormLabel>
-                                        <FormControl>
-                                            <Input
-                                                placeholder="Enter community name"
-                                                {...field}
-                                                onChange={handleNameChange}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            This is how your community will
-                                            appear to others
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+            <div>
+                <Form {...form}>
+                    <form
+                        onSubmit={form.handleSubmit(onSubmit)}
+                        className="space-y-6"
+                    >
+                        <FormField
+                            control={form.control}
+                            name="name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Community Name</FormLabel>
+                                    <FormControl>
+                                        <Input
+                                            placeholder="Enter community name"
+                                            {...field}
+                                            onChange={handleNameChange}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                            <FormField
-                                control={form.control}
-                                name="slug"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Community URL</FormLabel>
-                                        <FormControl>
-                                            <div className="flex items-center">
-                                                <span className="text-muted-foreground mr-2">
-                                                    /communities/
-                                                </span>
-                                                <Input
-                                                    placeholder="community-url"
-                                                    {...field}
-                                                />
-                                            </div>
-                                        </FormControl>
-                                        <FormDescription>
-                                            This will be the URL of your
-                                            community. Only lowercase letters,
-                                            numbers, and hyphens.
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="description"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Description</FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="Describe what your community is about"
-                                                className="min-h-24 resize-none"
-                                                {...field}
-                                            />
-                                        </FormControl>
-                                        <FormDescription>
-                                            A brief description to help people
-                                            understand what your community is
-                                            about
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="type"
-                                render={({ field }) => (
-                                    <FormItem className="space-y-3">
-                                        <FormLabel>Community Type</FormLabel>
-                                        <FormControl>
-                                            <RadioGroup
+                        <FormField
+                            control={form.control}
+                            name="orgId"
+                            render={({ field }) => (
+                                <FormItem className="w-full">
+                                    <FormLabel>Organization</FormLabel>
+                                    <FormControl>
+                                        <div className="w-full">
+                                            <Select
+                                                key={field.value} // Force re-render when value changes
+                                                value={field.value}
                                                 onValueChange={field.onChange}
-                                                defaultValue={field.value}
-                                                className="flex flex-col space-y-3"
+                                                disabled={isLoadingOrgs}
                                             >
-                                                <div className="flex items-center space-x-3 rounded-md border p-4">
-                                                    <RadioGroupItem
-                                                        value="public"
-                                                        id="public"
-                                                    />
-                                                    <Label
-                                                        htmlFor="public"
-                                                        className="flex cursor-pointer items-center gap-2"
-                                                    >
-                                                        <Globe className="h-4 w-4" />
-                                                        <div>
-                                                            <p className="font-medium">
-                                                                Public
-                                                            </p>
-                                                            <p className="text-muted-foreground text-sm">
-                                                                Anyone can view,
-                                                                post, and
-                                                                comment
-                                                            </p>
-                                                        </div>
-                                                    </Label>
-                                                </div>
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue placeholder="Select organization" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {organizations?.map(
+                                                        (org) => (
+                                                            <SelectItem
+                                                                key={org.id}
+                                                                value={org.id}
+                                                            >
+                                                                {org.name}
+                                                            </SelectItem>
+                                                        ),
+                                                    )}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                                                <div className="flex items-center space-x-3 rounded-md border p-4">
-                                                    <RadioGroupItem
-                                                        value="private"
-                                                        id="private"
-                                                    />
-                                                    <Label
-                                                        htmlFor="private"
-                                                        className="flex cursor-pointer items-center gap-2"
-                                                    >
-                                                        <Lock className="h-4 w-4" />
-                                                        <div>
-                                                            <p className="font-medium">
-                                                                Private
-                                                            </p>
-                                                            <p className="text-muted-foreground text-sm">
-                                                                Only approved
-                                                                members can view
-                                                                and post
-                                                            </p>
-                                                        </div>
-                                                    </Label>
-                                                </div>
-                                            </RadioGroup>
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-
-                            <FormField
-                                control={form.control}
-                                name="rules"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>
-                                            Community Rules (Optional)
-                                        </FormLabel>
-                                        <FormControl>
-                                            <Textarea
-                                                placeholder="Enter community rules and guidelines"
-                                                className="min-h-32 resize-none"
+                        <FormField
+                            control={form.control}
+                            name="slug"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Community URL</FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center">
+                                            <span className="text-muted-foreground mr-2">
+                                                /communities/
+                                            </span>
+                                            <Input
+                                                placeholder="community-url"
                                                 {...field}
                                             />
-                                        </FormControl>
-                                        <FormDescription>
-                                            Set guidelines for your community
-                                            members to follow
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                            <FormField
-                                control={form.control}
-                                name="avatar"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>
-                                            Community Avatar URL (Optional)
-                                        </FormLabel>
-                                        <FormControl>
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    placeholder="https://example.com/avatar.png"
-                                                    {...field}
-                                                    value={field.value || ''}
+                        <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Description</FormLabel>
+                                    <FormControl>
+                                        <Textarea
+                                            placeholder="Describe what your community is about"
+                                            className="min-h-24 resize-none"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="type"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>Community Type</FormLabel>
+                                    <FormControl>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-3"
+                                        >
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="public"
+                                                    id="public"
                                                 />
-                                                <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                                <Label
+                                                    htmlFor="public"
+                                                    className="flex cursor-pointer items-center gap-2"
+                                                >
+                                                    <Globe className="h-4 w-4" />
+                                                    <div>
+                                                        <p className="font-medium">
+                                                            Public
+                                                        </p>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Anyone can view and
+                                                            join this community
+                                                        </p>
+                                                    </div>
+                                                </Label>
                                             </div>
-                                        </FormControl>
-                                        <FormDescription>
-                                            URL to an image for your community
-                                            avatar
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
 
-                            <FormField
-                                control={form.control}
-                                name="banner"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>
-                                            Community Banner URL (Optional)
-                                        </FormLabel>
-                                        <FormControl>
-                                            <div className="flex items-center gap-2">
-                                                <Input
-                                                    placeholder="https://example.com/banner.png"
-                                                    {...field}
-                                                    value={field.value || ''}
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="private"
+                                                    id="private"
                                                 />
-                                                <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                                <Label
+                                                    htmlFor="private"
+                                                    className="flex cursor-pointer items-center gap-2"
+                                                >
+                                                    <Lock className="h-4 w-4" />
+                                                    <div>
+                                                        <p className="font-medium">
+                                                            Private
+                                                        </p>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Only invited members
+                                                            can view and join
+                                                        </p>
+                                                    </div>
+                                                </Label>
                                             </div>
-                                        </FormControl>
-                                        <FormDescription>
-                                            URL to an image for your community
-                                            banner
-                                        </FormDescription>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
 
-                            <div className="pt-4">
-                                <Button
-                                    type="submit"
-                                    disabled={isSubmitting}
-                                    className="w-full"
-                                >
-                                    {isSubmitting
-                                        ? 'Creating...'
-                                        : 'Create Community'}
-                                </Button>
-                            </div>
-                        </form>
-                    </Form>
-                </CardContent>
-            </Card>
+                        <FormField
+                            control={form.control}
+                            name="postCreationMinRole"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>
+                                        Post Creation Permissions
+                                    </FormLabel>
+                                    <FormControl>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-3"
+                                        >
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="member"
+                                                    id="member"
+                                                />
+                                                <Label
+                                                    htmlFor="member"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        All members
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Any community member can
+                                                        create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="moderator"
+                                                    id="moderator"
+                                                />
+                                                <Label
+                                                    htmlFor="moderator"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Moderators and admins
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only moderators and
+                                                        admins can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="admin"
+                                                    id="admin"
+                                                />
+                                                <Label
+                                                    htmlFor="admin"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Admins only
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only community admins
+                                                        can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="rules"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>
+                                        Community Rules (Optional)
+                                    </FormLabel>
+                                    <FormControl>
+                                        <Textarea
+                                            placeholder="Enter community rules and guidelines"
+                                            className="min-h-32 resize-none"
+                                            {...field}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="avatar"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>
+                                        Community Avatar URL (Optional)
+                                    </FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                placeholder="https://example.com/avatar.png"
+                                                {...field}
+                                                value={field.value || ''}
+                                            />
+                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="banner"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>
+                                        Community Banner URL (Optional)
+                                    </FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center gap-2">
+                                            <Input
+                                                placeholder="https://example.com/banner.png"
+                                                {...field}
+                                                value={field.value || ''}
+                                            />
+                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
+                                        </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <div className="pt-4">
+                            <Button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="w-full"
+                            >
+                                {isSubmitting
+                                    ? 'Creating...'
+                                    : 'Create Community'}
+                            </Button>
+                        </div>
+                    </form>
+                </Form>
+            </div>
         </div>
+    );
+}
+
+// Main component with Suspense boundary
+export default function NewCommunityPage() {
+    return (
+        <Suspense fallback={<NewCommunityPageSkeleton />}>
+            <NewCommunityForm />
+        </Suspense>
     );
 }
 
 // Skeleton loader for the new community page
 function NewCommunityPageSkeleton() {
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
-                <Skeleton className="mb-4 h-9 w-36" />
                 <Skeleton className="mb-2 h-8 w-64" />
                 <Skeleton className="h-4 w-96" />
             </div>
-
-            <Card className="mx-auto max-w-2xl">
-                <CardHeader>
-                    <Skeleton className="mb-2 h-6 w-40" />
-                    <Skeleton className="h-4 w-60" />
-                </CardHeader>
-                <CardContent>
-                    <div className="space-y-6">
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-32" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-4 w-48" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-32" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-4 w-72" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-32" />
-                            <Skeleton className="h-24 w-full" />
-                            <Skeleton className="h-4 w-60" />
-                        </div>
-
-                        <div className="space-y-3">
-                            <Skeleton className="h-5 w-32" />
-                            <div className="space-y-3">
-                                <Skeleton className="h-20 w-full" />
-                                <Skeleton className="h-20 w-full" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-40" />
-                            <Skeleton className="h-32 w-full" />
-                            <Skeleton className="h-4 w-56" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-40" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-4 w-56" />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Skeleton className="h-5 w-40" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-4 w-56" />
-                        </div>
-
-                        <div className="pt-4">
-                            <Skeleton className="h-10 w-full" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="space-y-6">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+            </div>
         </div>
     );
 }

@@ -2,8 +2,15 @@ import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
-import { eq, and, inArray } from 'drizzle-orm';
-import { users, orgs, communityMembers, communities } from '@/server/db/schema';
+import { eq, and, inArray, desc } from 'drizzle-orm';
+import {
+    users,
+    orgs,
+    communityMembers,
+    communities,
+    userBadgeAssignments,
+} from '@/server/db/schema';
+import { getUserPermission } from '../services/user-service';
 
 export const usersRouter = router({
     // Get a user's profile information
@@ -24,6 +31,8 @@ export const usersRouter = router({
                         email: true,
                         image: true,
                         orgId: true,
+                        role: true,
+                        appRole: true,
                     },
                 });
 
@@ -36,11 +45,29 @@ export const usersRouter = router({
 
                 // Then, get the organization name separately
                 const organization = await db.query.orgs.findFirst({
-                    where: eq(orgs.id, user.orgId),
+                    where: user.orgId ? eq(orgs.id, user.orgId) : undefined,
                     columns: {
                         name: true,
                     },
                 });
+
+                // Get user badges separately
+                const userBadges = await db.query.userBadgeAssignments.findMany(
+                    {
+                        where: eq(userBadgeAssignments.userId, input.userId),
+                        with: {
+                            badge: true,
+                            assignedBy: {
+                                columns: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                },
+                            },
+                        },
+                        orderBy: [desc(userBadgeAssignments.assignedAt)],
+                    },
+                );
 
                 return {
                     id: user.id,
@@ -49,6 +76,9 @@ export const usersRouter = router({
                     image: user.image,
                     orgId: user.orgId,
                     orgName: organization?.name,
+                    appRole: user.appRole,
+                    orgRole: user.role,
+                    badges: userBadges || [],
                 };
             } catch (error) {
                 console.error('Error fetching user profile:', error);
@@ -137,4 +167,16 @@ export const usersRouter = router({
                 });
             }
         }),
+
+    // Get the current user's permissions
+    getPermissions: publicProcedure.query(async ({ ctx }) => {
+        if (!ctx.session?.user) {
+            throw new TRPCError({
+                code: 'UNAUTHORIZED',
+                message: 'You must be logged in to view permissions',
+            });
+        }
+
+        return await getUserPermission(ctx.session.user.id);
+    }),
 });
