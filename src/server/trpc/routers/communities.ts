@@ -267,14 +267,23 @@ export const communitiesRouter = router({
                 // If the community is private, check if the user has access
                 if (community.type === 'private' && ctx.session?.user) {
                     const userId = ctx.session.user.id;
+                    const userOrgId = (ctx.session.user as any).orgId;
+                    const userRole = (ctx.session.user as any).role;
 
                     // Check if user is a member or follower
                     const membership = community.members.find(
                         (m) => m.userId === userId && m.status === 'active',
                     );
 
-                    // If user is not a member or follower, return the community without posts
-                    if (!membership) {
+                    // --- ORG ADMIN OVERRIDE ---
+                    const isOrgAdminForCommunity =
+                        userRole === 'admin' &&
+                        userOrgId &&
+                        community.orgId &&
+                        userOrgId === community.orgId;
+
+                    // If user is not a member/follower and not org admin, hide posts
+                    if (!membership && !isOrgAdminForCommunity) {
                         return {
                             ...community,
                             posts: [],
@@ -316,6 +325,7 @@ export const communitiesRouter = router({
                 // Return the community with posts that include author information and tags
                 return {
                     ...community,
+                    orgId: community.orgId, // <-- add this line
                     posts: postsWithTags,
                 };
             } catch (error) {
@@ -738,10 +748,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -807,10 +818,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    request.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        request.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -922,10 +934,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    request.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        request.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -978,10 +991,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -1065,10 +1079,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -1208,10 +1223,11 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canManageMembers = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-                );
+                const canManageMembers =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                    );
 
                 if (!canManageMembers) {
                     throw new TRPCError({
@@ -1288,7 +1304,7 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canCreateTag = permission.checkCommunityPermission(
+                const canCreateTag = await permission.checkCommunityPermission(
                     input.communityId.toString(),
                     PERMISSIONS.CREATE_TAG,
                 );
@@ -1347,7 +1363,7 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canEditTag = permission.checkCommunityPermission(
+                const canEditTag = await permission.checkCommunityPermission(
                     tag.communityId.toString(),
                     PERMISSIONS.EDIT_TAG,
                 );
@@ -1400,7 +1416,7 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canDeleteTag = permission.checkCommunityPermission(
+                const canDeleteTag = await permission.checkCommunityPermission(
                     tag.communityId.toString(),
                     PERMISSIONS.EDIT_TAG,
                 );

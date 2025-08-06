@@ -81,33 +81,55 @@ export function usePermission() {
         return hasPermission('org', data.orgRole, action);
     };
 
+    // Update checkCommunityPermission to require communityOrgId
     const checkCommunityPermission = (
         communityId: string,
         action: PermissionAction,
+        communityOrgId?: string | null,
     ): boolean => {
         // Super admins can perform any community action
         if (isAppAdmin()) return true;
 
+        // Find the user's community membership record
         const record = data.communityRoles.find(
             (c) => c.communityId === communityId,
         );
-        if (!record) return false;
+        if (record) {
+            const communityPerms = getAllPermissions('community', [
+                record.role,
+            ]);
+            const orgPerms = getAllPermissions('org', [data.orgRole]);
+            if (
+                communityPerms.includes(action) ||
+                orgPerms.includes(action) ||
+                communityPerms.includes('*') ||
+                orgPerms.includes('*')
+            ) {
+                return true;
+            }
+        }
 
-        const communityPerms = getAllPermissions('community', [record.role]);
-        const orgPerms = getAllPermissions('org', [data.orgRole]);
+        // --- ORG ADMIN OVERRIDE LOGIC ---
+        // Only allow if user is org admin AND the community's orgId matches the user's orgId
+        if (
+            data.orgRole === 'admin' &&
+            data.userDetails?.orgId &&
+            communityOrgId &&
+            data.userDetails.orgId === communityOrgId
+        ) {
+            return true;
+        }
 
-        return (
-            communityPerms.includes(action) ||
-            orgPerms.includes(action) ||
-            communityPerms.includes('*') ||
-            orgPerms.includes('*')
-        );
+        return false;
     };
 
+    // Update all usages in this file to require communityOrgId
+    // (For exported API, keep the old signature for backward compatibility, but warn if not provided)
     const checkPermission = (
         context: PermissionContext,
         action: PermissionAction,
         resourceId?: string,
+        communityOrgId?: string | null,
     ): boolean => {
         switch (context) {
             case 'app':
@@ -118,7 +140,11 @@ export function usePermission() {
 
             case 'community':
                 if (!resourceId) return false;
-                return checkCommunityPermission(resourceId, action);
+                return checkCommunityPermission(
+                    resourceId,
+                    action,
+                    communityOrgId,
+                );
 
             default:
                 return false;
