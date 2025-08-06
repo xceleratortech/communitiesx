@@ -81,11 +81,9 @@ export function usePermission() {
         return hasPermission('org', data.orgRole, action);
     };
 
-    // Update checkCommunityPermission to require communityOrgId
     const checkCommunityPermission = (
         communityId: string,
         action: PermissionAction,
-        communityOrgId?: string | null,
     ): boolean => {
         // Super admins can perform any community action
         if (isAppAdmin()) return true;
@@ -110,26 +108,24 @@ export function usePermission() {
         }
 
         // --- ORG ADMIN OVERRIDE LOGIC ---
-        // Only allow if user is org admin AND the community's orgId matches the user's orgId
+        // If user is org admin, check if the community belongs to their org
+
         if (
             data.orgRole === 'admin' &&
             data.userDetails?.orgId &&
-            communityOrgId &&
-            data.userDetails.orgId === communityOrgId
+            record?.orgId === data.userDetails.orgId
         ) {
-            return true;
+            // Only allow if the community's orgId matches the user's orgId
+            return hasPermission('org', data.orgRole, action);
         }
 
         return false;
     };
 
-    // Update all usages in this file to require communityOrgId
-    // (For exported API, keep the old signature for backward compatibility, but warn if not provided)
     const checkPermission = (
         context: PermissionContext,
         action: PermissionAction,
         resourceId?: string,
-        communityOrgId?: string | null,
     ): boolean => {
         switch (context) {
             case 'app':
@@ -140,11 +136,7 @@ export function usePermission() {
 
             case 'community':
                 if (!resourceId) return false;
-                return checkCommunityPermission(
-                    resourceId,
-                    action,
-                    communityOrgId,
-                );
+                return checkCommunityPermission(resourceId, action);
 
             default:
                 return false;
