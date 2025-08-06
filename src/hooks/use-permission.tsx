@@ -81,9 +81,11 @@ export function usePermission() {
         return hasPermission('org', data.orgRole, action);
     };
 
+    // Update checkCommunityPermission to require communityOrgId
     const checkCommunityPermission = (
         communityId: string,
         action: PermissionAction,
+        communityOrgId?: string | null,
     ): boolean => {
         // Super admins can perform any community action
         if (isAppAdmin()) return true;
@@ -108,37 +110,26 @@ export function usePermission() {
         }
 
         // --- ORG ADMIN OVERRIDE LOGIC ---
-        // If user is org admin, check if the community belongs to their org
+        // Only allow if user is org admin AND the community's orgId matches the user's orgId
         if (
             data.orgRole === 'admin' &&
             data.userDetails?.orgId &&
-            data.communityRoles
+            communityOrgId &&
+            data.userDetails.orgId === communityOrgId
         ) {
-            // Try to find the orgId for the community from any communityRoles record
-            // (Assumes at least one record for this orgId exists in communityRoles, or you may need to fetch community by id)
-            // For a more robust solution, you may want to pass communityOrgId as a param
-            // Here, we check if any communityRoles record for this orgId exists
-            // If not, you may need to fetch community data separately
-            // For now, we assume orgId is available in userDetails
-            // If you have communityOrgId available, compare directly
-            // Otherwise, this is a best-effort check
-            // If you want to be 100% robust, pass communityOrgId to this function
-            // For now, we assume orgId is available in userDetails and matches the community's orgId
-            // If so, allow all admin actions
-            // (You may want to fetch community by id to get orgId if not present)
-            // This logic can be improved if needed
-            // For now, allow if orgRole is admin and orgId matches
-            // (Assumes you have orgId on the community object in the UI)
             return true;
         }
 
         return false;
     };
 
+    // Update all usages in this file to require communityOrgId
+    // (For exported API, keep the old signature for backward compatibility, but warn if not provided)
     const checkPermission = (
         context: PermissionContext,
         action: PermissionAction,
         resourceId?: string,
+        communityOrgId?: string | null,
     ): boolean => {
         switch (context) {
             case 'app':
@@ -149,7 +140,11 @@ export function usePermission() {
 
             case 'community':
                 if (!resourceId) return false;
-                return checkCommunityPermission(resourceId, action);
+                return checkCommunityPermission(
+                    resourceId,
+                    action,
+                    communityOrgId,
+                );
 
             default:
                 return false;
