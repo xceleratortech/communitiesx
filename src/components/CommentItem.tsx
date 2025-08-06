@@ -102,7 +102,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
     };
 
     // Calculate left margin for thread indentation
-    const leftMargin = depth * 12; // 12px per level (more compact)
+    const leftMargin = Math.min(depth * 12, 48); // 12px per level, max 48px on mobile
 
     return (
         <div className="relative">
@@ -121,7 +121,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 className="hover:bg-muted/10 group relative px-2 py-1.5 transition-colors"
                 style={{ marginLeft: `${leftMargin}px` }}
             >
-                <div className="flex gap-1.5">
+                <div className="flex min-w-0 gap-1.5">
                     {/* Collapse/Expand button */}
                     <div className="flex w-4 flex-shrink-0 justify-center">
                         {hasReplies && (
@@ -179,7 +179,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                         ) : (
                             <>
                                 {/* Comment metadata */}
-                                <div className="text-muted-foreground mb-1 flex items-center gap-1 text-xs">
+                                <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-1 text-xs">
                                     {comment.author?.id ? (
                                         <UserProfilePopover
                                             userId={comment.author.id}
@@ -194,7 +194,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             Unknown
                                         </span>
                                     )}
-                                    <span>•</span>
+                                    <span className="hidden sm:inline">•</span>
                                     <span className="text-xs">
                                         {new Date(
                                             comment.createdAt,
@@ -208,7 +208,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     {comment.createdAt !==
                                         comment.updatedAt && (
                                         <>
-                                            <span>•</span>
+                                            <span className="hidden sm:inline">
+                                                •
+                                            </span>
                                             <span className="text-xs italic">
                                                 edited
                                             </span>
@@ -217,7 +219,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 </div>
 
                                 {/* Comment content */}
-                                <div className="mb-1.5">
+                                <div className="mb-1.5 break-words">
                                     {comment.isDeleted ? (
                                         <p className="text-muted-foreground text-sm italic">
                                             [Comment deleted]
@@ -231,7 +233,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 </div>
 
                                 {/* Comment actions */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
                                     {canReply && !comment.isDeleted && (
                                         <button
                                             onClick={() =>
@@ -259,7 +261,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     {canEdit && (
                                         <button
                                             onClick={() => onStartEdit(comment)}
-                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
+                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                                             title="Edit comment"
                                         >
                                             <Edit className="h-2.5 w-2.5" />
@@ -272,7 +274,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             onClick={() =>
                                                 onDeleteComment(comment.id)
                                             }
-                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
+                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                                             title="Delete comment"
                                             disabled={deleteCommentPending}
                                         >
