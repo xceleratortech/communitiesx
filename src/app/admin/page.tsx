@@ -82,7 +82,7 @@ type User = {
     email: string;
     emailVerified: boolean;
     image: string | null;
-    orgId: string;
+    orgId: string | null;
     organization?: {
         id: string;
         name: string;

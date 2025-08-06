@@ -30,6 +30,8 @@ import {
     Trash2,
     Edit,
     Tag,
+    Building,
+    X,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
@@ -142,6 +144,9 @@ export default function CommunityDetailPage() {
 
     // Tag filtering state
     const [selectedTagFilters, setSelectedTagFilters] = useState<number[]>([]);
+
+    // Post filtering state
+    const [showMyPosts, setShowMyPosts] = useState(false);
 
     const { checkCommunityPermission } = usePermission();
 
@@ -503,22 +508,32 @@ export default function CommunityDetailPage() {
         }
     };
 
-    // Filter posts by selected tags
+    // Filter posts by selected tags and post filter
     const filteredPosts = useMemo(() => {
         if (!community?.posts) return [];
 
-        if (selectedTagFilters.length === 0) {
-            return community.posts;
+        let filtered = community.posts;
+
+        // Filter by My Posts (posts by the current user)
+        if (showMyPosts) {
+            filtered = filtered.filter(
+                (post: any) => post.author?.id === session?.user?.id,
+            );
         }
 
-        return community.posts.filter(
-            (post: any) =>
-                post.tags &&
-                post.tags.some((tag: any) =>
-                    selectedTagFilters.includes(tag.id),
-                ),
-        );
-    }, [community?.posts, selectedTagFilters]);
+        // Filter by selected tags
+        if (selectedTagFilters.length > 0) {
+            filtered = filtered.filter(
+                (post: any) =>
+                    post.tags &&
+                    post.tags.some((tag: any) =>
+                        selectedTagFilters.includes(tag.id),
+                    ),
+            );
+        }
+
+        return filtered;
+    }, [community?.posts, selectedTagFilters, showMyPosts, session?.user?.id]);
 
     // Handle tag filter toggle
     const handleTagFilterToggle = (tagId: number) => {
@@ -527,6 +542,11 @@ export default function CommunityDetailPage() {
                 ? prev.filter((id) => id !== tagId)
                 : [...prev, tagId],
         );
+    };
+
+    // Handle post filter toggle
+    const handlePostFilterToggle = () => {
+        setShowMyPosts((prev) => !prev);
     };
 
     // Don't render anything meaningful during SSR to avoid hydration mismatches
@@ -1112,6 +1132,32 @@ export default function CommunityDetailPage() {
                                     )}
                                 </div>
 
+                                {/* Post Filter */}
+                                <div className="mb-4 flex flex-wrap items-center gap-2">
+                                    <button
+                                        onClick={handlePostFilterToggle}
+                                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                                            !showMyPosts
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                        }`}
+                                    >
+                                        <Building className="h-4 w-4" />
+                                        All Posts
+                                    </button>
+                                    <button
+                                        onClick={handlePostFilterToggle}
+                                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                                            showMyPosts
+                                                ? 'bg-primary text-primary-foreground'
+                                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                        }`}
+                                    >
+                                        <Users className="h-4 w-4" />
+                                        My Posts
+                                    </button>
+                                </div>
+
                                 {/* Tag Filter */}
                                 {community.tags &&
                                     community.tags.length > 0 && (
@@ -1366,7 +1412,9 @@ export default function CommunityDetailPage() {
                                             <p className="text-muted-foreground">
                                                 {selectedTagFilters.length > 0
                                                     ? 'No posts match the selected tags.'
-                                                    : 'No posts yet.'}
+                                                    : showMyPosts
+                                                      ? "You haven't created any posts in this community yet."
+                                                      : 'No posts yet.'}
                                             </p>
                                             {selectedTagFilters.length > 0 ? (
                                                 <Button
@@ -1378,6 +1426,15 @@ export default function CommunityDetailPage() {
                                                     className="mt-4"
                                                 >
                                                     Clear Filters
+                                                </Button>
+                                            ) : showMyPosts ? (
+                                                <Button
+                                                    onClick={() =>
+                                                        setShowMyPosts(false)
+                                                    }
+                                                    className="mt-4"
+                                                >
+                                                    Show All Posts
                                                 </Button>
                                             ) : canCreatePost ? (
                                                 <Button

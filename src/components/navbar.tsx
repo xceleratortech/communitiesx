@@ -152,12 +152,12 @@ export function Navbar() {
                     <div className="flex items-center space-x-4">
                         {mounted && session && (
                             <>
-                                <div className="flex sm:hidden">
+                                {/* <div className="flex sm:hidden">
                                     <ChatButton />
                                 </div>
                                 <div className="flex sm:hidden">
                                     <ViewNotificationButton />
-                                </div>
+                                </div> */}
                                 <div className="flex sm:hidden">
                                     <ThemeToggle variant="toggle" />
                                 </div>
@@ -168,8 +168,8 @@ export function Navbar() {
                             session ? (
                                 <>
                                     <div className="hidden items-center space-x-4 sm:flex">
-                                        <ChatButton />
-                                        <ViewNotificationButton />
+                                        {/* <ChatButton />
+                                        <ViewNotificationButton /> */}
                                         <ThemeToggle variant="toggle" />
 
                                         <Popover
@@ -298,7 +298,7 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        <NotificationButton variant="popover" />
+                                                        {/* <NotificationButton variant="popover" /> */}
 
                                                         <Link
                                                             href="/organization"
@@ -472,7 +472,7 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        <NotificationButton variant="popover" />
+                                                        {/* <NotificationButton variant="popover" /> */}
 
                                                         <Link
                                                             href="/organization"

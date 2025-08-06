@@ -447,4 +447,34 @@ export const adminRouter = router({
                 });
             }
         }),
+
+    // Get organization details for admin view
+    getOrgDetails: adminProcedure
+        .input(z.object({ slug: z.string() }))
+        .query(async ({ input, ctx }) => {
+            try {
+                const org = await db.query.orgs.findFirst({
+                    where: eq(orgs.slug, input.slug),
+                    with: {
+                        users: true,
+                        communities: true,
+                    },
+                });
+
+                if (!org) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Organization not found',
+                    });
+                }
+
+                return org;
+            } catch (error) {
+                console.error('Error fetching organization details:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch organization details',
+                });
+            }
+        }),
 });
