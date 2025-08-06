@@ -63,31 +63,59 @@ export class ServerPermissions {
         return hasPermission('org', this.permissionData.orgRole, action);
     }
 
-    checkCommunityPermission(
+    async checkCommunityPermission(
         communityId: string,
         action: PermissionAction,
-    ): boolean {
+    ): Promise<boolean> {
         // Super admins can perform any community action
         if (this.isAppAdmin()) return true;
 
+        // Find the user's community membership record
         const rec = this.permissionData.communityRoles.find(
             (c) => c.communityId === communityId,
         );
-        if (!rec) return false;
+        if (rec) {
+            const allowed = new Set<string>([
+                ...getAllPermissions('community', [rec.role]),
+                ...getAllPermissions('org', [this.permissionData.orgRole]),
+            ]);
+            if (allowed.has('*') || allowed.has(action)) return true;
+        }
 
-        const allowed = new Set<string>([
-            ...getAllPermissions('community', [rec.role]),
-            ...getAllPermissions('org', [this.permissionData.orgRole]),
-        ]);
+        // --- ORG ADMIN OVERRIDE LOGIC ---
+        // If user is org admin, check if the community belongs to their org
+        if (
+            this.permissionData.orgRole === 'admin' &&
+            this.permissionData.userDetails?.orgId
+        ) {
+            // Import db and communities at the top if not already
+            // Dynamically import to avoid circular deps if needed
+            const { db } = await import('@/server/db');
+            const { communities } = await import('@/server/db/schema');
+            const community = await db.query.communities.findFirst({
+                where: (c, { eq }) => eq(c.id, Number(communityId)),
+            });
+            if (
+                community &&
+                community.orgId === this.permissionData.userDetails.orgId
+            ) {
+                // Org admin can perform any community admin action for their org's communities
+                const allowed = new Set<string>([
+                    ...getAllPermissions('community', ['admin']),
+                    ...getAllPermissions('org', [this.permissionData.orgRole]),
+                ]);
+                return allowed.has('*') || allowed.has(action);
+            }
+        }
 
-        return allowed.has('*') || allowed.has(action);
+        return false;
     }
 
-    checkPermission(
+    async checkPermission(
         context: PermissionContext,
         action: PermissionAction,
         contextId?: string,
-    ): boolean {
+    ): Promise<boolean> {
         switch (context) {
             case 'app':
                 return this.checkAppPermission(action);
@@ -98,7 +126,7 @@ export class ServerPermissions {
                     throw new Error(
                         'communityId is required for community context',
                     );
-                return this.checkCommunityPermission(contextId, action);
+                return await this.checkCommunityPermission(contextId, action);
             default:
                 return false;
         }
@@ -174,7 +202,7 @@ export async function checkUserPermission(
     contextId?: string,
 ) {
     const perms = await ServerPermissions.fromUserId(userId);
-    return perms.checkPermission(context, action, contextId);
+    return await perms.checkPermission(context, action, contextId);
 }
 
 export async function getUserRole(
