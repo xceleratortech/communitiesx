@@ -269,35 +269,33 @@ export default function CommunityPostPage() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl py-4">
+        <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6">
             {/* Breadcrumb Navigation */}
-            <nav className="text-muted-foreground mb-6 flex items-center space-x-2 text-sm">
+            <nav className="text-muted-foreground mb-6 flex flex-wrap items-center gap-2 text-sm">
                 <Link
                     href="/"
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     <Home className="mr-1 h-4 w-4" />
-                    Home
+                    <span className="hidden sm:inline">Home</span>
                 </Link>
-                <span>/</span>
+                <span className="hidden sm:inline">/</span>
                 <Link
                     href="/communities"
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     <Users className="mr-1 h-4 w-4" />
-                    Communities
+                    <span className="hidden sm:inline">Communities</span>
                 </Link>
-                <span>/</span>
+                <span className="hidden sm:inline">/</span>
                 <Link
                     href={`/communities/${communitySlug}`}
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     {community?.name || 'Community'}
                 </Link>
-                <span>/</span>
-                {/* <span className="text-foreground">Posts</span>
-                <span>/</span> */}
-                <span className="text-foreground font-medium">
+                <span className="hidden sm:inline">/</span>
+                <span className="text-foreground truncate font-medium">
                     {postData.isDeleted ? '[Deleted]' : postData.title}
                 </span>
             </nav>
@@ -306,7 +304,7 @@ export default function CommunityPostPage() {
             {community && (
                 <Card className="mb-6">
                     <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                             <div className="flex items-center space-x-3">
                                 <Avatar className="h-10 w-10">
                                     <AvatarImage
@@ -323,7 +321,7 @@ export default function CommunityPostPage() {
                                     <h2 className="text-lg font-semibold">
                                         {community.name}
                                     </h2>
-                                    <div className="text-muted-foreground flex items-center space-x-2 text-sm">
+                                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
                                         <Badge
                                             variant={
                                                 community.type === 'private'
@@ -335,21 +333,23 @@ export default function CommunityPostPage() {
                                                 ? 'Private'
                                                 : 'Public'}
                                         </Badge>
-                                        <span>•</span>
+                                        <span className="hidden sm:inline">
+                                            •
+                                        </span>
                                         <span>Community Post</span>
                                     </div>
                                 </div>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                    router.push(`/communities/${communitySlug}`)
-                                }
-                            >
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Community
-                            </Button>
+                            <Link href={`/communities/${communitySlug}`}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Back to Community
+                                </Button>
+                            </Link>
                         </div>
                     </CardContent>
                 </Card>
@@ -358,8 +358,8 @@ export default function CommunityPostPage() {
             {/* Post Content */}
             <div className="mb-8">
                 <div className="mb-2 flex items-start justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold dark:text-white">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-2xl font-bold break-words sm:text-3xl dark:text-white">
                             {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
                     </div>
@@ -386,7 +386,7 @@ export default function CommunityPostPage() {
 
             {/* Comments Section */}
             <div className="mb-8">
-                <h2 className="mb-4 text-2xl font-bold dark:text-white">
+                <h2 className="mb-4 text-xl font-bold sm:text-2xl dark:text-white">
                     Comments
                 </h2>
                 {session && !postData.isDeleted && (

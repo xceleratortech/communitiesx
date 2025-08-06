@@ -34,6 +34,7 @@ import _ from 'lodash';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -143,13 +144,13 @@ export const communityRouter = router({
 
                         // --- ORG ADMIN OVERRIDE ---
                         // Check if user is org admin for this community
-                        const isOrgAdminForCommunity =
-                            user?.role === 'admin' &&
-                            user.orgId &&
-                            community.orgId &&
-                            user.orgId === community.orgId;
+                        const isOrgAdminForCommunityCheck =
+                            isOrgAdminForCommunity(
+                                ctx.session?.user,
+                                community.orgId,
+                            );
 
-                        if (!userMembership && !isOrgAdminForCommunity) {
+                        if (!userMembership && !isOrgAdminForCommunityCheck) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
                                 message:
@@ -179,7 +180,7 @@ export const communityRouter = router({
 
                         if (
                             userRoleLevel < minRoleLevel &&
-                            !isOrgAdminForCommunity
+                            !isOrgAdminForCommunityCheck
                         ) {
                             const roleDisplay = {
                                 member: 'members',
@@ -297,11 +298,6 @@ export const communityRouter = router({
             try {
                 const userId = ctx.session.user.id;
 
-                // Get user's org ID for org admin check
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, userId),
-                });
-
                 // Get all communities where the user is a member or follower
                 const userCommunities =
                     await db.query.communityMembers.findMany({
@@ -317,9 +313,12 @@ export const communityRouter = router({
                 // --- ORG ADMIN OVERRIDE ---
                 // If user is org admin, also get communities from their org
                 let additionalCommunityIds: number[] = [];
-                if (user?.role === 'admin' && user.orgId) {
+                if (
+                    ctx.session.user.appRole === 'admin' &&
+                    ctx.session.user.orgId
+                ) {
                     const orgCommunities = await db.query.communities.findMany({
-                        where: eq(communities.orgId, user.orgId),
+                        where: eq(communities.orgId, ctx.session.user.orgId),
                         columns: { id: true },
                     });
                     additionalCommunityIds = orgCommunities.map((c) => c.id);
@@ -381,10 +380,7 @@ export const communityRouter = router({
                 const userId = ctx.session.user.id;
 
                 // Get user's org ID
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, userId),
-                });
-                const orgId = user?.orgId;
+                const orgId = ctx.session.user.orgId;
 
                 if (!orgId) {
                     throw new TRPCError({
@@ -408,9 +404,12 @@ export const communityRouter = router({
                 // --- ORG ADMIN OVERRIDE ---
                 // If user is org admin, also get communities from their org
                 let additionalCommunityIds: number[] = [];
-                if (user?.role === 'admin' && user.orgId) {
+                if (
+                    ctx.session.user.appRole === 'admin' &&
+                    ctx.session.user.orgId
+                ) {
                     const orgCommunities = await db.query.communities.findMany({
-                        where: eq(communities.orgId, user.orgId),
+                        where: eq(communities.orgId, ctx.session.user.orgId),
                         columns: { id: true },
                     });
                     additionalCommunityIds = orgCommunities.map((c) => c.id);
@@ -608,16 +607,12 @@ export const communityRouter = router({
 
                     // --- ORG ADMIN OVERRIDE ---
                     // Check if user is org admin for this community
-                    const user = await db.query.users.findFirst({
-                        where: eq(users.id, ctx.session.user.id),
-                    });
-                    const isOrgAdminForCommunity =
-                        user?.role === 'admin' &&
-                        user.orgId &&
-                        postFromDb.community?.orgId &&
-                        user.orgId === postFromDb.community.orgId;
+                    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+                        ctx.session.user,
+                        postFromDb.community?.orgId,
+                    );
 
-                    if (!membership && !isOrgAdminForCommunity) {
+                    if (!membership && !isOrgAdminForCommunityCheck) {
                         throw new TRPCError({
                             code: 'FORBIDDEN',
                             message:
