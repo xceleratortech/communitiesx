@@ -250,7 +250,13 @@ export const organizationsRouter = router({
                     message: 'Organization not found',
                 });
 
-            const orgCommunities = await db.query.communities.findMany({
+            // Get communities that directly belong to this organization
+            const directCommunities = await db.query.communities.findMany({
+                where: eq(communities.orgId, org.id),
+            });
+
+            // Get communities that are allowed for this organization via communityAllowedOrgs
+            const allowedCommunities = await db.query.communities.findMany({
                 where: (communities, { inArray }) =>
                     inArray(
                         communities.id,
@@ -262,6 +268,17 @@ export const organizationsRouter = router({
                             .where(eq(communityAllowedOrgs.orgId, org.id)),
                     ),
             });
+
+            // Combine and deduplicate communities
+            const allCommunities = [
+                ...directCommunities,
+                ...allowedCommunities.filter(
+                    (allowed) =>
+                        !directCommunities.some(
+                            (direct) => direct.id === allowed.id,
+                        ),
+                ),
+            ];
 
             const members = await db.query.users.findMany({
                 where: eq(users.orgId, org.id),
@@ -275,7 +292,7 @@ export const organizationsRouter = router({
                 orderBy: [users.createdAt],
             });
 
-            return { ...org, communities: orgCommunities, members };
+            return { ...org, communities: allCommunities, members };
         }),
 
     deleteCommunity: publicProcedure
