@@ -34,6 +34,7 @@ import _ from 'lodash';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
@@ -141,7 +142,15 @@ export const communityRouter = router({
                                 m.status === 'active',
                         );
 
-                        if (!userMembership) {
+                        // --- ORG ADMIN OVERRIDE ---
+                        // Check if user is org admin for this community
+                        const isOrgAdminForCommunityCheck =
+                            isOrgAdminForCommunity(
+                                ctx.session?.user,
+                                community.orgId,
+                            );
+
+                        if (!userMembership && !isOrgAdminForCommunityCheck) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
                                 message:
@@ -150,7 +159,7 @@ export const communityRouter = router({
                         }
 
                         // Check if user's role meets the minimum requirement for post creation
-                        const userRole = userMembership.role;
+                        const userRole = userMembership?.role || 'admin'; // Default to admin for org admins
                         const minRole = community.postCreationMinRole;
 
                         // Define role hierarchy (higher number = higher privilege)
@@ -169,7 +178,10 @@ export const communityRouter = router({
                                 minRole as keyof typeof roleHierarchy
                             ] || 1;
 
-                        if (userRoleLevel < minRoleLevel) {
+                        if (
+                            userRoleLevel < minRoleLevel &&
+                            !isOrgAdminForCommunityCheck
+                        ) {
                             const roleDisplay = {
                                 member: 'members',
                                 moderator: 'moderators and admins',
@@ -298,20 +310,42 @@ export const communityRouter = router({
                         },
                     });
 
-                // Extract community IDs
-                const communityIds = userCommunities.map(
+                // --- ORG ADMIN OVERRIDE ---
+                // If user is org admin, also get communities from their org
+                let additionalCommunityIds: number[] = [];
+                if (
+                    ctx.session.user.appRole === 'admin' &&
+                    ctx.session.user.orgId
+                ) {
+                    const orgCommunities = await db.query.communities.findMany({
+                        where: eq(communities.orgId, ctx.session.user.orgId),
+                        columns: { id: true },
+                    });
+                    additionalCommunityIds = orgCommunities.map((c) => c.id);
+                }
+
+                // Extract community IDs from memberships
+                const membershipCommunityIds = userCommunities.map(
                     (membership) => membership.communityId,
                 );
 
-                // If user isn't part of any communities, return an empty array
-                if (communityIds.length === 0) {
+                // Combine membership communities with org admin communities
+                const allCommunityIds = [
+                    ...new Set([
+                        ...membershipCommunityIds,
+                        ...additionalCommunityIds,
+                    ]),
+                ];
+
+                // If user isn't part of any communities and isn't org admin, return an empty array
+                if (allCommunityIds.length === 0) {
                     return [];
                 }
 
                 // Get posts from these communities
                 const relevantPosts = await db.query.posts.findMany({
                     where: and(
-                        inArray(posts.communityId, communityIds),
+                        inArray(posts.communityId, allCommunityIds),
                         eq(posts.isDeleted, false),
                     ),
                     orderBy: desc(posts.createdAt),
@@ -346,10 +380,7 @@ export const communityRouter = router({
                 const userId = ctx.session.user.id;
 
                 // Get user's org ID
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, userId),
-                });
-                const orgId = user?.orgId;
+                const orgId = ctx.session.user.orgId;
 
                 if (!orgId) {
                     throw new TRPCError({
@@ -370,6 +401,20 @@ export const communityRouter = router({
                         },
                     });
 
+                // --- ORG ADMIN OVERRIDE ---
+                // If user is org admin, also get communities from their org
+                let additionalCommunityIds: number[] = [];
+                if (
+                    ctx.session.user.appRole === 'admin' &&
+                    ctx.session.user.orgId
+                ) {
+                    const orgCommunities = await db.query.communities.findMany({
+                        where: eq(communities.orgId, ctx.session.user.orgId),
+                        columns: { id: true },
+                    });
+                    additionalCommunityIds = orgCommunities.map((c) => c.id);
+                }
+
                 // Create a map of community ID to membership type for quick lookup
                 const communityMembershipMap = new Map();
                 userMemberships.forEach((membership) => {
@@ -379,10 +424,18 @@ export const communityRouter = router({
                     );
                 });
 
-                // Extract community IDs
-                const communityIds = userMemberships.map(
+                // Extract community IDs from memberships
+                const membershipCommunityIds = userMemberships.map(
                     (membership) => membership.communityId,
                 );
+
+                // Combine membership communities with org admin communities
+                const allCommunityIds = [
+                    ...new Set([
+                        ...membershipCommunityIds,
+                        ...additionalCommunityIds,
+                    ]),
+                ];
 
                 // Get organization-wide posts (not belonging to any community)
                 const orgPosts = await db.query.posts.findMany({
@@ -427,10 +480,10 @@ export const communityRouter = router({
 
                 // Get community posts if user is part of any communities
                 let communityPosts: PostWithSource[] = [];
-                if (communityIds.length > 0) {
+                if (allCommunityIds.length > 0) {
                     const rawCommunityPosts = await db.query.posts.findMany({
                         where: and(
-                            inArray(posts.communityId, communityIds),
+                            inArray(posts.communityId, allCommunityIds),
                             eq(posts.isDeleted, false),
                         ),
                         orderBy: [desc(posts.createdAt)],
@@ -552,7 +605,14 @@ export const communityRouter = router({
                             ),
                         });
 
-                    if (!membership) {
+                    // --- ORG ADMIN OVERRIDE ---
+                    // Check if user is org admin for this community
+                    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+                        ctx.session.user,
+                        postFromDb.community?.orgId,
+                    );
+
+                    if (!membership && !isOrgAdminForCommunityCheck) {
                         throw new TRPCError({
                             code: 'FORBIDDEN',
                             message:
@@ -1240,19 +1300,19 @@ export const communityRouter = router({
                 });
             }
 
-            // Check if the current user is an admin of the community
-            const adminMembership = await db.query.communityMembers.findFirst({
-                where: and(
-                    eq(communityMembers.userId, ctx.session.user.id),
-                    eq(communityMembers.communityId, input.communityId),
-                    eq(communityMembers.role, 'admin'),
-                ),
-            });
+            // Use permission system to check if user can manage community members
+            const permission = await ServerPermissions.fromUserId(
+                ctx.session.user.id,
+            );
+            const canRemoveModerator = permission.checkCommunityPermission(
+                input.communityId.toString(),
+                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+            );
 
-            if (!adminMembership) {
+            if (!canRemoveModerator) {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
-                    message: 'Only community admins can remove moderators',
+                    message: 'You do not have permission to remove moderators',
                 });
             }
 
