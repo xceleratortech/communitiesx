@@ -1,10 +1,13 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import nodemailer from 'nodemailer';
 import { z } from 'zod';
 
 // Default sender email that will be used if none is provided
 const DEFAULT_FROM =
     process.env.DEFAULT_EMAIL_FROM ||
-    'Communities App <noreply@communities.app>';
+    'Communities App <noreply@xcelerator.co.in>';
 
 // Create a transporter using SMTP credentials
 const transporter = nodemailer.createTransport({

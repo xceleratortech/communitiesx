@@ -191,6 +191,29 @@ export default function EditCommunityPage() {
         );
     }
 
+    // Permission logic: allow if user is community admin, or org admin for this org
+    const isOrgAdminForCommunity =
+        session?.user?.role === 'admin' &&
+        session?.user &&
+        community?.orgId &&
+        (session.user as any).orgId === community.orgId;
+    // TODO: If you have a more granular community admin check, add it here
+    // For now, allow edit if org admin for this org
+
+    if (!isOrgAdminForCommunity) {
+        return (
+            <div className="container mx-auto px-4 py-16 text-center">
+                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
+                <p className="text-muted-foreground mb-8">
+                    You do not have permission to edit this community.
+                </p>
+                <Button asChild>
+                    <Link href={`/communities/${slug}`}>Back to Community</Link>
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
