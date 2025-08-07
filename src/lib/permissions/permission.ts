@@ -90,6 +90,87 @@ export type AppRole = keyof typeof permissions.app;
 export type OrgRole = keyof typeof permissions.org;
 export type CommunityRole = keyof typeof permissions.community;
 
+/**
+ * Permission Hierarchy:
+ *
+ * 1. SuperAdmin (appRole=admin) - Overrides everything
+ * 2. OrgAdmin (orgRole=admin) - Overrides CommunityAdmin for their org's communities
+ * 3. CommunityAdmin - Manages their specific community
+ * 4. CommunityModerator - Limited community management
+ * 5. CommunityMember - Basic community access
+ *
+ * Hierarchy Rules:
+ * - SuperAdmin can perform any action in any context
+ * - OrgAdmin can perform any community action for communities in their organization
+ * - CommunityAdmin can perform any action within their community
+ * - Lower roles inherit permissions from higher roles in their context
+ */
+
+/**
+ * Check if a role can override another role in the hierarchy
+ */
+export function canOverrideRole(
+    context: PermissionContext,
+    userRole: string | null | undefined,
+    targetRole: string | null | undefined,
+    orgRole?: string | null | undefined,
+    appRole?: string | null | undefined,
+): boolean {
+    if (!userRole || !targetRole) return false;
+
+    // SuperAdmin can override any role in any context
+    if (appRole === 'admin') return true;
+
+    // OrgAdmin can override any role in their org's communities
+    if (orgRole === 'admin' && context === 'community') {
+        return true; // OrgAdmin can override any community role
+    }
+
+    // OrgAdmin can override lower org roles
+    if (userRole === 'admin' && context === 'org') {
+        return (
+            targetRole === 'admin' ||
+            targetRole === 'moderator' ||
+            targetRole === 'member'
+        );
+    }
+
+    // CommunityAdmin can override lower community roles
+    if (userRole === 'admin' && context === 'community') {
+        return targetRole === 'moderator' || targetRole === 'member';
+    }
+
+    // CommunityModerator can override community members
+    if (userRole === 'moderator' && context === 'community') {
+        return targetRole === 'member';
+    }
+
+    return false;
+}
+
+/**
+ * Get the effective role for a user in a specific context
+ * This considers the hierarchy and overrides
+ */
+export function getEffectiveRole(
+    context: PermissionContext,
+    userRole: string | null | undefined,
+    orgRole?: string | null | undefined,
+    appRole?: string | null | undefined,
+): string | null {
+    if (!userRole) return null;
+
+    // SuperAdmin has highest priority - can override any role in any context
+    if (appRole === 'admin') return 'admin';
+
+    // OrgAdmin can act as CommunityAdmin for their org's communities
+    if (orgRole === 'admin' && context === 'community') {
+        return 'admin'; // OrgAdmin should always be treated as admin in their org's communities
+    }
+
+    return userRole;
+}
+
 export function hasPermission(
     context: PermissionContext,
     role: string | undefined | null,
