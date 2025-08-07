@@ -75,13 +75,6 @@ export class ServerPermissions {
         const rec = this.permissionData.communityRoles.find(
             (c) => c.communityId === communityId,
         );
-        if (rec) {
-            const allowed = new Set<string>([
-                ...getAllPermissions('community', [rec.role]),
-                ...getAllPermissions('org', [this.permissionData.orgRole]),
-            ]);
-            if (allowed.has('*') || allowed.has(action)) return true;
-        }
 
         // --- ORG ADMIN OVERRIDE LOGIC ---
         // If user is org admin, check if the community belongs to their org
@@ -89,8 +82,6 @@ export class ServerPermissions {
             this.permissionData.orgRole === 'admin' &&
             this.permissionData.userDetails?.orgId
         ) {
-            // Import db and communities at the top if not already
-            // Dynamically import to avoid circular deps if needed
             const { db } = await import('@/server/db');
             const { communities } = await import('@/server/db/schema');
             const community = await db.query.communities.findFirst({
@@ -107,6 +98,15 @@ export class ServerPermissions {
                 ]);
                 return allowed.has('*') || allowed.has(action);
             }
+        }
+
+        // Regular permission check using the found record
+        if (rec) {
+            const allowed = new Set<string>([
+                ...getAllPermissions('community', [rec.role]),
+                ...getAllPermissions('org', [this.permissionData.orgRole]),
+            ]);
+            if (allowed.has('*') || allowed.has(action)) return true;
         }
 
         return false;
@@ -156,35 +156,13 @@ export class ServerPermissions {
             (c) => c.communityId === communityId,
         );
 
-        // If org admin, check if they should get community admin permissions
+        // If org admin, check if this community belongs to their org
         if (
             this.permissionData.orgRole === 'admin' &&
             this.permissionData.userDetails?.orgId
         ) {
-            let belongsToOrg = false;
-
-            // Check via existing record first
+            // Check if this community belongs to the user's org
             if (rec && rec.orgId === this.permissionData.userDetails.orgId) {
-                belongsToOrg = true;
-            } else if (!rec) {
-                // If no record, check via database lookup
-                const { db } = await import('@/server/db');
-                const { communities } = await import('@/server/db/schema');
-
-                // Convert string communityId to number
-                const communityIdNum = parseInt(communityId, 10);
-                if (!isNaN(communityIdNum)) {
-                    const community = await db.query.communities.findFirst({
-                        where: eq(communities.id, communityIdNum),
-                    });
-
-                    belongsToOrg =
-                        community?.orgId ===
-                        this.permissionData.userDetails.orgId;
-                }
-            }
-
-            if (belongsToOrg) {
                 const perms = new Set<string>([
                     ...getAllPermissions('org', [this.permissionData.orgRole]),
                     ...getAllPermissions('community', ['admin']),

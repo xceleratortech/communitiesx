@@ -69,6 +69,8 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { UserBadgeDisplay } from '@/components/ui/user-badge-display';
+import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { SafeHtml } from '@/lib/sanitize';
@@ -254,7 +256,9 @@ export default function CommunityDetailPage() {
                             (m.role === 'admin' || m.role === 'moderator'),
                     ) ||
                         // Allow org admins to see pending requests
-                        isOrgAdminForCommunityCheck),
+                        isOrgAdminForCommunityCheck ||
+                        // Allow Super Admins to see pending requests for any community
+                        (session?.user as any)?.appRole === 'admin'),
             },
         );
 
@@ -1617,12 +1621,19 @@ export default function CommunityDetailPage() {
                                         <Table>
                                             <TableHeader>
                                                 <TableRow>
-                                                    <TableHead>User</TableHead>
-                                                    <TableHead>Role</TableHead>
-                                                    <TableHead>
+                                                    <TableHead className="text-center">
+                                                        User
+                                                    </TableHead>
+                                                    <TableHead className="text-center">
+                                                        Badges
+                                                    </TableHead>
+                                                    <TableHead className="text-center">
+                                                        Role
+                                                    </TableHead>
+                                                    <TableHead className="text-center">
                                                         Joined
                                                     </TableHead>
-                                                    <TableHead className="text-right">
+                                                    <TableHead className="text-center">
                                                         Actions
                                                     </TableHead>
                                                 </TableRow>
@@ -1657,8 +1668,8 @@ export default function CommunityDetailPage() {
                                                         <TableRow
                                                             key={member.userId}
                                                         >
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-3">
+                                                            <TableCell className="text-center">
+                                                                <div className="flex items-center justify-center gap-3">
                                                                     {member.user
                                                                         ?.id ? (
                                                                         <UserProfilePopover
@@ -1745,7 +1756,19 @@ export default function CommunityDetailPage() {
                                                                     </div>
                                                                 </div>
                                                             </TableCell>
-                                                            <TableCell>
+                                                            <TableCell className="text-center">
+                                                                {member.user
+                                                                    ?.id && (
+                                                                    <UserBadgesInTable
+                                                                        userId={
+                                                                            member
+                                                                                .user
+                                                                                .id
+                                                                        }
+                                                                    />
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell className="text-center">
                                                                 <Badge
                                                                     variant={
                                                                         member.role ===
@@ -1766,14 +1789,14 @@ export default function CommunityDetailPage() {
                                                                           : 'Member'}
                                                                 </Badge>
                                                             </TableCell>
-                                                            <TableCell>
+                                                            <TableCell className="text-center">
                                                                 {member.joinedAt
                                                                     ? new Date(
                                                                           member.joinedAt,
                                                                       ).toLocaleDateString()
                                                                     : '-'}
                                                             </TableCell>
-                                                            <TableCell className="text-right">
+                                                            <TableCell className="text-center">
                                                                 {canManageCommunityMembers && (
                                                                     <DropdownMenu>
                                                                         <DropdownMenuTrigger
