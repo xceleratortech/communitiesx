@@ -256,7 +256,9 @@ export default function CommunityDetailPage() {
                             (m.role === 'admin' || m.role === 'moderator'),
                     ) ||
                         // Allow org admins to see pending requests
-                        isOrgAdminForCommunityCheck),
+                        isOrgAdminForCommunityCheck ||
+                        // Allow Super Admins to see pending requests for any community
+                        (session?.user as any)?.appRole === 'admin'),
             },
         );
 
