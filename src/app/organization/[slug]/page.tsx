@@ -33,6 +33,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
@@ -328,12 +329,23 @@ export default function OrganizationCommunitiesPage() {
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Email</TableHead>
-                                        <TableHead>Role</TableHead>
-                                        <TableHead>Joined</TableHead>
+                                        <TableHead className="text-center">
+                                            Name
+                                        </TableHead>
+                                        <TableHead className="text-center">
+                                            Badges
+                                        </TableHead>
+                                        <TableHead className="text-center">
+                                            Email
+                                        </TableHead>
+                                        <TableHead className="text-center">
+                                            Role
+                                        </TableHead>
+                                        <TableHead className="text-center">
+                                            Joined
+                                        </TableHead>
                                         {canManageMembers && (
-                                            <TableHead className="text-right">
+                                            <TableHead className="text-center">
                                                 Actions
                                             </TableHead>
                                         )}
@@ -344,13 +356,18 @@ export default function OrganizationCommunitiesPage() {
                                     orgData.members.length > 0 ? (
                                         orgData.members.map((member: any) => (
                                             <TableRow key={member.id}>
-                                                <TableCell className="font-medium">
+                                                <TableCell className="text-center font-medium">
                                                     {member.name}
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground">
+                                                <TableCell className="text-center">
+                                                    <UserBadgesInTable
+                                                        userId={member.id}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-center">
                                                     {member.email}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
                                                     <span
                                                         className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
                                                             member.role ===
@@ -362,14 +379,14 @@ export default function OrganizationCommunitiesPage() {
                                                         {member.role}
                                                     </span>
                                                 </TableCell>
-                                                <TableCell className="text-muted-foreground">
+                                                <TableCell className="text-muted-foreground text-center">
                                                     {new Date(
                                                         member.createdAt,
                                                     ).toLocaleDateString()}
                                                 </TableCell>
                                                 {canManageMembers && (
-                                                    <TableCell className="text-right">
-                                                        <div className="flex justify-end">
+                                                    <TableCell className="text-center">
+                                                        <div className="flex justify-center">
                                                             {member.role !==
                                                                 'admin' && (
                                                                 <DropdownMenu>
@@ -425,7 +442,7 @@ export default function OrganizationCommunitiesPage() {
                                         <TableRow>
                                             <TableCell
                                                 colSpan={
-                                                    canManageMembers ? 5 : 4
+                                                    canManageMembers ? 6 : 5
                                                 }
                                                 className="text-muted-foreground py-8 text-center"
                                             >

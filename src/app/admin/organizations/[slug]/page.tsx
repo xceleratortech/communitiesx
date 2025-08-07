@@ -38,6 +38,7 @@ import { InviteUserDialog } from '@/components/invite-user-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
+import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import {
     Card,
     CardContent,
@@ -225,18 +226,6 @@ export default function AdminOrganizationDetailPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">
-                                    Organization ID
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="font-mono text-sm">
-                                    {orgData.id}
-                                </div>
-                            </CardContent>
-                        </Card>
                     </div>
                 </TabsContent>
 
@@ -386,11 +375,22 @@ export default function AdminOrganizationDetailPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead>Role</TableHead>
-                                            <TableHead>Joined</TableHead>
-                                            <TableHead className="text-right">
+                                            <TableHead className="text-center">
+                                                Name
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Badges
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Email
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Role
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Joined
+                                            </TableHead>
+                                            <TableHead className="text-center">
                                                 Actions
                                             </TableHead>
                                         </TableRow>
@@ -398,13 +398,18 @@ export default function AdminOrganizationDetailPage() {
                                     <TableBody>
                                         {orgData.members.map((member) => (
                                             <TableRow key={member.id}>
-                                                <TableCell className="font-medium">
+                                                <TableCell className="text-center font-medium">
                                                     {member.name}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
+                                                    <UserBadgesInTable
+                                                        userId={member.id}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center">
                                                     {member.email}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
                                                     <Badge
                                                         variant={
                                                             member.role ===
@@ -416,12 +421,12 @@ export default function AdminOrganizationDetailPage() {
                                                         {member.role}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
                                                     {new Date(
                                                         member.createdAt,
                                                     ).toLocaleDateString()}
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="text-center">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger
                                                             asChild

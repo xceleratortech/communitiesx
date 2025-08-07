@@ -28,6 +28,8 @@ import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Loading } from '@/components/ui/loading';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+import { usePermission } from '@/hooks/use-permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 interface Tag {
     id: number;
@@ -57,23 +59,35 @@ function NewPostForm() {
         );
 
     // Check if user is a member of the community
+    const { checkCommunityPermission, isAppAdmin } = usePermission();
+
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
     );
-    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
-        session?.user,
-        community?.orgId,
-    );
+
+    // Check if user is a member of the community
     const isMember =
-        (!!userMembership && userMembership.membershipType === 'member') ||
-        isOrgAdminForCommunityCheck;
+        !!userMembership && userMembership.membershipType === 'member';
 
-    // Check if user can create posts based on role hierarchy
+    // Check if user can create posts using proper permission system
     const canCreatePost = React.useMemo(() => {
-        // If org admin, allow post creation
-        if (isOrgAdminForCommunityCheck) return true;
+        if (!community?.id) return false;
 
-        if (!isMember || !userMembership) return false;
+        // SuperAdmin can create posts anywhere
+        if (isAppAdmin()) return true;
+
+        // Check if user has permission to create posts in this community
+        const hasPermission = checkCommunityPermission(
+            community.id.toString(),
+            PERMISSIONS.CREATE_POST,
+        );
+
+        if (hasPermission) return true;
+
+        // Fallback: check if user is a member with appropriate role
+        if (!userMembership || userMembership.membershipType !== 'member') {
+            return false;
+        }
 
         const roleHierarchy = {
             member: 1,
@@ -91,10 +105,11 @@ function NewPostForm() {
 
         return userRoleLevel >= minRoleLevel;
     }, [
-        isMember,
+        community?.id,
         userMembership,
         community?.postCreationMinRole,
-        isOrgAdminForCommunityCheck,
+        checkCommunityPermission,
+        isAppAdmin,
     ]);
 
     // Get available tags for the community
