@@ -226,18 +226,6 @@ export default function AdminOrganizationDetailPage() {
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">
-                                    Organization ID
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="font-mono text-sm">
-                                    {orgData.id}
-                                </div>
-                            </CardContent>
-                        </Card>
                     </div>
                 </TabsContent>
 
