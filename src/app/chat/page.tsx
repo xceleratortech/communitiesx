@@ -374,7 +374,10 @@ function ChatThread({ threadId }: { threadId: number }) {
                 {/* Top loader or no more messages info */}
                 {loadingOlder && (
                     <div className="text-muted-foreground mb-2 flex justify-center text-xs">
-                        Loading older messages...
+                        <Loading
+                            message="Loading older messages..."
+                            size="sm"
+                        />
                     </div>
                 )}
                 {!hasMore && paginatedMessages.length > 0 && (

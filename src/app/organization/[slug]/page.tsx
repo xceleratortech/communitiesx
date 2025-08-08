@@ -37,6 +37,7 @@ import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
+import { Loading } from '@/components/ui/loading';
 
 export default function OrganizationCommunitiesPage() {
     const params = useParams();
@@ -47,6 +48,13 @@ export default function OrganizationCommunitiesPage() {
         trpc.organizations.getOrganizationWithCommunities.useQuery({
             slug: params.slug as string,
         });
+
+    // Fetch all users with their badges in a single query
+    const { data: usersWithBadges, isLoading: isLoadingUsers } =
+        trpc.badges.getOrgUsers.useQuery(
+            { orgId: orgData?.id || '' },
+            { enabled: !!orgData?.id },
+        );
 
     const utils = trpc.useUtils();
     const makeOrgAdminMutation = trpc.organizations.makeOrgAdmin.useMutation();
@@ -131,7 +139,7 @@ export default function OrganizationCommunitiesPage() {
     const canInviteMembers = checkOrgPermission(PERMISSIONS.INVITE_ORG_MEMBERS);
     const canManageBadges = checkOrgPermission('view_badge');
 
-    if (isLoading) return <div>Loading...</div>;
+    if (isLoading) return <Loading />;
     if (!orgData) return <div>Organization not found</div>;
 
     return (
@@ -362,6 +370,18 @@ export default function OrganizationCommunitiesPage() {
                                                 <TableCell className="text-center">
                                                     <UserBadgesInTable
                                                         userId={member.id}
+                                                        userBadges={
+                                                            usersWithBadges?.find(
+                                                                (u) =>
+                                                                    u.id ===
+                                                                    member.id,
+                                                            )
+                                                                ?.badgeAssignments ||
+                                                            []
+                                                        }
+                                                        isLoading={
+                                                            isLoadingUsers
+                                                        }
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-muted-foreground text-center">
