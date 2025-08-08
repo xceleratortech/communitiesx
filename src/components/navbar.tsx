@@ -36,6 +36,7 @@ export function Navbar() {
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
+    const [mobilePopoverOpen, setMobilePopoverOpen] = useState(false);
     const { closeChat } = useChat();
 
     const { appRole, orgRole, userDetails } = usePermission();
@@ -60,6 +61,7 @@ export function Navbar() {
     const handleSignOut = async () => {
         closeChat();
         setPopoverOpen(false);
+        setMobilePopoverOpen(false);
         await signOut();
         router.push('/auth/login');
     };
@@ -369,7 +371,10 @@ export function Navbar() {
                                     </div>
 
                                     <div className="flex items-center sm:hidden">
-                                        <Popover>
+                                        <Popover
+                                            open={mobilePopoverOpen}
+                                            onOpenChange={setMobilePopoverOpen}
+                                        >
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="ghost"

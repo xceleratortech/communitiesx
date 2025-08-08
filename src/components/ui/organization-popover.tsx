@@ -31,6 +31,7 @@ export function OrganizationPopover({
 }: OrganizationPopoverProps) {
     const [isOpen, setIsOpen] = useState(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isHoveringRef = useRef(false);
 
     // Use the new getOrgDetails procedure
     const { data: orgDetails, isLoading } =
@@ -52,17 +53,21 @@ export function OrganizationPopover({
 
     // Handlers for mouse events to control hover behavior
     const handleMouseEnter = () => {
+        isHoveringRef.current = true;
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
         // Add a delay before showing the popover
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(true);
+            if (isHoveringRef.current) {
+                setIsOpen(true);
+            }
         }, 1000);
     };
 
     const handleMouseLeave = () => {
+        isHoveringRef.current = false;
         // Clear the open timeout if the mouse leaves before the popover opens
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -71,9 +76,20 @@ export function OrganizationPopover({
 
         // Add a small delay before closing to prevent flickering
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(false);
+            if (!isHoveringRef.current) {
+                setIsOpen(false);
+            }
         }, 300); // Small delay to prevent closing when moving to popover content
     };
+
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>

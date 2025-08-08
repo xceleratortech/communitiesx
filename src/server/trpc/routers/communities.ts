@@ -9,12 +9,93 @@ import {
     tags,
     communityAllowedOrgs,
 } from '@/server/db/schema';
-import { eq, and, desc, or, lt, inArray, sql } from 'drizzle-orm';
+import { eq, and, desc, or, lt, inArray, sql, ilike } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 export const communitiesRouter = router({
+    // Search communities by name
+    search: publicProcedure
+        .input(
+            z.object({
+                search: z.string().min(1),
+                limit: z.number().min(1).max(100).default(20),
+                offset: z.number().default(0),
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            const { search, limit, offset } = input;
+
+            // orgId is included in the user object via selectUserFields and customSession in better-auth config
+            const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
+
+            // This includes public communities and communities from their org
+            let baseFilter: any;
+
+            if (orgId) {
+                // Get all community IDs where this org is allowed
+                const allowedCommunityRows = await db
+                    .select({ communityId: communityAllowedOrgs.communityId })
+                    .from(communityAllowedOrgs)
+                    .where(eq(communityAllowedOrgs.orgId, orgId));
+                const allowedCommunityIds = allowedCommunityRows.map(
+                    (row) => row.communityId,
+                );
+
+                // Show communities that are: public OR belong to user's org OR are explicitly allowed for user's org
+                baseFilter = or(
+                    eq(communities.type, 'public'), // Public communities
+                    eq(communities.orgId, orgId), // User's org communities
+                    allowedCommunityIds.length > 0
+                        ? inArray(communities.id, allowedCommunityIds)
+                        : sql`false`, // Explicitly allowed communities
+                );
+            } else {
+                // If no orgId, only show public communities
+                baseFilter = eq(communities.type, 'public');
+            }
+
+            const searchTerm = `%${search.toLowerCase()}%`;
+            const searchFilter = ilike(communities.name, searchTerm);
+
+            // Get total count for pagination
+            const totalCountResult = await db
+                .select({ count: sql<number>`count(*)` })
+                .from(communities)
+                .where(and(baseFilter, searchFilter));
+
+            const totalCount = totalCountResult[0]?.count || 0;
+
+            // Fetch paginated results
+            const searchResults = await db.query.communities.findMany({
+                where: and(baseFilter, searchFilter),
+                with: {
+                    members: true,
+                    posts: true,
+                    creator: {
+                        columns: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                },
+                orderBy: desc(communities.id),
+                limit: limit,
+                offset: offset,
+            });
+
+            // Check if there are more results
+            const hasNextPage = offset + limit < totalCount;
+
+            return {
+                items: searchResults,
+                totalCount,
+                hasNextPage,
+            };
+        }),
+
     getAll: publicProcedure
         .input(
             z

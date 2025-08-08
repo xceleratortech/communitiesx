@@ -139,6 +139,17 @@ export default function AdminDashboard() {
     const { appRole } = usePermission();
     const isAppAdmin = appRole?.includes('admin');
 
+    // Function to get display role based on appRole and role
+    const getDisplayRole = (user: User): string => {
+        if (user.appRole === 'admin') {
+            return 'Super Admin';
+        } else if (user.role === 'admin' && user.appRole === 'user') {
+            return 'Org Admin';
+        } else {
+            return 'User';
+        }
+    };
+
     // Queries
     const { data: users, isLoading: isLoadingUsers } =
         trpc.admin.getUsers.useQuery(undefined, {
@@ -549,7 +560,10 @@ export default function AdminDashboard() {
                         <CardContent>
                             {isLoadingUsers ? (
                                 <div className="py-4 text-center">
-                                    Loading users...
+                                    <Loading
+                                        message="Loading users..."
+                                        size="sm"
+                                    />
                                 </div>
                             ) : (
                                 <Table>
@@ -574,7 +588,7 @@ export default function AdminDashboard() {
                                                     {user.email}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {user.appRole}
+                                                    {getDisplayRole(user)}
                                                 </TableCell>
                                                 <TableCell>
                                                     {user.organization?.name ||
@@ -786,7 +800,10 @@ export default function AdminDashboard() {
                         <CardContent>
                             {isLoadingOrgs ? (
                                 <div className="py-4 text-center">
-                                    Loading organizations...
+                                    <Loading
+                                        message="Loading organizations..."
+                                        size="sm"
+                                    />
                                 </div>
                             ) : (
                                 <Table>
