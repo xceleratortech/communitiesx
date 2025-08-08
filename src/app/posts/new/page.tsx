@@ -390,9 +390,7 @@ function NewPostForm() {
 
 export default function NewPostPage() {
     return (
-        <Suspense
-            fallback={<div className="mx-auto max-w-4xl p-4">Loading...</div>}
-        >
+        <Suspense fallback={<Loading message="Loading editor..." />}>
             <NewPostForm />
         </Suspense>
     );

@@ -6,6 +6,7 @@ import { X, Minus, Plus, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import dynamic from 'next/dynamic';
+import { Loading } from '@/components/ui/loading';
 
 // Define types for the dynamically imported components
 interface ChatMessageViewProps {
@@ -18,7 +19,7 @@ const ChatThreadList = dynamic(() => import('./chat-thread-list'), {
     ssr: false,
     loading: () => (
         <div className="flex h-full w-full items-center justify-center">
-            Loading conversations...
+            <Loading message="Loading conversations..." size="sm" />
         </div>
     ),
 });
@@ -30,7 +31,7 @@ const ChatMessageView = dynamic<ChatMessageViewProps>(
         ssr: false,
         loading: () => (
             <div className="flex h-full w-full items-center justify-center">
-                Loading messages...
+                <Loading message="Loading messages..." size="sm" />
             </div>
         ),
     },
@@ -122,7 +123,7 @@ export function ChatContainer() {
                     <Suspense
                         fallback={
                             <div className="flex h-full w-full items-center justify-center">
-                                Loading...
+                                <Loading message="Loading..." size="sm" />
                             </div>
                         }
                     >
