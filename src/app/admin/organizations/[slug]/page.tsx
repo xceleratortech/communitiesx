@@ -47,6 +47,7 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Loading } from '@/components/ui/loading';
 
 export default function AdminOrganizationDetailPage() {
     const params = useParams();
@@ -57,6 +58,13 @@ export default function AdminOrganizationDetailPage() {
         trpc.organizations.getOrganizationWithCommunities.useQuery({
             slug: params.slug as string,
         });
+
+    // Fetch all users with their badges in a single query
+    const { data: usersWithBadges, isLoading: isLoadingUsers } =
+        trpc.badges.getOrgUsers.useQuery(
+            { orgId: orgData?.id || '' },
+            { enabled: !!orgData?.id },
+        );
 
     const utils = trpc.useUtils();
     const makeOrgAdminMutation = trpc.organizations.makeOrgAdmin.useMutation();
@@ -135,7 +143,7 @@ export default function AdminOrganizationDetailPage() {
         );
     };
 
-    if (isLoading) return <div>Loading...</div>;
+    if (isLoading) return <Loading />;
     if (!orgData) return <div>Organization not found</div>;
 
     return (
@@ -404,6 +412,18 @@ export default function AdminOrganizationDetailPage() {
                                                 <TableCell className="text-center">
                                                     <UserBadgesInTable
                                                         userId={member.id}
+                                                        userBadges={
+                                                            usersWithBadges?.find(
+                                                                (u) =>
+                                                                    u.id ===
+                                                                    member.id,
+                                                            )
+                                                                ?.badgeAssignments ||
+                                                            []
+                                                        }
+                                                        isLoading={
+                                                            isLoadingUsers
+                                                        }
                                                     />
                                                 </TableCell>
                                                 <TableCell className="text-center">
