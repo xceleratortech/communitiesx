@@ -32,6 +32,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
 import type { Community } from '@/types/models';
+import { Input } from '@/components/ui/input';
 
 // Define CommunityCardProps type
 interface CommunityCardProps {
@@ -43,6 +44,13 @@ export default function CommunitiesPage() {
     const session = sessionData.data;
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('all');
+
+    // Search state
+    const [searchInputValue, setSearchInputValue] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     // Infinite query for communities
     const {
@@ -56,8 +64,18 @@ export default function CommunitiesPage() {
             limit: 6,
         },
         {
-            enabled: !!session,
+            enabled: !!session && !isSearching,
             getNextPageParam: (lastPage) => lastPage.nextCursor,
+        },
+    );
+
+    // Search query
+    const searchQuery = trpc.communities.search.useQuery(
+        { search: searchTerm, limit: 20, offset: 0 },
+        {
+            enabled: !!searchTerm && searchTerm.length >= 2,
+            staleTime: 5 * 60 * 1000, // Cache results for 5 minutes
+            refetchOnWindowFocus: false,
         },
     );
 
@@ -92,16 +110,71 @@ export default function CommunitiesPage() {
         setIsClient(true);
     }, []);
 
+    // Debounced search handler
+    const handleSearchInputChange = useCallback((value: string) => {
+        setSearchInputValue(value);
+
+        // Clear existing timer
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+
+        // Set new timer
+        debounceTimerRef.current = setTimeout(() => {
+            setSearchTerm(value.trim());
+        }, 300);
+    }, []);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+        };
+    }, []);
+
+    // Listen for search results
+    useEffect(() => {
+        if (searchTerm.length >= 2) {
+            setIsSearching(true);
+            if (searchQuery.data) {
+                setSearchResults(searchQuery.data.items as any[]);
+            }
+        } else {
+            setIsSearching(false);
+            setSearchResults(null);
+        }
+    }, [searchTerm, searchQuery.data]);
+
+    // Clear search when input is cleared
+    useEffect(() => {
+        if (searchInputValue.length === 0) {
+            setSearchTerm('');
+            setSearchResults(null);
+            setIsSearching(false);
+        }
+    }, [searchInputValue]);
+
+    // Use searchResults if searching, else use communities
+    const communitiesToRender =
+        isSearching && searchResults !== null ? searchResults : communities;
+
     // Intersection observer for infinite scrolling
     const observerTarget = useRef<HTMLDivElement>(null);
     const handleObserver = useCallback(
         (entries: IntersectionObserverEntry[]) => {
             const [entry] = entries;
-            if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+            if (
+                entry.isIntersecting &&
+                hasNextPage &&
+                !isFetchingNextPage &&
+                !isSearching
+            ) {
                 fetchNextPage();
             }
         },
-        [fetchNextPage, hasNextPage, isFetchingNextPage],
+        [fetchNextPage, hasNextPage, isFetchingNextPage, isSearching],
     );
 
     useEffect(() => {
@@ -144,17 +217,22 @@ export default function CommunitiesPage() {
     }
 
     // Only show loading state on client after hydration
-    if (isClient && isLoadingCommunities && communities.length === 0) {
+    if (
+        isClient &&
+        isLoadingCommunities &&
+        communities.length === 0 &&
+        !isSearching
+    ) {
         return <Loading message="Loading communities..." />;
     }
 
     // Filter communities for "My Communities" tab
-    const myCommunities = communities.filter((c: any) =>
+    const myCommunities = communitiesToRender.filter((c: any) =>
         c.members?.some((m: any) => m.userId === session.user.id),
     );
 
     // Sort communities by member count for "Popular" tab
-    const popularCommunities = [...communities]
+    const popularCommunities = [...communitiesToRender]
         .sort(
             (a: any, b: any) =>
                 (b.members?.length || 0) - (a.members?.length || 0),
@@ -169,6 +247,17 @@ export default function CommunitiesPage() {
                         Discover and join communities based on your interests
                     </p>
                 </div>
+            </div>
+
+            {/* Search input */}
+            <div className="mb-6">
+                <Input
+                    type="text"
+                    placeholder="Search communities..."
+                    className="w-full max-w-md"
+                    value={searchInputValue}
+                    onChange={(e) => handleSearchInputChange(e.target.value)}
+                />
             </div>
 
             <Tabs
@@ -197,7 +286,8 @@ export default function CommunitiesPage() {
                         {/* All TabsContent sections remain the same */}
                         <TabsContent value="all" className="space-y-4">
                             {isLoadingCommunities &&
-                            communities.length === 0 ? (
+                            communities.length === 0 &&
+                            !isSearching ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {Array(3)
                                         .fill(0)
@@ -205,45 +295,65 @@ export default function CommunitiesPage() {
                                             <CommunityCardSkeleton key={i} />
                                         ))}
                                 </div>
-                            ) : communities.length ? (
+                            ) : communitiesToRender.length ? (
                                 <>
                                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                        {communities.map((community: any) => (
-                                            <CommunityCard
-                                                key={community.id}
-                                                community={
-                                                    community as Community
-                                                }
-                                            />
-                                        ))}
-                                    </div>
-                                    <div
-                                        ref={observerTarget}
-                                        className="mt-8 flex justify-center"
-                                    >
-                                        {isFetchingNextPage && (
-                                            <div className="flex items-center space-x-2">
-                                                <Loader2 className="h-5 w-5 animate-spin" />
-                                                <span>Loading more...</span>
-                                            </div>
+                                        {communitiesToRender.map(
+                                            (community: any) => (
+                                                <CommunityCard
+                                                    key={community.id}
+                                                    community={
+                                                        community as Community
+                                                    }
+                                                />
+                                            ),
                                         )}
                                     </div>
+                                    {!isSearching && (
+                                        <div
+                                            ref={observerTarget}
+                                            className="mt-8 flex justify-center"
+                                        >
+                                            {isFetchingNextPage && (
+                                                <div className="flex items-center space-x-2">
+                                                    <Loader2 className="h-5 w-5 animate-spin" />
+                                                    <span>Loading more...</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </>
                             ) : (
                                 <div className="py-12 text-center">
                                     <h3 className="text-lg font-medium">
-                                        No communities found
+                                        {isSearching
+                                            ? `No communities found for "${searchInputValue}"`
+                                            : 'No communities found'}
                                     </h3>
                                     <p className="text-muted-foreground mt-2">
-                                        Be the first to create a community!
+                                        {isSearching
+                                            ? 'Try a different search term'
+                                            : 'Be the first to create a community!'}
                                     </p>
+                                    {isSearching && (
+                                        <Button
+                                            onClick={() => {
+                                                setSearchInputValue('');
+                                                setSearchTerm('');
+                                            }}
+                                            className="mt-4"
+                                        >
+                                            Clear Search
+                                        </Button>
+                                    )}
                                 </div>
                             )}
                         </TabsContent>
 
                         <TabsContent value="my">
                             {isLoadingCommunities &&
-                            communities.length === 0 ? (
+                            communities.length === 0 &&
+                            !isSearching ? (
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                     {Array(2)
                                         .fill(0)
@@ -263,11 +373,14 @@ export default function CommunitiesPage() {
                             ) : (
                                 <div className="py-12 text-center">
                                     <h3 className="text-lg font-medium">
-                                        You haven't joined any communities yet
+                                        {isSearching
+                                            ? 'No matching communities in your communities'
+                                            : "You haven't joined any communities yet"}
                                     </h3>
                                     <p className="text-muted-foreground mt-2">
-                                        Browse the communities and join ones
-                                        that interest you
+                                        {isSearching
+                                            ? 'Try searching in all communities instead'
+                                            : 'Browse the communities and join ones that interest you'}
                                     </p>
                                 </div>
                             )}

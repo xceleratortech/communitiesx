@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -10,21 +11,46 @@ import {
 } from '@/components/ui/popover';
 import { MoreHorizontal } from 'lucide-react';
 
-interface UserBadgesInTableProps {
-    userId: string;
+interface BadgeAssignment {
+    badge: {
+        id: number;
+        name: string;
+        color: string;
+        icon?: string | null;
+        description?: string | null;
+    };
+    note?: string | null;
 }
 
-export function UserBadgesInTable({ userId }: UserBadgesInTableProps) {
-    const { data: userBadges, isLoading } = trpc.badges.getUserBadges.useQuery(
-        { userId },
-        { enabled: !!userId },
-    );
+interface UserBadgesInTableProps {
+    userId: string;
+    userBadges?: BadgeAssignment[];
+    isLoading?: boolean;
+}
+
+export function UserBadgesInTable({
+    userId,
+    userBadges,
+    isLoading: externalLoading = false,
+}: UserBadgesInTableProps) {
+    const [isOpen, setIsOpen] = useState(false);
+
+    // Only make the query if badge data wasn't passed as props
+    const { data: queriedBadges, isLoading: queryLoading } =
+        trpc.badges.getUserBadges.useQuery(
+            { userId },
+            { enabled: !!userId && !userBadges },
+        );
+
+    // Use provided badges or queried badges
+    const badges = userBadges || queriedBadges || [];
+    const isLoading = externalLoading || (queryLoading && !userBadges);
 
     if (isLoading) {
         return <div className="bg-muted h-4 w-8 animate-pulse rounded" />;
     }
 
-    if (!userBadges || userBadges.length === 0) {
+    if (!badges || badges.length === 0) {
         return (
             <div className="flex justify-center">
                 <span className="text-muted-foreground text-xs">N/A</span>
@@ -34,8 +60,8 @@ export function UserBadgesInTable({ userId }: UserBadgesInTableProps) {
 
     // For table display, show max 2 badges, then show dropdown for more
     const maxDisplay = 2;
-    const displayBadges = userBadges.slice(0, maxDisplay);
-    const remainingBadges = userBadges.slice(maxDisplay);
+    const displayBadges = badges.slice(0, maxDisplay);
+    const remainingBadges = badges.slice(maxDisplay);
     const hasMoreBadges = remainingBadges.length > 0;
 
     return (
@@ -62,7 +88,7 @@ export function UserBadgesInTable({ userId }: UserBadgesInTableProps) {
 
                 {/* Show dropdown for additional badges */}
                 {hasMoreBadges && (
-                    <Popover>
+                    <Popover open={isOpen} onOpenChange={setIsOpen}>
                         <PopoverTrigger asChild>
                             <Button
                                 variant="ghost"
@@ -77,11 +103,11 @@ export function UserBadgesInTable({ userId }: UserBadgesInTableProps) {
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
                                     <h4 className="text-sm font-medium">
-                                        All Badges ({userBadges.length})
+                                        All Badges ({badges.length})
                                     </h4>
                                 </div>
                                 <div className="space-y-1">
-                                    {userBadges.map((userBadge) => (
+                                    {badges.map((userBadge) => (
                                         <div
                                             key={userBadge.badge.id}
                                             className="flex items-center gap-2 rounded-md border p-1.5"
