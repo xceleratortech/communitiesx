@@ -129,7 +129,7 @@ export default function PostPage() {
     });
 
     if (!isClient) {
-        return <div className="p-4">Loading...</div>;
+        return <Loading message="Initializing..." />;
     }
 
     if (!session) {
