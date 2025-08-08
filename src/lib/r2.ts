@@ -87,7 +87,7 @@ export function validateAttachmentFile(file: File): {
     const allowedVideoTypes = [
         'video/mp4',
         // 'video/webm', // Disabled for better iOS compatibility
-        // 'video/quicktime', // Disabled due to inconsistent Android support
+        'video/quicktime', // Allow .mov (iOS-friendly). Android support may vary.
     ];
 
     const maxImageSize = 15 * 1024 * 1024; // 15MB
@@ -126,7 +126,7 @@ export function validateAttachmentFile(file: File): {
     // Invalid file type
     return {
         valid: false,
-        error: 'Invalid file type. Only JPEG, PNG, GIF, WebP images and MP4 videos are allowed.',
+        error: 'Invalid file type. Only JPEG, PNG, GIF, WebP images and MP4 or MOV videos are allowed.',
         type: 'image', // fallback
     };
 }
