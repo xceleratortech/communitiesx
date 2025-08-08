@@ -56,21 +56,53 @@ export async function GET(
         // Create proxy URL for download
         const proxyUrl = `https://edx-storage-proxy.xcelerator.co.in?proxyUrl=${encodeURIComponent(downloadUrl)}`;
 
+        // Forward Range header (critical for mobile playback/seek)
+        const rangeHeader = request.headers.get('range') ?? undefined;
+
         // Fetch the file from R2 via proxy and serve it directly
-        const fileResponse = await fetch(proxyUrl);
+        const fileResponse = await fetch(proxyUrl, {
+            method: 'GET',
+            headers: rangeHeader ? { Range: rangeHeader } : undefined,
+        });
 
         if (!fileResponse.ok) {
             throw new Error('Failed to fetch file from storage');
         }
 
-        // Set correct content type
+        // Preserve streaming-related headers
+        const responseHeaders = new Headers();
+
+        const contentType =
+            fileResponse.headers.get('content-type') ||
+            attachmentRecord.mimetype ||
+            'application/octet-stream';
+        responseHeaders.set('Content-Type', contentType);
+
+        for (const headerName of [
+            'content-length',
+            'content-range',
+            'accept-ranges',
+            'etag',
+            'last-modified',
+            'cache-control',
+        ]) {
+            const headerValue = fileResponse.headers.get(headerName);
+            if (headerValue) {
+                responseHeaders.set(headerName, headerValue);
+            }
+        }
+
+        // Ensure defaults if not provided by origin
+        if (!responseHeaders.has('accept-ranges')) {
+            responseHeaders.set('accept-ranges', 'bytes');
+        }
+        if (!responseHeaders.has('cache-control')) {
+            responseHeaders.set('cache-control', 'public, max-age=3600');
+        }
+
         return new NextResponse(fileResponse.body, {
-            status: fileResponse.status,
-            headers: {
-                'Content-Type':
-                    attachmentRecord.mimetype || 'application/octet-stream',
-                'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
-            },
+            status: fileResponse.status, // 200 or 206
+            headers: responseHeaders,
         });
     } catch (error) {
         console.error('Error serving image:', error);
