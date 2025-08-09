@@ -9,6 +9,7 @@ import { ChatProvider } from '@/providers/chat-provider';
 import { Navbar } from '@/components/navbar';
 import { ChatContainer } from '@/components/chat/chat-container';
 import { Toaster } from '@/components/ui/sonner';
+import Script from 'next/script';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -39,6 +40,13 @@ export default function RootLayout({
                     'bg-background min-h-screen font-sans antialiased',
                 )}
             >
+                {process.env.NODE_ENV === 'production' && (
+                    <Script
+                        src="https://plaus.xcelerator.co.in/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"
+                        data-domain="communityx.xcelerator.in"
+                        strategy="afterInteractive"
+                    />
+                )}
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="light"
