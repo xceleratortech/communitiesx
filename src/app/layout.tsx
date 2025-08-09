@@ -40,13 +40,17 @@ export default function RootLayout({
                     'bg-background min-h-screen font-sans antialiased',
                 )}
             >
-                {process.env.NODE_ENV === 'production' && (
-                    <Script
-                        src="https://plaus.xcelerator.co.in/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"
-                        data-domain="communityx.xcelerator.in"
-                        strategy="afterInteractive"
-                    />
-                )}
+                {process.env.NODE_ENV === 'production' &&
+                    process.env.NEXT_PUBLIC_PLAUSIBLE_SRC &&
+                    process.env.NEXT_PUBLIC_PLAUSIBLE_DATA_DOMAIN && (
+                        <Script
+                            src={process.env.NEXT_PUBLIC_PLAUSIBLE_SRC}
+                            data-domain={
+                                process.env.NEXT_PUBLIC_PLAUSIBLE_DATA_DOMAIN
+                            }
+                            strategy="afterInteractive"
+                        />
+                    )}
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="light"
