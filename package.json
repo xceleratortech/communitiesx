@@ -18,7 +18,7 @@
         "create:super-admin": "tsx scripts/create-super-admin.js",
         "create:org-admin": "tsx scripts/create-org-admin.js",
         "create:users-communities": "pnpm dlx tsx scripts/create-users-and-communities.ts",
-        "send:password-reset-emails": "pnpm dlx tsx --env-file .env.local scripts/send-password-reset-emails.ts",
+        "send:password-reset-emails": "pnpm dlx tsx scripts/send-password-reset-emails.ts",
         "test:password-reset-email": "pnpm dlx tsx scripts/test-password-reset-email.ts"
     },
     "dependencies": {
