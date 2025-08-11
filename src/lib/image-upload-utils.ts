@@ -41,10 +41,29 @@ export async function uploadAttachmentWithPresignedFlow(
         throw new Error(validation.error);
     }
 
-    // Generate file key
+    // For videos that need format conversion, rename to .mp4 for better compatibility
+    let filename = file.name;
+    if (validation.type === 'video') {
+        const videoFormats = [
+            'video/quicktime',
+            'video/mov',
+            'video/avi',
+            'video/webm',
+            'video/x-msvideo',
+            'video/3gpp',
+            'video/x-ms-wmv',
+            'video/ogg',
+        ];
+        if (videoFormats.includes(file.type)) {
+            // Change extension to .mp4 for better web compatibility
+            filename = filename.replace(/\.[^/.]+$/, '.mp4');
+        }
+    }
+
+    // Generate file key with potentially modified filename
     const key = generateImageKey(
         userEmail,
-        file.name,
+        filename,
         options?.communityId,
         options?.communitySlug,
     );
