@@ -1,4 +1,4 @@
-import { userData } from '../src/csv/processed-user-data-email-key.js';
+import { getUserData } from '../src/lib/user-data-loader.js';
 import { sendEmail } from '../src/lib/email.js';
 import dotenv from 'dotenv';
 
@@ -223,6 +223,9 @@ function createPasswordResetEmail(name: string, email: string) {
 
 async function sendPasswordResetEmails() {
     console.log('Starting to send password reset emails...');
+
+    // Load user data securely
+    const userData = await getUserData();
     console.log(`Total users to process: ${Object.keys(userData).length}`);
 
     let successCount = 0;

@@ -5,7 +5,7 @@ import { orgs, users, accounts } from '../src/server/db/auth-schema';
 import { communities, communityMembers } from '../src/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '../src/lib/email';
-import { userData } from '../src/csv/processed-user-data-email-key';
+import { getUserData } from '../src/lib/user-data-loader';
 
 // Configuration
 const ORG_ID = '9cupkjj4GkxKMW97pCkBW'; // Atria Institute of Technology
@@ -396,6 +396,10 @@ async function createUsersAndCommunities() {
     console.log('🚀 Starting user and community creation process...');
     console.log(`📋 Organization ID: ${ORG_ID}`);
     console.log(`🔐 Default password: ${DEFAULT_PASSWORD}`);
+    
+    // Load user data securely
+    console.log('📊 Loading user data securely...');
+    const userData = await getUserData();
     console.log(`📊 Total users to process: ${Object.keys(userData).length}`);
 
     try {
