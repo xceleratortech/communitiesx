@@ -80,6 +80,7 @@ function NewPostForm() {
         const hasPermission = checkCommunityPermission(
             community.id.toString(),
             PERMISSIONS.CREATE_POST,
+            community.orgId, // Pass community's orgId for org admin validation
         );
 
         if (hasPermission) return true;

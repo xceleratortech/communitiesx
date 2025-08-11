@@ -86,12 +86,17 @@ export function validateAttachmentFile(file: File): {
     ];
     const allowedVideoTypes = [
         'video/mp4',
-        // 'video/webm', // Disabled for better iOS compatibility
-        'video/quicktime', // Allow .mov (iOS-friendly). Android support may vary.
+        'video/quicktime', // .mov files
+        'video/avi', // .avi files
+        'video/webm', // .webm files (will be converted for iOS compatibility)
+        'video/x-msvideo', // Alternative MIME type for .avi
+        'video/3gpp', // .3gp files
+        'video/x-ms-wmv', // .wmv files
+        'video/ogg', // .ogv files
     ];
 
     const maxImageSize = 15 * 1024 * 1024; // 15MB
-    const maxVideoSize = 50 * 1024 * 1024; // 50MB
+    const maxVideoSize = 100 * 1024 * 1024; // 100MB (increased for conversion)
 
     // Check if it's an image
     if (allowedImageTypes.includes(file.type)) {
@@ -113,7 +118,7 @@ export function validateAttachmentFile(file: File): {
         if (file.size > maxVideoSize) {
             return {
                 valid: false,
-                error: 'Video file size too large. Maximum size is 50MB.',
+                error: 'Video file size too large. Maximum size is 100MB.',
                 type: 'video',
             };
         }
@@ -126,7 +131,7 @@ export function validateAttachmentFile(file: File): {
     // Invalid file type
     return {
         valid: false,
-        error: 'Invalid file type. Only JPEG, PNG, GIF, WebP images and MP4 or MOV videos are allowed.',
+        error: 'Invalid file type. Supported formats: JPEG, PNG, GIF, WebP images and MP4, MOV, AVI, WebM, 3GP, WMV, OGV videos.',
         type: 'image', // fallback
     };
 }
