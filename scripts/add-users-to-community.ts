@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto';
-import { db } from '@/server/db';
-import { users, communityMembers, communities } from '@/server/db/schema';
+import { db } from '../src/server/db';
+import { users, communityMembers, communities } from '../src/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 // Configuration
