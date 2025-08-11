@@ -4,7 +4,7 @@ import { users, communityMembers, communities } from '@/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 
 // Configuration
-const COMMUNITY_ID = 34;
+const COMMUNITY_ID = 28;
 
 // User data from your previous script
 // const userData = {
@@ -102,25 +102,28 @@ const COMMUNITY_ID = 34;
 // };
 
 const userData = {
-    'Kaushik Raju': 'kaushik.raju@atriagroups.com',
-    'Ajay Agarwal': 'aj.agrawal@gmail.com',
-    'Murlidhar Surya': 'murlidharsurya@gmail.com',
-    'Dr.Purandar Chakravarty': 'pcworks20@gmail.com',
-    'Madanmohan Rao': 'madan@yourstory.com',
-    'Sumit Marwah': 'sumit.marwah@icloud.com',
-    'Himansha Singh': 'himansha.singh@craste.co',
-    'Ananthram Varayur': 'ananth@manasum.com',
-    'K Vaitheeswaran': 'vaithee.k@gmail.com',
-    'Jagadish Sunkad': 'jagadeeshsunkad@gmail.com',
-    'Himanshu Gupta': 'himu79@gmail.com',
-    'Chinmaya AM': 'chinmaya@agraga.co.in',
-    'Chetan Raja': 'chetan@arnav.in',
-    'Nitin Awasthi': 'nitin_awasthi@yahoo.com',
-    'Sudhanshu Goyal': 'sudhanshu.g@healthgennie.com',
-    'Mohanram P V': 'mohanpv@live.com',
-    'Romil Turakia': 'romilturakhia@gmail.com',
-    'Sandhya Vasudevan': 'svasudevan253@gmail.com',
+    'Ajay S Kabadi': 'ajay.kabadi94@gmail.com',
 };
+// const userData = {
+//     'Kaushik Raju': 'kaushik.raju@atriagroups.com',
+//     'Ajay Agarwal': 'aj.agrawal@gmail.com',
+//     'Murlidhar Surya': 'murlidharsurya@gmail.com',
+//     'Dr.Purandar Chakravarty': 'pcworks20@gmail.com',
+//     'Madanmohan Rao': 'madan@yourstory.com',
+//     'Sumit Marwah': 'sumit.marwah@icloud.com',
+//     'Himansha Singh': 'himansha.singh@craste.co',
+//     'Ananthram Varayur': 'ananth@manasum.com',
+//     'K Vaitheeswaran': 'vaithee.k@gmail.com',
+//     'Jagadish Sunkad': 'jagadeeshsunkad@gmail.com',
+//     'Himanshu Gupta': 'himu79@gmail.com',
+//     'Chinmaya AM': 'chinmaya@agraga.co.in',
+//     'Chetan Raja': 'chetan@arnav.in',
+//     'Nitin Awasthi': 'nitin_awasthi@yahoo.com',
+//     'Sudhanshu Goyal': 'sudhanshu.g@healthgennie.com',
+//     'Mohanram P V': 'mohanpv@live.com',
+//     'Romil Turakia': 'romilturakhia@gmail.com',
+//     'Sandhya Vasudevan': 'svasudevan253@gmail.com',
+// };
 // Function to find user by email (force lowercase)
 async function findUserByEmail(email: string): Promise<string | null> {
     const user = await db.query.users.findFirst({
