@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserSession } from '@/server/auth/server';
 import { db } from '@/server/db';
-import { attachments } from '@/server/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+    attachments,
+    communities as communitiesTable,
+    posts as postsTable,
+    communityMembers,
+} from '@/server/db/schema';
+import { and, eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
+import { ServerPermissions } from '@/server/utils/permission';
+import { isOrgAdminForCommunity } from '@/lib/utils';
 
 export async function GET(
     request: NextRequest,
@@ -40,12 +47,105 @@ export async function GET(
             );
         }
 
-        // Validate ownership (optional - you might want to allow public access)
-        if (attachmentRecord.uploadedBy !== session.user.id) {
-            return NextResponse.json(
-                { error: 'Access denied' },
-                { status: 403 },
-            );
+        // Allow if uploaded by the current user
+        if (attachmentRecord.uploadedBy === session.user.id) {
+            // proceed
+        } else {
+            // Build permission context
+            const perms = await ServerPermissions.fromUserId(session.user.id);
+            const isAppAdmin = perms.isAppAdmin();
+
+            let isAllowed = isAppAdmin;
+
+            // If linked to a community directly, allow active members/followers or org admins of that org
+            if (!isAllowed && attachmentRecord.communityId) {
+                // Check membership (active)
+                const membership = await db.query.communityMembers.findFirst({
+                    where: and(
+                        eq(communityMembers.userId, session.user.id),
+                        eq(
+                            communityMembers.communityId,
+                            attachmentRecord.communityId,
+                        ),
+                        eq(communityMembers.status, 'active'),
+                    ),
+                });
+
+                if (membership) {
+                    isAllowed = true;
+                } else {
+                    // Check org admin override for the community's org
+                    const community = await db.query.communities.findFirst({
+                        where: eq(
+                            communitiesTable.id,
+                            attachmentRecord.communityId,
+                        ),
+                        columns: { orgId: true },
+                    });
+                    if (
+                        community &&
+                        isOrgAdminForCommunity(session.user, community.orgId)
+                    ) {
+                        isAllowed = true;
+                    }
+                }
+            }
+
+            // If linked to a post, evaluate based on post's community or org
+            if (!isAllowed && attachmentRecord.postId) {
+                const post = await db.query.posts.findFirst({
+                    where: eq(postsTable.id, attachmentRecord.postId),
+                    columns: { communityId: true, orgId: true },
+                });
+
+                if (post?.communityId) {
+                    // Same logic as community-linked attachment
+                    const membership =
+                        await db.query.communityMembers.findFirst({
+                            where: and(
+                                eq(communityMembers.userId, session.user.id),
+                                eq(
+                                    communityMembers.communityId,
+                                    post.communityId,
+                                ),
+                                eq(communityMembers.status, 'active'),
+                            ),
+                        });
+
+                    if (membership) {
+                        isAllowed = true;
+                    } else {
+                        const community = await db.query.communities.findFirst({
+                            where: eq(communitiesTable.id, post.communityId),
+                            columns: { orgId: true },
+                        });
+                        if (
+                            community &&
+                            isOrgAdminForCommunity(
+                                session.user,
+                                community.orgId,
+                            )
+                        ) {
+                            isAllowed = true;
+                        }
+                    }
+                } else if (post?.orgId) {
+                    // Org-wide post: allow anyone from the same org
+                    if (
+                        session.user.orgId &&
+                        session.user.orgId === post.orgId
+                    ) {
+                        isAllowed = true;
+                    }
+                }
+            }
+
+            if (!isAllowed) {
+                return NextResponse.json(
+                    { error: 'Access denied' },
+                    { status: 403 },
+                );
+            }
         }
 
         // Generate presigned download URL
