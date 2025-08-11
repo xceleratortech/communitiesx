@@ -5,7 +5,7 @@ import { orgs, users, accounts } from '../src/server/db/auth-schema';
 import { communities, communityMembers } from '../src/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { sendEmail } from '../src/lib/email';
-import { getUserData } from '../src/lib/user-data-loader';
+import { getUserData } from '../src/lib/user-data-loader.js';
 
 // Configuration
 const ORG_ID = '9cupkjj4GkxKMW97pCkBW'; // Atria Institute of Technology
