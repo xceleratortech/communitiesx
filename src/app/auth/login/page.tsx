@@ -157,6 +157,14 @@ function LoginForm() {
                                     }
                                     required
                                 />
+                                <div className="text-right">
+                                    <Link
+                                        href="/auth/forgot-password"
+                                        className="text-muted-foreground hover:text-primary text-sm underline"
+                                    >
+                                        Forgot Password?
+                                    </Link>
+                                </div>
                             </div>
 
                             {error && (

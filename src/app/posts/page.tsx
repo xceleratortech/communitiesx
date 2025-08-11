@@ -183,23 +183,35 @@ export default function PostsPage() {
 
     const canEditPost = (post: PostDisplay) => {
         if (!session) return false;
+
+        // Check if user is the post author
+        if (post.author && post.author.id === session.user.id) return true;
+
+        // Check community permissions for non-community posts or community-based permissions
         if (!post.communityId) {
             return false;
         }
         return checkCommunityPermission(
             post.communityId.toString(),
             PERMISSIONS.EDIT_POST,
+            post.community?.orgId, // Pass community's orgId for org admin validation
         );
     };
 
     const canDeletePost = (post: PostDisplay) => {
         if (!session) return false;
+
+        // Check if user is the post author
+        if (post.author && post.author.id === session.user.id) return true;
+
+        // Check community permissions for non-community posts or community-based permissions
         if (!post.communityId) {
             return false;
         }
         return checkCommunityPermission(
             post.communityId.toString(),
             PERMISSIONS.DELETE_POST,
+            post.community?.orgId, // Pass community's orgId for org admin validation
         );
     };
 

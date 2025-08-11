@@ -63,6 +63,10 @@ const purifyConfig = {
         'webkit-playsinline',
         'preload',
         'muted',
+        'crossorigin',
+        'disablepictureinpicture',
+        'controlslist',
+        'x-webkit-airplay',
         // iframe attributes for YouTube embeds
         'frameborder',
         'allowfullscreen',
@@ -311,7 +315,22 @@ export function SafeHtml({
         processedHtml = html.replace(
             /\[VIDEO:([^\]]+)\]/g,
             (match, videoUrl) => {
-                return `<video src="${videoUrl}" controls playsinline webkit-playsinline preload="metadata" muted width="100%" style="max-width: 100%; border-radius: 0.375rem; display: block; margin: 1rem 0;"></video>`;
+                return `<video 
+                    src="${videoUrl}" 
+                    controls 
+                    playsinline 
+                    webkit-playsinline 
+                    preload="metadata" 
+                    muted 
+                    width="100%" 
+                    style="max-width: 100%; border-radius: 0.375rem; display: block; margin: 1rem 0;"
+                    crossorigin="anonymous"
+                    disablepictureinpicture="false"
+                    controlslist="nodownload"
+                    x-webkit-airplay="allow"
+                    >
+                    <p>Your browser doesn't support HTML video. <a href="${videoUrl}">Download the video</a> instead.</p>
+                </video>`;
             },
         );
     }
@@ -337,6 +356,12 @@ export function SafeHtml({
             }
             if (!newAttributes.includes('muted')) {
                 newAttributes += ' muted';
+            }
+            if (!newAttributes.includes('crossorigin')) {
+                newAttributes += ' crossorigin="anonymous"';
+            }
+            if (!newAttributes.includes('x-webkit-airplay')) {
+                newAttributes += ' x-webkit-airplay="allow"';
             }
 
             return `<video${newAttributes}>`;
