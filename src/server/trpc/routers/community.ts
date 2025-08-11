@@ -36,6 +36,15 @@ import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
 
+// Reusable helper to fetch community IDs for an organization
+async function getCommunityIdsForOrg(orgId: string): Promise<number[]> {
+    const orgCommunities = await db.query.communities.findMany({
+        where: eq(communities.orgId, orgId),
+        columns: { id: true },
+    });
+    return orgCommunities.map((community) => community.id);
+}
+
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
 type PostType = typeof posts.$inferSelect;
@@ -317,11 +326,9 @@ export const communityRouter = router({
                     ctx.session.user.appRole === 'admin' &&
                     ctx.session.user.orgId
                 ) {
-                    const orgCommunities = await db.query.communities.findMany({
-                        where: eq(communities.orgId, ctx.session.user.orgId),
-                        columns: { id: true },
-                    });
-                    additionalCommunityIds = orgCommunities.map((c) => c.id);
+                    additionalCommunityIds = await getCommunityIdsForOrg(
+                        ctx.session.user.orgId,
+                    );
                 }
 
                 // Extract community IDs from memberships
@@ -404,15 +411,15 @@ export const communityRouter = router({
                 // --- ORG ADMIN OVERRIDE ---
                 // If user is org admin, also get communities from their org
                 let additionalCommunityIds: number[] = [];
-                if (
-                    ctx.session.user.appRole === 'admin' &&
-                    ctx.session.user.orgId
-                ) {
-                    const orgCommunities = await db.query.communities.findMany({
-                        where: eq(communities.orgId, ctx.session.user.orgId),
-                        columns: { id: true },
+                {
+                    const currentUser = await db.query.users.findFirst({
+                        where: eq(users.id, userId),
+                        columns: { role: true },
                     });
-                    additionalCommunityIds = orgCommunities.map((c) => c.id);
+                    if (currentUser?.role === 'admin' && orgId) {
+                        additionalCommunityIds =
+                            await getCommunityIdsForOrg(orgId);
+                    }
                 }
 
                 // Create a map of community ID to membership type for quick lookup
@@ -1692,7 +1699,11 @@ export const communityRouter = router({
             }
 
             try {
-                const results = [];
+                const results: Array<{
+                    email: string;
+                    invite: typeof communityInvites.$inferSelect;
+                    emailSent: boolean;
+                }> = [];
 
                 for (const email of input.emails) {
                     // Generate a unique code for this invite
@@ -1802,6 +1813,19 @@ export const communityRouter = router({
             });
             const communityIds = memberships.map((m) => m.communityId);
 
+            // --- ORG ADMIN OVERRIDE ---
+            // If the user is an org admin, include all communities in their org
+            let orgAdminCommunityIds: number[] = [];
+            if (user?.role === 'admin' && ctx.session.user.orgId) {
+                orgAdminCommunityIds = await getCommunityIdsForOrg(
+                    ctx.session.user.orgId,
+                );
+            }
+
+            const accessibleCommunityIds = [
+                ...new Set([...communityIds, ...orgAdminCommunityIds]),
+            ];
+
             // Build search conditions using database-level filtering
             const searchTerm = `%${search.toLowerCase()}%`;
 
@@ -1812,8 +1836,8 @@ export const communityRouter = router({
                     // User's org posts
                     eq(posts.orgId, orgId),
                     // Community posts user has access to
-                    communityIds.length > 0
-                        ? inArray(posts.communityId, communityIds)
+                    accessibleCommunityIds.length > 0
+                        ? inArray(posts.communityId, accessibleCommunityIds)
                         : sql`false`,
                 ),
             );
