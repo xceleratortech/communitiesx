@@ -36,6 +36,15 @@ import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
 
+// Reusable helper to fetch community IDs for an organization
+async function getCommunityIdsForOrg(orgId: string): Promise<number[]> {
+    const orgCommunities = await db.query.communities.findMany({
+        where: eq(communities.orgId, orgId),
+        columns: { id: true },
+    });
+    return orgCommunities.map((community) => community.id);
+}
+
 // Define types for the responses based on schema
 type UserType = typeof users.$inferSelect;
 type PostType = typeof posts.$inferSelect;
@@ -317,11 +326,9 @@ export const communityRouter = router({
                     ctx.session.user.appRole === 'admin' &&
                     ctx.session.user.orgId
                 ) {
-                    const orgCommunities = await db.query.communities.findMany({
-                        where: eq(communities.orgId, ctx.session.user.orgId),
-                        columns: { id: true },
-                    });
-                    additionalCommunityIds = orgCommunities.map((c) => c.id);
+                    additionalCommunityIds = await getCommunityIdsForOrg(
+                        ctx.session.user.orgId,
+                    );
                 }
 
                 // Extract community IDs from memberships
@@ -410,14 +417,8 @@ export const communityRouter = router({
                         columns: { role: true },
                     });
                     if (currentUser?.role === 'admin' && orgId) {
-                        const orgCommunities =
-                            await db.query.communities.findMany({
-                                where: eq(communities.orgId, orgId),
-                                columns: { id: true },
-                            });
-                        additionalCommunityIds = orgCommunities.map(
-                            (c) => c.id,
-                        );
+                        additionalCommunityIds =
+                            await getCommunityIdsForOrg(orgId);
                     }
                 }
 
@@ -1698,7 +1699,11 @@ export const communityRouter = router({
             }
 
             try {
-                const results = [];
+                const results: Array<{
+                    email: string;
+                    invite: typeof communityInvites.$inferSelect;
+                    emailSent: boolean;
+                }> = [];
 
                 for (const email of input.emails) {
                     // Generate a unique code for this invite
@@ -1812,11 +1817,9 @@ export const communityRouter = router({
             // If the user is an org admin, include all communities in their org
             let orgAdminCommunityIds: number[] = [];
             if (user?.role === 'admin' && ctx.session.user.orgId) {
-                const orgCommunities = await db.query.communities.findMany({
-                    where: eq(communities.orgId, ctx.session.user.orgId),
-                    columns: { id: true },
-                });
-                orgAdminCommunityIds = orgCommunities.map((c) => c.id);
+                orgAdminCommunityIds = await getCommunityIdsForOrg(
+                    ctx.session.user.orgId,
+                );
             }
 
             const accessibleCommunityIds = [
