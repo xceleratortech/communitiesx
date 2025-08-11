@@ -191,35 +191,59 @@ export default function CommunityDetailPage() {
 
         return userRoleLevel >= minRoleLevel;
     }, [session?.user?.id, community]);
-    const canEditPost = checkCommunityPermission(
-        community?.id?.toString() ?? '',
-        PERMISSIONS.EDIT_POST,
-    );
-    const canDeletePost = checkCommunityPermission(
-        community?.id?.toString() ?? '',
-        PERMISSIONS.DELETE_POST,
-    );
+    const canEditPost = (post: any) => {
+        if (!session) return false;
+
+        // Check if user is the post author
+        if (post.author && post.author.id === session.user.id) return true;
+
+        // Check community permissions
+        return checkCommunityPermission(
+            community?.id?.toString() ?? '',
+            PERMISSIONS.EDIT_POST,
+            community?.orgId, // Pass community's orgId for org admin validation
+        );
+    };
+
+    const canDeletePost = (post: any) => {
+        if (!session) return false;
+
+        // Check if user is the post author
+        if (post.author && post.author.id === session.user.id) return true;
+
+        // Check community permissions
+        return checkCommunityPermission(
+            community?.id?.toString() ?? '',
+            PERMISSIONS.DELETE_POST,
+            community?.orgId, // Pass community's orgId for org admin validation
+        );
+    };
 
     const canCreateTag = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.CREATE_TAG,
+        community?.orgId,
     );
     const canEditTag = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.EDIT_TAG,
+        community?.orgId,
     );
     const canDeleteTag = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.DELETE_TAG,
+        community?.orgId,
     );
 
     const canManageCommunityMembers = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+        community?.orgId,
     );
     const canInviteCommunityMembers = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.INVITE_COMMUNITY_MEMBERS,
+        community?.orgId,
     );
 
     const handleEditTag = (tag: any) => {
@@ -1378,7 +1402,9 @@ export default function CommunityDetailPage() {
 
                                                                 {/* Action buttons */}
                                                                 <div className="flex space-x-1">
-                                                                    {canEditPost && (
+                                                                    {canEditPost(
+                                                                        post,
+                                                                    ) && (
                                                                         <button
                                                                             type="button"
                                                                             onClick={(
@@ -1395,7 +1421,9 @@ export default function CommunityDetailPage() {
                                                                             <Edit className="h-4 w-4" />
                                                                         </button>
                                                                     )}
-                                                                    {canDeletePost && (
+                                                                    {canDeletePost(
+                                                                        post,
+                                                                    ) && (
                                                                         <button
                                                                             type="button"
                                                                             onClick={(
