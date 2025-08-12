@@ -5,9 +5,7 @@ import { cn } from '@/lib/utils';
 import NextTopLoader from 'nextjs-toploader';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
-import { ChatProvider } from '@/providers/chat-provider';
 import { Navbar } from '@/components/navbar';
-import { ChatContainer } from '@/components/chat/chat-container';
 import { Toaster } from '@/components/ui/sonner';
 import Script from 'next/script';
 
@@ -57,15 +55,15 @@ export default function RootLayout({
                     disableTransitionOnChange
                 >
                     <TRPCProvider>
-                        <ChatProvider>
-                            <Navbar />
-                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                                <NextTopLoader />
-                                <main>{children}</main>
-                                <Toaster />
-                            </div>
-                            <ChatContainer />
-                        </ChatProvider>
+                        {/* <ChatProvider> */}
+                        <Navbar />
+                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                            <NextTopLoader />
+                            <main>{children}</main>
+                            <Toaster />
+                        </div>
+                        {/* <ChatContainer />
+                        </ChatProvider> */}
                     </TRPCProvider>
                 </ThemeProvider>
             </body>
