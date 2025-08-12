@@ -1,4 +1,4 @@
-import { eq, count, and, like, or } from 'drizzle-orm';
+import { eq, count, and, like, or, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
@@ -26,6 +26,7 @@ import {
     accounts,
 } from '@/server/db/schema';
 import type { Org, OrgMember } from '@/types/models';
+import { SQL } from 'drizzle-orm';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -374,6 +375,113 @@ export const organizationsRouter = router({
                 .set({ role: 'admin' })
                 .where(eq(users.id, input.userId));
             return { success: true, message: 'User has been made an admin' };
+        }),
+
+    // Get paginated organization members with search and filtering
+    getOrganizationMembersPaginated: publicProcedure
+        .input(
+            z.object({
+                orgId: z.string(),
+                page: z.number().min(1).default(1),
+                limit: z.number().min(1).max(100).default(10),
+                search: z.string().optional(),
+                role: z.enum(['all', 'admin', 'user']).default('all'),
+                sortBy: z
+                    .enum(['name', 'email', 'createdAt', 'role'])
+                    .default('createdAt'),
+                sortOrder: z.enum(['asc', 'desc']).default('desc'),
+            }),
+        )
+        .query(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to view organization members',
+                });
+            }
+
+            try {
+                // Build where conditions
+                const whereConditions: SQL<unknown>[] = [
+                    eq(users.orgId, input.orgId),
+                ];
+
+                // Add search condition
+                if (input.search) {
+                    const searchCondition = or(
+                        like(users.name, `%${input.search}%`),
+                        like(users.email, `%${input.search}%`),
+                    );
+                    if (searchCondition) {
+                        whereConditions.push(searchCondition);
+                    }
+                }
+
+                // Add role filter
+                if (input.role !== 'all') {
+                    whereConditions.push(eq(users.role, input.role));
+                }
+
+                // Count total members matching criteria
+                const [totalResult] = await db
+                    .select({ count: count() })
+                    .from(users)
+                    .where(and(...whereConditions));
+
+                const total = totalResult?.count || 0;
+                const totalPages = Math.ceil(total / input.limit);
+                const offset = (input.page - 1) * input.limit;
+
+                // Get paginated members
+                const members = await db.query.users.findMany({
+                    where: and(...whereConditions),
+                    columns: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        role: true,
+                        createdAt: true,
+                    },
+                    orderBy: [
+                        input.sortBy === 'name'
+                            ? input.sortOrder === 'desc'
+                                ? desc(users.name)
+                                : asc(users.name)
+                            : input.sortBy === 'email'
+                              ? input.sortOrder === 'desc'
+                                  ? desc(users.email)
+                                  : asc(users.email)
+                              : input.sortBy === 'role'
+                                ? input.sortOrder === 'desc'
+                                    ? desc(users.role)
+                                    : asc(users.role)
+                                : input.sortOrder === 'desc'
+                                  ? desc(users.createdAt)
+                                  : asc(users.createdAt),
+                    ],
+                    limit: input.limit,
+                    offset: offset,
+                });
+
+                return {
+                    members,
+                    pagination: {
+                        page: input.page,
+                        limit: input.limit,
+                        total,
+                        totalPages,
+                        hasNextPage: input.page < totalPages,
+                        hasPrevPage: input.page > 1,
+                    },
+                };
+            } catch (error) {
+                console.error('Error fetching organization members:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch organization members',
+                });
+            }
         }),
 
     removeOrgMember: publicProcedure
