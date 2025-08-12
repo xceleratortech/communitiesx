@@ -99,28 +99,15 @@ export const adminRouter = router({
                         : undefined;
 
                 // Build order by
-                let orderByClause;
-                if (sortBy === 'name') {
-                    orderByClause =
-                        sortOrder === 'asc'
-                            ? asc(users.name)
-                            : desc(users.name);
-                } else if (sortBy === 'email') {
-                    orderByClause =
-                        sortOrder === 'asc'
-                            ? asc(users.email)
-                            : desc(users.email);
-                } else if (sortBy === 'role') {
-                    orderByClause =
-                        sortOrder === 'asc'
-                            ? asc(users.role)
-                            : desc(users.role);
-                } else {
-                    orderByClause =
-                        sortOrder === 'asc'
-                            ? asc(users.createdAt)
-                            : desc(users.createdAt);
-                }
+                const sortableColumns = {
+                    name: users.name,
+                    email: users.email,
+                    createdAt: users.createdAt,
+                    role: users.role,
+                };
+                const column = sortableColumns[sortBy];
+                const order = sortOrder === 'asc' ? asc : desc;
+                const orderByClause = order(column);
 
                 // Get total count for pagination
                 const totalCountResult = await db

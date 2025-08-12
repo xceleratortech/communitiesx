@@ -448,23 +448,17 @@ export const organizationsRouter = router({
                         role: true,
                         createdAt: true,
                     },
-                    orderBy: [
-                        input.sortBy === 'name'
-                            ? input.sortOrder === 'desc'
-                                ? desc(users.name)
-                                : asc(users.name)
-                            : input.sortBy === 'email'
-                              ? input.sortOrder === 'desc'
-                                  ? desc(users.email)
-                                  : asc(users.email)
-                              : input.sortBy === 'role'
-                                ? input.sortOrder === 'desc'
-                                    ? desc(users.role)
-                                    : asc(users.role)
-                                : input.sortOrder === 'desc'
-                                  ? desc(users.createdAt)
-                                  : asc(users.createdAt),
-                    ],
+                    orderBy: (() => {
+                        const sortableColumns = {
+                            name: users.name,
+                            email: users.email,
+                            createdAt: users.createdAt,
+                            role: users.role,
+                        };
+                        const column = sortableColumns[input.sortBy];
+                        const order = input.sortOrder === 'asc' ? asc : desc;
+                        return [order(column)];
+                    })(),
                     limit: input.limit,
                     offset: offset,
                 });
