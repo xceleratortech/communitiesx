@@ -59,6 +59,10 @@ import {
     Users,
     Building,
     MoreHorizontal,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
@@ -136,6 +140,18 @@ export default function AdminDashboard() {
     const [dialogOpen, setDialogOpen] = useState(false);
     const utils = trpc.useUtils();
 
+    // User search and pagination state
+    const [userSearchTerm, setUserSearchTerm] = useState('');
+    const [userSearchRole, setUserSearchRole] = useState<
+        'all' | 'super-admin' | 'org-admin' | 'user'
+    >('all');
+    const [userSearchOrg, setUserSearchOrg] = useState<string>('all');
+    const [userSearchVerified, setUserSearchVerified] = useState<
+        'all' | 'verified' | 'unverified'
+    >('all');
+    const [currentUserPage, setCurrentUserPage] = useState(1);
+    const usersPerPage = 10;
+
     const { appRole } = usePermission();
     const isAppAdmin = appRole?.includes('admin');
 
@@ -151,10 +167,23 @@ export default function AdminDashboard() {
     };
 
     // Queries
-    const { data: users, isLoading: isLoadingUsers } =
-        trpc.admin.getUsers.useQuery(undefined, {
+    const {
+        data: usersData,
+        isLoading: isLoadingUsers,
+        isFetching: isFetchingUsers,
+    } = trpc.admin.getUsersPaginated.useQuery(
+        {
+            page: currentUserPage,
+            limit: usersPerPage,
+            search: userSearchTerm,
+            role: userSearchRole,
+            orgId: userSearchOrg === 'all' ? undefined : userSearchOrg,
+            verified: userSearchVerified,
+        },
+        {
             enabled: !!session,
-        });
+        },
+    );
 
     const { data: orgs, isLoading: isLoadingOrgs } =
         trpc.admin.getOrgs.useQuery(undefined, {
@@ -178,6 +207,15 @@ export default function AdminDashboard() {
 
     const makeAppAdminMutation = trpc.admin.makeAppAdmin.useMutation();
 
+    // Extract users and pagination info from the response
+    const users = usersData?.users || [];
+    const pagination = usersData?.pagination;
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentUserPage(1);
+    }, [userSearchTerm, userSearchRole, userSearchOrg, userSearchVerified]);
+
     // Mutations
     const makeAppAdmin = (userId: string) => {
         makeAppAdminMutation.mutate(
@@ -185,7 +223,7 @@ export default function AdminDashboard() {
             {
                 onSuccess: () => {
                     toast.success('User promoted to App Admin');
-                    utils.admin.getUsers.invalidate();
+                    utils.admin.getUsersPaginated.invalidate();
                 },
                 onError: (error) => {
                     toast.error(`Failed to promote user: ${error.message}`);
@@ -203,7 +241,7 @@ export default function AdminDashboard() {
                 role: 'user' as 'admin' | 'user',
                 orgId: '',
             });
-            utils.admin.getUsers.invalidate();
+            utils.admin.getUsersPaginated.invalidate();
         },
     });
 
@@ -244,7 +282,7 @@ export default function AdminDashboard() {
 
     const removeUserMutation = trpc.admin.removeUser.useMutation({
         onSuccess: () => {
-            utils.admin.getUsers.invalidate();
+            utils.admin.getUsersPaginated.invalidate();
         },
     });
 
@@ -321,6 +359,23 @@ export default function AdminDashboard() {
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         debouncedSearch(e.target.value);
+    };
+
+    // User search handling
+    const debouncedUserSearch = useCallback(
+        debounce((value: string) => {
+            setUserSearchTerm(value);
+        }, 300),
+        [],
+    );
+
+    const handleUserSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        debouncedUserSearch(e.target.value);
+    };
+
+    // Pagination handlers
+    const goToUserPage = (page: number) => {
+        setCurrentUserPage(page);
     };
 
     const isLoading = isLoadingInitial || isSearching;
@@ -558,112 +613,477 @@ export default function AdminDashboard() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
+                            {/* Search and Filter Controls */}
+                            <div className="mb-6 space-y-4">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                                    <div className="flex-1">
+                                        <Label
+                                            htmlFor="user-search"
+                                            className="text-sm font-medium"
+                                        >
+                                            Search Users
+                                        </Label>
+                                        <div className="relative mt-1">
+                                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                            <Input
+                                                id="user-search"
+                                                placeholder="Search by name or email..."
+                                                value={userSearchTerm}
+                                                onChange={
+                                                    handleUserSearchChange
+                                                }
+                                                className={`pl-10 ${userSearchTerm ? 'border-primary' : ''}`}
+                                            />
+                                            {isFetchingUsers && (
+                                                <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="w-full sm:w-32">
+                                        <Label
+                                            htmlFor="role-filter"
+                                            className="text-sm font-medium"
+                                        >
+                                            Role
+                                        </Label>
+                                        <Select
+                                            value={userSearchRole}
+                                            onValueChange={(value) => {
+                                                setUserSearchRole(
+                                                    value as
+                                                        | 'all'
+                                                        | 'super-admin'
+                                                        | 'org-admin'
+                                                        | 'user',
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger
+                                                className={`mt-1 ${userSearchRole !== 'all' ? 'border-primary' : ''}`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    All Roles
+                                                </SelectItem>
+                                                <SelectItem value="super-admin">
+                                                    Super Admin
+                                                </SelectItem>
+                                                <SelectItem value="org-admin">
+                                                    Org Admin
+                                                </SelectItem>
+                                                <SelectItem value="user">
+                                                    User
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full sm:w-40">
+                                        <Label
+                                            htmlFor="org-filter"
+                                            className="text-sm font-medium"
+                                        >
+                                            Organization
+                                        </Label>
+                                        <Select
+                                            value={userSearchOrg}
+                                            onValueChange={(value) => {
+                                                setUserSearchOrg(value);
+                                            }}
+                                        >
+                                            <SelectTrigger
+                                                className={`mt-1 ${userSearchOrg !== 'all' ? 'border-primary' : ''}`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    All Organizations
+                                                </SelectItem>
+                                                {orgs?.map(
+                                                    (org: Organization) => (
+                                                        <SelectItem
+                                                            key={org.id}
+                                                            value={org.id}
+                                                        >
+                                                            {org.name}
+                                                        </SelectItem>
+                                                    ),
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="w-full sm:w-32">
+                                        <Label
+                                            htmlFor="verified-filter"
+                                            className="text-sm font-medium"
+                                        >
+                                            Verified
+                                        </Label>
+                                        <Select
+                                            value={userSearchVerified}
+                                            onValueChange={(value) => {
+                                                setUserSearchVerified(
+                                                    value as
+                                                        | 'all'
+                                                        | 'verified'
+                                                        | 'unverified',
+                                                );
+                                            }}
+                                        >
+                                            <SelectTrigger
+                                                className={`mt-1 ${userSearchVerified !== 'all' ? 'border-primary' : ''}`}
+                                            >
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">
+                                                    All
+                                                </SelectItem>
+                                                <SelectItem value="verified">
+                                                    Verified
+                                                </SelectItem>
+                                                <SelectItem value="unverified">
+                                                    Unverified
+                                                </SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                {/* Results Summary */}
+                                <div className="text-muted-foreground flex items-center justify-between text-sm">
+                                    <span>
+                                        {isLoadingUsers || isFetchingUsers ? (
+                                            <span className="flex items-center gap-2">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                {isFetchingUsers &&
+                                                !isLoadingUsers
+                                                    ? 'Searching...'
+                                                    : 'Loading...'}
+                                            </span>
+                                        ) : (
+                                            `Showing ${(currentUserPage - 1) * usersPerPage + 1}-${Math.min(currentUserPage * usersPerPage, pagination?.total || 0)} of ${pagination?.total || 0} users`
+                                        )}
+                                    </span>
+                                    {userSearchTerm ||
+                                    userSearchRole !== 'all' ||
+                                    userSearchOrg !== 'all' ||
+                                    userSearchVerified !== 'all' ? (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => {
+                                                setUserSearchTerm('');
+                                                setUserSearchRole('all');
+                                                setUserSearchOrg('all');
+                                                setUserSearchVerified('all');
+                                            }}
+                                        >
+                                            Clear Filters
+                                        </Button>
+                                    ) : null}
+                                </div>
+                            </div>
+
                             {isLoadingUsers ? (
-                                <div className="py-4 text-center">
-                                    <Loading
-                                        message="Loading users..."
-                                        size="sm"
-                                    />
+                                <div className="space-y-4">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Email</TableHead>
+                                                <TableHead>Role</TableHead>
+                                                <TableHead>
+                                                    Organization
+                                                </TableHead>
+                                                <TableHead>Verified</TableHead>
+                                                <TableHead>Created</TableHead>
+                                                <TableHead>Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Array.from({
+                                                length: usersPerPage,
+                                            }).map((_, index) => (
+                                                <TableRow key={index}>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-32 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-28 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-16 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-8 w-8 animate-pulse rounded" />
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
                                 </div>
                             ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead>Role</TableHead>
-                                            <TableHead>Organization</TableHead>
-                                            <TableHead>Verified</TableHead>
-                                            <TableHead>Created</TableHead>
-                                            <TableHead>Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {users?.map((user: User) => (
-                                            <TableRow key={user.id}>
-                                                <TableCell>
-                                                    {user.name}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {user.email}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {getDisplayRole(user)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {user.organization?.name ||
-                                                        user.orgId}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {user.emailVerified
-                                                        ? 'Yes'
-                                                        : 'No'}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {new Date(
-                                                        user.createdAt,
-                                                    ).toLocaleDateString()}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger
-                                                            asChild
-                                                        >
-                                                            <Button
-                                                                variant="ghost"
-                                                                className="h-8 w-8 p-0"
-                                                            >
-                                                                <span className="sr-only">
-                                                                    Open menu
-                                                                </span>
-                                                                <MoreHorizontal className="h-4 w-4" />
-                                                            </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            <DropdownMenuLabel>
-                                                                Actions
-                                                            </DropdownMenuLabel>
-                                                            <DropdownMenuItem
-                                                                onClick={() =>
-                                                                    makeAppAdmin(
-                                                                        user.id,
-                                                                    )
-                                                                }
-                                                                disabled={
-                                                                    user.appRole ===
-                                                                    'admin'
-                                                                }
-                                                            >
-                                                                <CheckCircle className="mr-2 h-4 w-4" />
-                                                                {user.appRole ===
-                                                                'admin'
-                                                                    ? 'Already Admin'
-                                                                    : 'Make Admin'}
-                                                            </DropdownMenuItem>
-                                                            <DropdownMenuSeparator />
-                                                            <DropdownMenuItem
-                                                                onClick={() =>
-                                                                    handleRemoveUser(
-                                                                        user.id,
-                                                                    )
-                                                                }
-                                                                disabled={
-                                                                    user.id ===
-                                                                    session.user
-                                                                        .id
-                                                                }
-                                                                className="text-destructive"
-                                                            >
-                                                                <UserMinus className="mr-2 h-4 w-4" />
-                                                                Remove User
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
-                                                </TableCell>
+                                <>
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Email</TableHead>
+                                                <TableHead>Role</TableHead>
+                                                <TableHead>
+                                                    Organization
+                                                </TableHead>
+                                                <TableHead>Verified</TableHead>
+                                                <TableHead>Created</TableHead>
+                                                <TableHead>Actions</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {users.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell
+                                                        colSpan={7}
+                                                        className="text-muted-foreground py-8 text-center"
+                                                    >
+                                                        {userSearchTerm ||
+                                                        userSearchRole !==
+                                                            'all' ||
+                                                        userSearchOrg !==
+                                                            'all' ||
+                                                        userSearchVerified !==
+                                                            'all' ? (
+                                                            <div className="space-y-2">
+                                                                <p>
+                                                                    No users
+                                                                    found
+                                                                    matching
+                                                                    your filters
+                                                                </p>
+                                                                <p className="text-xs">
+                                                                    Try
+                                                                    adjusting
+                                                                    your search
+                                                                    criteria or
+                                                                    clearing
+                                                                    some filters
+                                                                </p>
+                                                            </div>
+                                                        ) : (
+                                                            'No users found'
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                users.map((user: User) => (
+                                                    <TableRow key={user.id}>
+                                                        <TableCell>
+                                                            {user.name}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {user.email}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {getDisplayRole(
+                                                                user,
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {user.organization
+                                                                ?.name ||
+                                                                user.orgId}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {user.emailVerified
+                                                                ? 'Yes'
+                                                                : 'No'}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {new Date(
+                                                                user.createdAt,
+                                                            ).toLocaleDateString()}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger
+                                                                    asChild
+                                                                >
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        className="h-8 w-8 p-0"
+                                                                    >
+                                                                        <span className="sr-only">
+                                                                            Open
+                                                                            menu
+                                                                        </span>
+                                                                        <MoreHorizontal className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuLabel>
+                                                                        Actions
+                                                                    </DropdownMenuLabel>
+                                                                    <DropdownMenuItem
+                                                                        onClick={() =>
+                                                                            makeAppAdmin(
+                                                                                user.id,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            user.appRole ===
+                                                                            'admin'
+                                                                        }
+                                                                    >
+                                                                        <CheckCircle className="mr-2 h-4 w-4" />
+                                                                        {user.appRole ===
+                                                                        'admin'
+                                                                            ? 'Already Admin'
+                                                                            : 'Make Admin'}
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuSeparator />
+                                                                    <DropdownMenuItem
+                                                                        onClick={() =>
+                                                                            handleRemoveUser(
+                                                                                user.id,
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            user.id ===
+                                                                            session
+                                                                                .user
+                                                                                .id
+                                                                        }
+                                                                        className="text-destructive"
+                                                                    >
+                                                                        <UserMinus className="mr-2 h-4 w-4" />
+                                                                        Remove
+                                                                        User
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+
+                                    {/* Pagination Controls */}
+                                    {pagination &&
+                                        pagination.totalPages > 1 && (
+                                            <div className="mt-6 flex items-center justify-between">
+                                                <div className="text-muted-foreground text-sm">
+                                                    {isFetchingUsers &&
+                                                    !isLoadingUsers ? (
+                                                        <span className="flex items-center gap-2">
+                                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                                            Loading page{' '}
+                                                            {currentUserPage}...
+                                                        </span>
+                                                    ) : (
+                                                        <>
+                                                            <span>
+                                                                Page{' '}
+                                                                {
+                                                                    currentUserPage
+                                                                }{' '}
+                                                                of{' '}
+                                                                {
+                                                                    pagination.totalPages
+                                                                }
+                                                            </span>
+                                                            <span className="ml-2">
+                                                                •
+                                                            </span>
+                                                            <span className="ml-2">
+                                                                {
+                                                                    pagination.total
+                                                                }{' '}
+                                                                total users
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center space-x-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            goToUserPage(1)
+                                                        }
+                                                        disabled={
+                                                            currentUserPage ===
+                                                                1 ||
+                                                            isFetchingUsers
+                                                        }
+                                                    >
+                                                        <ChevronsLeft className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            goToUserPage(
+                                                                currentUserPage -
+                                                                    1,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentUserPage ===
+                                                                1 ||
+                                                            isFetchingUsers
+                                                        }
+                                                    >
+                                                        <ChevronLeft className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            goToUserPage(
+                                                                currentUserPage +
+                                                                    1,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentUserPage ===
+                                                                pagination.totalPages ||
+                                                            isFetchingUsers
+                                                        }
+                                                    >
+                                                        <ChevronRight className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            goToUserPage(
+                                                                pagination.totalPages,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            currentUserPage ===
+                                                                pagination.totalPages ||
+                                                            isFetchingUsers
+                                                        }
+                                                    >
+                                                        <ChevronsRight className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                </>
                             )}
                         </CardContent>
                     </Card>
