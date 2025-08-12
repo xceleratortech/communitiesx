@@ -1,4 +1,4 @@
-import { eq, count, and, like, or, desc, asc } from 'drizzle-orm';
+import { eq, count, and, like, ilike, or, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
@@ -187,6 +187,11 @@ export const organizationsRouter = router({
             }
 
             try {
+                // Early return if search term is empty after trimming
+                if (!input.searchTerm.trim()) {
+                    return [];
+                }
+
                 // Get the user and their orgId
                 const user = await db.query.users.findFirst({
                     where: eq(users.id, input.userId),
@@ -202,8 +207,8 @@ export const organizationsRouter = router({
                     where: and(
                         eq(orgs.id, user.orgId),
                         or(
-                            like(orgs.name, `%${input.searchTerm}%`),
-                            like(orgs.slug, `%${input.searchTerm}%`),
+                            ilike(orgs.name, `%${input.searchTerm.trim()}%`),
+                            ilike(orgs.slug, `%${input.searchTerm.trim()}%`),
                         ),
                     ),
                 });
@@ -408,10 +413,10 @@ export const organizationsRouter = router({
                 ];
 
                 // Add search condition
-                if (input.search) {
+                if (input.search && input.search.trim()) {
                     const searchCondition = or(
-                        like(users.name, `%${input.search}%`),
-                        like(users.email, `%${input.search}%`),
+                        ilike(users.name, `%${input.search.trim()}%`),
+                        ilike(users.email, `%${input.search.trim()}%`),
                     );
                     if (searchCondition) {
                         whereConditions.push(searchCondition);
@@ -443,23 +448,17 @@ export const organizationsRouter = router({
                         role: true,
                         createdAt: true,
                     },
-                    orderBy: [
-                        input.sortBy === 'name'
-                            ? input.sortOrder === 'desc'
-                                ? desc(users.name)
-                                : asc(users.name)
-                            : input.sortBy === 'email'
-                              ? input.sortOrder === 'desc'
-                                  ? desc(users.email)
-                                  : asc(users.email)
-                              : input.sortBy === 'role'
-                                ? input.sortOrder === 'desc'
-                                    ? desc(users.role)
-                                    : asc(users.role)
-                                : input.sortOrder === 'desc'
-                                  ? desc(users.createdAt)
-                                  : asc(users.createdAt),
-                    ],
+                    orderBy: (() => {
+                        const sortableColumns = {
+                            name: users.name,
+                            email: users.email,
+                            createdAt: users.createdAt,
+                            role: users.role,
+                        };
+                        const column = sortableColumns[input.sortBy];
+                        const order = input.sortOrder === 'asc' ? asc : desc;
+                        return [order(column)];
+                    })(),
                     limit: input.limit,
                     offset: offset,
                 });

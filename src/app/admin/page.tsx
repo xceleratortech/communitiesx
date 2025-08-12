@@ -142,11 +142,15 @@ export default function AdminDashboard() {
 
     // User search and pagination state
     const [userSearchTerm, setUserSearchTerm] = useState('');
-    const [userSearchRole, setUserSearchRole] = useState<string>('all');
+    const [userSearchRole, setUserSearchRole] = useState<
+        'all' | 'super-admin' | 'org-admin' | 'user'
+    >('all');
     const [userSearchOrg, setUserSearchOrg] = useState<string>('all');
-    const [userSearchVerified, setUserSearchVerified] = useState<string>('all');
+    const [userSearchVerified, setUserSearchVerified] = useState<
+        'all' | 'verified' | 'unverified'
+    >('all');
     const [currentUserPage, setCurrentUserPage] = useState(1);
-    const [usersPerPage] = useState(10);
+    const usersPerPage = 10;
 
     const { appRole } = usePermission();
     const isAppAdmin = appRole?.includes('admin');
@@ -163,27 +167,23 @@ export default function AdminDashboard() {
     };
 
     // Queries
-    const { data: usersData, isLoading: isLoadingUsers } =
-        trpc.admin.getUsersPaginated.useQuery(
-            {
-                page: currentUserPage,
-                limit: usersPerPage,
-                search: userSearchTerm,
-                role: userSearchRole as
-                    | 'all'
-                    | 'super-admin'
-                    | 'org-admin'
-                    | 'user',
-                orgId: userSearchOrg === 'all' ? undefined : userSearchOrg,
-                verified: userSearchVerified as
-                    | 'all'
-                    | 'verified'
-                    | 'unverified',
-            },
-            {
-                enabled: !!session,
-            },
-        );
+    const {
+        data: usersData,
+        isLoading: isLoadingUsers,
+        isFetching: isFetchingUsers,
+    } = trpc.admin.getUsersPaginated.useQuery(
+        {
+            page: currentUserPage,
+            limit: usersPerPage,
+            search: userSearchTerm,
+            role: userSearchRole,
+            orgId: userSearchOrg === 'all' ? undefined : userSearchOrg,
+            verified: userSearchVerified,
+        },
+        {
+            enabled: !!session,
+        },
+    );
 
     const { data: orgs, isLoading: isLoadingOrgs } =
         trpc.admin.getOrgs.useQuery(undefined, {
@@ -373,32 +373,9 @@ export default function AdminDashboard() {
         debouncedUserSearch(e.target.value);
     };
 
-    // Add loading state for search operations
-    const [isSearchingUsers, setIsSearchingUsers] = useState(false);
-    const [isChangingPage, setIsChangingPage] = useState(false);
-
-    // Effect to show loading state during search
-    useEffect(() => {
-        if (
-            userSearchTerm ||
-            userSearchRole !== 'all' ||
-            userSearchOrg !== 'all' ||
-            userSearchVerified !== 'all'
-        ) {
-            setIsSearchingUsers(true);
-            const timer = setTimeout(() => setIsSearchingUsers(false), 500);
-            return () => clearTimeout(timer);
-        } else {
-            setIsSearchingUsers(false);
-        }
-    }, [userSearchTerm, userSearchRole, userSearchOrg, userSearchVerified]);
-
     // Pagination handlers
     const goToUserPage = (page: number) => {
-        setIsChangingPage(true);
         setCurrentUserPage(page);
-        // Reset the changing page state after a short delay
-        setTimeout(() => setIsChangingPage(false), 300);
     };
 
     const isLoading = isLoadingInitial || isSearching;
@@ -657,7 +634,7 @@ export default function AdminDashboard() {
                                                 }
                                                 className={`pl-10 ${userSearchTerm ? 'border-primary' : ''}`}
                                             />
-                                            {isSearchingUsers && (
+                                            {isFetchingUsers && (
                                                 <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
                                             )}
                                         </div>
@@ -672,8 +649,13 @@ export default function AdminDashboard() {
                                         <Select
                                             value={userSearchRole}
                                             onValueChange={(value) => {
-                                                setUserSearchRole(value);
-                                                setIsSearchingUsers(true);
+                                                setUserSearchRole(
+                                                    value as
+                                                        | 'all'
+                                                        | 'super-admin'
+                                                        | 'org-admin'
+                                                        | 'user',
+                                                );
                                             }}
                                         >
                                             <SelectTrigger
@@ -708,7 +690,6 @@ export default function AdminDashboard() {
                                             value={userSearchOrg}
                                             onValueChange={(value) => {
                                                 setUserSearchOrg(value);
-                                                setIsSearchingUsers(true);
                                             }}
                                         >
                                             <SelectTrigger
@@ -743,8 +724,12 @@ export default function AdminDashboard() {
                                         <Select
                                             value={userSearchVerified}
                                             onValueChange={(value) => {
-                                                setUserSearchVerified(value);
-                                                setIsSearchingUsers(true);
+                                                setUserSearchVerified(
+                                                    value as
+                                                        | 'all'
+                                                        | 'verified'
+                                                        | 'unverified',
+                                                );
                                             }}
                                         >
                                             <SelectTrigger
@@ -770,10 +755,11 @@ export default function AdminDashboard() {
                                 {/* Results Summary */}
                                 <div className="text-muted-foreground flex items-center justify-between text-sm">
                                     <span>
-                                        {isLoadingUsers || isSearchingUsers ? (
+                                        {isLoadingUsers || isFetchingUsers ? (
                                             <span className="flex items-center gap-2">
                                                 <Loader2 className="h-4 w-4 animate-spin" />
-                                                {isSearchingUsers
+                                                {isFetchingUsers &&
+                                                !isLoadingUsers
                                                     ? 'Searching...'
                                                     : 'Loading...'}
                                             </span>
@@ -998,7 +984,8 @@ export default function AdminDashboard() {
                                         pagination.totalPages > 1 && (
                                             <div className="mt-6 flex items-center justify-between">
                                                 <div className="text-muted-foreground text-sm">
-                                                    {isChangingPage ? (
+                                                    {isFetchingUsers &&
+                                                    !isLoadingUsers ? (
                                                         <span className="flex items-center gap-2">
                                                             <Loader2 className="h-4 w-4 animate-spin" />
                                                             Loading page{' '}
@@ -1038,7 +1025,7 @@ export default function AdminDashboard() {
                                                         disabled={
                                                             currentUserPage ===
                                                                 1 ||
-                                                            isChangingPage
+                                                            isFetchingUsers
                                                         }
                                                     >
                                                         <ChevronsLeft className="h-4 w-4" />
@@ -1055,7 +1042,7 @@ export default function AdminDashboard() {
                                                         disabled={
                                                             currentUserPage ===
                                                                 1 ||
-                                                            isChangingPage
+                                                            isFetchingUsers
                                                         }
                                                     >
                                                         <ChevronLeft className="h-4 w-4" />
@@ -1072,7 +1059,7 @@ export default function AdminDashboard() {
                                                         disabled={
                                                             currentUserPage ===
                                                                 pagination.totalPages ||
-                                                            isChangingPage
+                                                            isFetchingUsers
                                                         }
                                                     >
                                                         <ChevronRight className="h-4 w-4" />
@@ -1088,7 +1075,7 @@ export default function AdminDashboard() {
                                                         disabled={
                                                             currentUserPage ===
                                                                 pagination.totalPages ||
-                                                            isChangingPage
+                                                            isFetchingUsers
                                                         }
                                                     >
                                                         <ChevronsRight className="h-4 w-4" />

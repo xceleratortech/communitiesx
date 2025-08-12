@@ -62,7 +62,9 @@ export default function OrganizationCommunitiesPage() {
 
     // Member search and pagination state
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
-    const [memberSearchRole, setMemberSearchRole] = useState<string>('all');
+    const [memberSearchRole, setMemberSearchRole] = useState<
+        'all' | 'admin' | 'user'
+    >('all');
     const [currentMemberPage, setCurrentMemberPage] = useState(1);
     const [membersPerPage] = useState(10);
 
@@ -72,20 +74,20 @@ export default function OrganizationCommunitiesPage() {
         });
 
     // Fetch paginated members with search and filtering
-    const { data: membersData, isLoading: isLoadingMembers } =
-        trpc.organizations.getOrganizationMembersPaginated.useQuery(
-            {
-                orgId: orgData?.id || '',
-                page: currentMemberPage,
-                limit: membersPerPage,
-                search: memberSearchTerm || undefined,
-                role:
-                    memberSearchRole === 'all'
-                        ? 'all'
-                        : (memberSearchRole as 'admin' | 'user'),
-            },
-            { enabled: !!orgData?.id },
-        );
+    const {
+        data: membersData,
+        isLoading: isLoadingMembers,
+        isFetching: isFetchingMembers,
+    } = trpc.organizations.getOrganizationMembersPaginated.useQuery(
+        {
+            orgId: orgData?.id || '',
+            page: currentMemberPage,
+            limit: membersPerPage,
+            search: memberSearchTerm || undefined,
+            role: memberSearchRole,
+        },
+        { enabled: !!orgData?.id },
+    );
 
     // Fetch all users with their badges in a single query
     const { data: usersWithBadges, isLoading: isLoadingUsers } =
@@ -424,6 +426,10 @@ export default function OrganizationCommunitiesPage() {
                                             onChange={handleMemberSearchChange}
                                             className={`pl-10 ${memberSearchTerm ? 'border-primary' : ''}`}
                                         />
+                                        {isFetchingMembers &&
+                                            !isLoadingMembers && (
+                                                <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+                                            )}
                                     </div>
                                 </div>
                                 <div className="w-full sm:w-32">
@@ -436,7 +442,12 @@ export default function OrganizationCommunitiesPage() {
                                     <Select
                                         value={memberSearchRole}
                                         onValueChange={(value) =>
-                                            setMemberSearchRole(value)
+                                            setMemberSearchRole(
+                                                value as
+                                                    | 'all'
+                                                    | 'admin'
+                                                    | 'user',
+                                            )
                                         }
                                     >
                                         <SelectTrigger
@@ -456,16 +467,24 @@ export default function OrganizationCommunitiesPage() {
                                             </SelectItem>
                                         </SelectContent>
                                     </Select>
+                                    {isFetchingMembers &&
+                                        !isLoadingMembers &&
+                                        memberSearchRole !== 'all' && (
+                                            <Loader2 className="text-muted-foreground ml-2 h-4 w-4 animate-spin" />
+                                        )}
                                 </div>
                             </div>
 
                             {/* Results Summary */}
                             <div className="text-muted-foreground flex items-center justify-between text-sm">
                                 <span>
-                                    {isLoadingMembers ? (
+                                    {isLoadingMembers || isFetchingMembers ? (
                                         <span className="flex items-center gap-2">
                                             <Loader2 className="h-4 w-4 animate-spin" />
-                                            Loading...
+                                            {isFetchingMembers &&
+                                            !isLoadingMembers
+                                                ? 'Searching...'
+                                                : 'Loading...'}
                                         </span>
                                     ) : (
                                         `Showing ${(currentMemberPage - 1) * membersPerPage + 1}-${Math.min(currentMemberPage * membersPerPage, pagination?.total || 0)} of ${pagination?.total || 0} members`
@@ -488,7 +507,8 @@ export default function OrganizationCommunitiesPage() {
                         </div>
 
                         <div className="overflow-hidden rounded-md border">
-                            {isLoadingMembers ? (
+                            {isLoadingMembers ||
+                            (isFetchingMembers && !members.length) ? (
                                 <div className="space-y-4">
                                     <Table>
                                         <TableHeader>
@@ -709,21 +729,33 @@ export default function OrganizationCommunitiesPage() {
                         {pagination && pagination.totalPages > 1 && (
                             <div className="flex items-center justify-between">
                                 <div className="text-muted-foreground text-sm">
-                                    <span>
-                                        Page {currentMemberPage} of{' '}
-                                        {pagination.totalPages}
-                                    </span>
-                                    <span className="ml-2">•</span>
-                                    <span className="ml-2">
-                                        {pagination.total} total members
-                                    </span>
+                                    {isFetchingMembers && !isLoadingMembers ? (
+                                        <span className="flex items-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Loading page {currentMemberPage}...
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span>
+                                                Page {currentMemberPage} of{' '}
+                                                {pagination.totalPages}
+                                            </span>
+                                            <span className="ml-2">•</span>
+                                            <span className="ml-2">
+                                                {pagination.total} total members
+                                            </span>
+                                        </>
+                                    )}
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => goToMemberPage(1)}
-                                        disabled={currentMemberPage === 1}
+                                        disabled={
+                                            currentMemberPage === 1 ||
+                                            isFetchingMembers
+                                        }
                                     >
                                         <ChevronsLeft className="h-4 w-4" />
                                     </Button>
@@ -735,7 +767,10 @@ export default function OrganizationCommunitiesPage() {
                                                 currentMemberPage - 1,
                                             )
                                         }
-                                        disabled={currentMemberPage === 1}
+                                        disabled={
+                                            currentMemberPage === 1 ||
+                                            isFetchingMembers
+                                        }
                                     >
                                         <ChevronLeft className="h-4 w-4" />
                                     </Button>
@@ -749,7 +784,8 @@ export default function OrganizationCommunitiesPage() {
                                         }
                                         disabled={
                                             currentMemberPage ===
-                                            pagination.totalPages
+                                                pagination.totalPages ||
+                                            isFetchingMembers
                                         }
                                     >
                                         <ChevronRight className="h-4 w-4" />
@@ -764,7 +800,8 @@ export default function OrganizationCommunitiesPage() {
                                         }
                                         disabled={
                                             currentMemberPage ===
-                                            pagination.totalPages
+                                                pagination.totalPages ||
+                                            isFetchingMembers
                                         }
                                     >
                                         <ChevronsRight className="h-4 w-4" />
