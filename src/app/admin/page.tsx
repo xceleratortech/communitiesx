@@ -142,11 +142,15 @@ export default function AdminDashboard() {
 
     // User search and pagination state
     const [userSearchTerm, setUserSearchTerm] = useState('');
-    const [userSearchRole, setUserSearchRole] = useState<string>('all');
+    const [userSearchRole, setUserSearchRole] = useState<
+        'all' | 'super-admin' | 'org-admin' | 'user'
+    >('all');
     const [userSearchOrg, setUserSearchOrg] = useState<string>('all');
-    const [userSearchVerified, setUserSearchVerified] = useState<string>('all');
+    const [userSearchVerified, setUserSearchVerified] = useState<
+        'all' | 'verified' | 'unverified'
+    >('all');
     const [currentUserPage, setCurrentUserPage] = useState(1);
-    const [usersPerPage] = useState(10);
+    const usersPerPage = 10;
 
     const { appRole } = usePermission();
     const isAppAdmin = appRole?.includes('admin');
@@ -172,13 +176,9 @@ export default function AdminDashboard() {
             page: currentUserPage,
             limit: usersPerPage,
             search: userSearchTerm,
-            role: userSearchRole as
-                | 'all'
-                | 'super-admin'
-                | 'org-admin'
-                | 'user',
+            role: userSearchRole,
             orgId: userSearchOrg === 'all' ? undefined : userSearchOrg,
-            verified: userSearchVerified as 'all' | 'verified' | 'unverified',
+            verified: userSearchVerified,
         },
         {
             enabled: !!session,
@@ -649,7 +649,13 @@ export default function AdminDashboard() {
                                         <Select
                                             value={userSearchRole}
                                             onValueChange={(value) => {
-                                                setUserSearchRole(value);
+                                                setUserSearchRole(
+                                                    value as
+                                                        | 'all'
+                                                        | 'super-admin'
+                                                        | 'org-admin'
+                                                        | 'user',
+                                                );
                                             }}
                                         >
                                             <SelectTrigger
@@ -718,7 +724,12 @@ export default function AdminDashboard() {
                                         <Select
                                             value={userSearchVerified}
                                             onValueChange={(value) => {
-                                                setUserSearchVerified(value);
+                                                setUserSearchVerified(
+                                                    value as
+                                                        | 'all'
+                                                        | 'verified'
+                                                        | 'unverified',
+                                                );
                                             }}
                                         >
                                             <SelectTrigger

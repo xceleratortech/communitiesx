@@ -62,7 +62,9 @@ export default function OrganizationCommunitiesPage() {
 
     // Member search and pagination state
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
-    const [memberSearchRole, setMemberSearchRole] = useState<string>('all');
+    const [memberSearchRole, setMemberSearchRole] = useState<
+        'all' | 'admin' | 'user'
+    >('all');
     const [currentMemberPage, setCurrentMemberPage] = useState(1);
     const [membersPerPage] = useState(10);
 
@@ -82,10 +84,7 @@ export default function OrganizationCommunitiesPage() {
             page: currentMemberPage,
             limit: membersPerPage,
             search: memberSearchTerm || undefined,
-            role:
-                memberSearchRole === 'all'
-                    ? 'all'
-                    : (memberSearchRole as 'admin' | 'user'),
+            role: memberSearchRole,
         },
         { enabled: !!orgData?.id },
     );
@@ -443,7 +442,12 @@ export default function OrganizationCommunitiesPage() {
                                     <Select
                                         value={memberSearchRole}
                                         onValueChange={(value) =>
-                                            setMemberSearchRole(value)
+                                            setMemberSearchRole(
+                                                value as
+                                                    | 'all'
+                                                    | 'admin'
+                                                    | 'user',
+                                            )
                                         }
                                     >
                                         <SelectTrigger
