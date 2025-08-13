@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
     Table,
     TableHeader,
@@ -22,6 +23,12 @@ import {
     Users,
     Building2,
     Award,
+    Search,
+    Loader2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -38,16 +45,49 @@ import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
 import { Loading } from '@/components/ui/loading';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import debounce from 'lodash/debounce';
 
 export default function OrganizationCommunitiesPage() {
     const params = useParams();
     const router = useRouter();
     const [deleteId, setDeleteId] = useState<number | null>(null);
 
+    // Member search and pagination state
+    const [memberSearchTerm, setMemberSearchTerm] = useState('');
+    const [memberSearchRole, setMemberSearchRole] = useState<
+        'all' | 'admin' | 'user'
+    >('all');
+    const [currentMemberPage, setCurrentMemberPage] = useState(1);
+    const [membersPerPage] = useState(10);
+
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
             slug: params.slug as string,
         });
+
+    // Fetch paginated members with search and filtering
+    const {
+        data: membersData,
+        isLoading: isLoadingMembers,
+        isFetching: isFetchingMembers,
+    } = trpc.organizations.getOrganizationMembersPaginated.useQuery(
+        {
+            orgId: orgData?.id || '',
+            page: currentMemberPage,
+            limit: membersPerPage,
+            search: memberSearchTerm || undefined,
+            role: memberSearchRole,
+        },
+        { enabled: !!orgData?.id },
+    );
 
     // Fetch all users with their badges in a single query
     const { data: usersWithBadges, isLoading: isLoadingUsers } =
@@ -62,6 +102,34 @@ export default function OrganizationCommunitiesPage() {
         trpc.organizations.removeOrgMember.useMutation();
     const deleteCommunityMutation =
         trpc.organizations.deleteCommunity.useMutation();
+
+    // Reset to first page when filters change
+    useEffect(() => {
+        setCurrentMemberPage(1);
+    }, [memberSearchTerm, memberSearchRole]);
+
+    // Extract members and pagination info from the response
+    const members = membersData?.members || [];
+    const pagination = membersData?.pagination;
+
+    // Search handling
+    const debouncedMemberSearch = useCallback(
+        debounce((value: string) => {
+            setMemberSearchTerm(value);
+        }, 300),
+        [],
+    );
+
+    const handleMemberSearchChange = (
+        e: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        debouncedMemberSearch(e.target.value);
+    };
+
+    // Pagination handlers
+    const goToMemberPage = (page: number) => {
+        setCurrentMemberPage(page);
+    };
 
     const deleteCommunity = (communityId: number) => {
         deleteCommunityMutation.mutate(
@@ -97,6 +165,9 @@ export default function OrganizationCommunitiesPage() {
                     utils.organizations.getOrganizationWithCommunities.invalidate(
                         { slug: params.slug as string },
                     );
+                    utils.organizations.getOrganizationMembersPaginated.invalidate(
+                        { orgId: orgData.id },
+                    );
                 },
                 onError: (err) => {
                     toast.error('Failed to make user admin', {
@@ -120,6 +191,9 @@ export default function OrganizationCommunitiesPage() {
                     toast.success('Member deleted permanently');
                     utils.organizations.getOrganizationWithCommunities.invalidate(
                         { slug: params.slug as string },
+                    );
+                    utils.organizations.getOrganizationMembersPaginated.invalidate(
+                        { orgId: orgData.id },
                     );
                 },
                 onError: (err) => {
@@ -333,147 +407,408 @@ export default function OrganizationCommunitiesPage() {
                             )}
                         </div>
 
-                        <div className="overflow-hidden rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="text-center">
-                                            Name
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Badges
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Email
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Role
-                                        </TableHead>
-                                        <TableHead className="text-center">
-                                            Joined
-                                        </TableHead>
-                                        {canManageMembers && (
-                                            <TableHead className="text-center">
-                                                Actions
-                                            </TableHead>
+                        {/* Search and Filter Controls */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                                <div className="flex-1">
+                                    <Label
+                                        htmlFor="member-search"
+                                        className="text-sm font-medium"
+                                    >
+                                        Search Members
+                                    </Label>
+                                    <div className="relative mt-1">
+                                        <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                                        <Input
+                                            id="member-search"
+                                            placeholder="Search by name or email..."
+                                            value={memberSearchTerm}
+                                            onChange={handleMemberSearchChange}
+                                            className={`pl-10 ${memberSearchTerm ? 'border-primary' : ''}`}
+                                        />
+                                        {isFetchingMembers &&
+                                            !isLoadingMembers && (
+                                                <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+                                            )}
+                                    </div>
+                                </div>
+                                <div className="w-full sm:w-32">
+                                    <Label
+                                        htmlFor="role-filter"
+                                        className="text-sm font-medium"
+                                    >
+                                        Role
+                                    </Label>
+                                    <Select
+                                        value={memberSearchRole}
+                                        onValueChange={(value) =>
+                                            setMemberSearchRole(
+                                                value as
+                                                    | 'all'
+                                                    | 'admin'
+                                                    | 'user',
+                                            )
+                                        }
+                                    >
+                                        <SelectTrigger
+                                            className={`mt-1 ${memberSearchRole !== 'all' ? 'border-primary' : ''}`}
+                                        >
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">
+                                                All Roles
+                                            </SelectItem>
+                                            <SelectItem value="admin">
+                                                Admin
+                                            </SelectItem>
+                                            <SelectItem value="user">
+                                                User
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    {isFetchingMembers &&
+                                        !isLoadingMembers &&
+                                        memberSearchRole !== 'all' && (
+                                            <Loader2 className="text-muted-foreground ml-2 h-4 w-4 animate-spin" />
                                         )}
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {orgData.members &&
-                                    orgData.members.length > 0 ? (
-                                        orgData.members.map((member: any) => (
-                                            <TableRow key={member.id}>
-                                                <TableCell className="text-center font-medium">
-                                                    {member.name}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <UserBadgesInTable
-                                                        userId={member.id}
-                                                        userBadges={
-                                                            usersWithBadges?.find(
-                                                                (u) =>
-                                                                    u.id ===
-                                                                    member.id,
-                                                            )
-                                                                ?.badgeAssignments ||
-                                                            []
-                                                        }
-                                                        isLoading={
-                                                            isLoadingUsers
-                                                        }
-                                                    />
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-center">
-                                                    {member.email}
-                                                </TableCell>
-                                                <TableCell className="text-center">
-                                                    <span
-                                                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                                                            member.role ===
-                                                            'admin'
-                                                                ? 'bg-primary/10 text-primary'
-                                                                : 'bg-muted text-muted-foreground'
-                                                        }`}
-                                                    >
-                                                        {member.role}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-center">
-                                                    {new Date(
-                                                        member.createdAt,
-                                                    ).toLocaleDateString()}
-                                                </TableCell>
+                                </div>
+                            </div>
+
+                            {/* Results Summary */}
+                            <div className="text-muted-foreground flex items-center justify-between text-sm">
+                                <span>
+                                    {isLoadingMembers || isFetchingMembers ? (
+                                        <span className="flex items-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            {isFetchingMembers &&
+                                            !isLoadingMembers
+                                                ? 'Searching...'
+                                                : 'Loading...'}
+                                        </span>
+                                    ) : (
+                                        `Showing ${(currentMemberPage - 1) * membersPerPage + 1}-${Math.min(currentMemberPage * membersPerPage, pagination?.total || 0)} of ${pagination?.total || 0} members`
+                                    )}
+                                </span>
+                                {(memberSearchTerm ||
+                                    memberSearchRole !== 'all') && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setMemberSearchTerm('');
+                                            setMemberSearchRole('all');
+                                        }}
+                                    >
+                                        Clear Filters
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="overflow-hidden rounded-md border">
+                            {isLoadingMembers ||
+                            (isFetchingMembers && !members.length) ? (
+                                <div className="space-y-4">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="text-center">
+                                                    Name
+                                                </TableHead>
+                                                <TableHead className="text-center">
+                                                    Badges
+                                                </TableHead>
+                                                <TableHead className="text-center">
+                                                    Email
+                                                </TableHead>
+                                                <TableHead className="text-center">
+                                                    Role
+                                                </TableHead>
+                                                <TableHead className="text-center">
+                                                    Joined
+                                                </TableHead>
                                                 {canManageMembers && (
-                                                    <TableCell className="text-center">
-                                                        <div className="flex justify-center">
-                                                            {member.role !==
-                                                                'admin' && (
-                                                                <DropdownMenu>
-                                                                    <DropdownMenuTrigger
-                                                                        asChild
-                                                                    >
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                        >
-                                                                            <MoreHorizontal className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </DropdownMenuTrigger>
-                                                                    <DropdownMenuContent align="end">
-                                                                        {member.role !==
-                                                                            'admin' && (
-                                                                            <DropdownMenuItem
-                                                                                onSelect={() =>
-                                                                                    handleMakeAdmin(
-                                                                                        member.id,
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                <CircleCheckBig className="mr-2 h-4 w-4" />
-                                                                                Make
-                                                                                Admin
-                                                                            </DropdownMenuItem>
-                                                                        )}
-                                                                        {member.role !==
-                                                                            'admin' && (
-                                                                            <DropdownMenuItem
-                                                                                className="text-destructive"
-                                                                                onSelect={() =>
-                                                                                    handleRemoveMember(
-                                                                                        member.id,
-                                                                                    )
-                                                                                }
-                                                                            >
-                                                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                                                Remove
-                                                                                Member
-                                                                            </DropdownMenuItem>
-                                                                        )}
-                                                                    </DropdownMenuContent>
-                                                                </DropdownMenu>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
+                                                    <TableHead className="text-center">
+                                                        Actions
+                                                    </TableHead>
                                                 )}
                                             </TableRow>
-                                        ))
-                                    ) : (
+                                        </TableHeader>
+                                        <TableBody>
+                                            {Array.from({
+                                                length: membersPerPage,
+                                            }).map((_, index) => (
+                                                <TableRow key={index}>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-24 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-32 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="bg-muted h-4 w-20 animate-pulse rounded" />
+                                                    </TableCell>
+                                                    {canManageMembers && (
+                                                        <TableCell>
+                                                            <div className="bg-muted h-8 w-8 animate-pulse rounded" />
+                                                        </TableCell>
+                                                    )}
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
                                         <TableRow>
-                                            <TableCell
-                                                colSpan={
-                                                    canManageMembers ? 6 : 5
-                                                }
-                                                className="text-muted-foreground py-8 text-center"
-                                            >
-                                                No members found for this
-                                                organization.
-                                            </TableCell>
+                                            <TableHead className="text-center">
+                                                Name
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Badges
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Email
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Role
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Joined
+                                            </TableHead>
+                                            {canManageMembers && (
+                                                <TableHead className="text-center">
+                                                    Actions
+                                                </TableHead>
+                                            )}
                                         </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {members.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={
+                                                        canManageMembers ? 6 : 5
+                                                    }
+                                                    className="text-muted-foreground py-8 text-center"
+                                                >
+                                                    {memberSearchTerm ||
+                                                    memberSearchRole !==
+                                                        'all' ? (
+                                                        <div className="space-y-2">
+                                                            <p>
+                                                                No members found
+                                                                matching your
+                                                                filters
+                                                            </p>
+                                                            <p className="text-xs">
+                                                                Try adjusting
+                                                                your search
+                                                                criteria or
+                                                                clearing some
+                                                                filters
+                                                            </p>
+                                                        </div>
+                                                    ) : (
+                                                        'No members found for this organization.'
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            members.map((member: any) => (
+                                                <TableRow key={member.id}>
+                                                    <TableCell className="text-center font-medium">
+                                                        {member.name}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <UserBadgesInTable
+                                                            userId={member.id}
+                                                            userBadges={
+                                                                usersWithBadges?.find(
+                                                                    (u) =>
+                                                                        u.id ===
+                                                                        member.id,
+                                                                )
+                                                                    ?.badgeAssignments ||
+                                                                []
+                                                            }
+                                                            isLoading={
+                                                                isLoadingUsers
+                                                            }
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-center">
+                                                        {member.email}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <span
+                                                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                                                                member.role ===
+                                                                'admin'
+                                                                    ? 'bg-primary/10 text-primary'
+                                                                    : 'bg-muted text-muted-foreground'
+                                                            }`}
+                                                        >
+                                                            {member.role}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-center">
+                                                        {new Date(
+                                                            member.createdAt,
+                                                        ).toLocaleDateString()}
+                                                    </TableCell>
+                                                    {canManageMembers && (
+                                                        <TableCell className="text-center">
+                                                            <div className="flex justify-center">
+                                                                {member.role !==
+                                                                    'admin' && (
+                                                                    <DropdownMenu>
+                                                                        <DropdownMenuTrigger
+                                                                            asChild
+                                                                        >
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                            >
+                                                                                <MoreHorizontal className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </DropdownMenuTrigger>
+                                                                        <DropdownMenuContent align="end">
+                                                                            {member.role !==
+                                                                                'admin' && (
+                                                                                <DropdownMenuItem
+                                                                                    onSelect={() =>
+                                                                                        handleMakeAdmin(
+                                                                                            member.id,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <CircleCheckBig className="mr-2 h-4 w-4" />
+                                                                                    Make
+                                                                                    Admin
+                                                                                </DropdownMenuItem>
+                                                                            )}
+                                                                            {member.role !==
+                                                                                'admin' && (
+                                                                                <DropdownMenuItem
+                                                                                    className="text-destructive"
+                                                                                    onSelect={() =>
+                                                                                        handleRemoveMember(
+                                                                                            member.id,
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                                                    Remove
+                                                                                    Member
+                                                                                </DropdownMenuItem>
+                                                                            )}
+                                                                        </DropdownMenuContent>
+                                                                    </DropdownMenu>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    )}
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </div>
+
+                        {/* Pagination Controls */}
+                        {pagination && pagination.totalPages > 1 && (
+                            <div className="flex items-center justify-between">
+                                <div className="text-muted-foreground text-sm">
+                                    {isFetchingMembers && !isLoadingMembers ? (
+                                        <span className="flex items-center gap-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                            Loading page {currentMemberPage}...
+                                        </span>
+                                    ) : (
+                                        <>
+                                            <span>
+                                                Page {currentMemberPage} of{' '}
+                                                {pagination.totalPages}
+                                            </span>
+                                            <span className="ml-2">•</span>
+                                            <span className="ml-2">
+                                                {pagination.total} total members
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => goToMemberPage(1)}
+                                        disabled={
+                                            currentMemberPage === 1 ||
+                                            isFetchingMembers
+                                        }
+                                    >
+                                        <ChevronsLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            goToMemberPage(
+                                                currentMemberPage - 1,
+                                            )
+                                        }
+                                        disabled={
+                                            currentMemberPage === 1 ||
+                                            isFetchingMembers
+                                        }
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            goToMemberPage(
+                                                currentMemberPage + 1,
+                                            )
+                                        }
+                                        disabled={
+                                            currentMemberPage ===
+                                                pagination.totalPages ||
+                                            isFetchingMembers
+                                        }
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            goToMemberPage(
+                                                pagination.totalPages,
+                                            )
+                                        }
+                                        disabled={
+                                            currentMemberPage ===
+                                                pagination.totalPages ||
+                                            isFetchingMembers
+                                        }
+                                    >
+                                        <ChevronsRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </TabsContent>
 
                     {canManageBadges && (

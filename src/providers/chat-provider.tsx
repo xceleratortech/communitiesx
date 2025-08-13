@@ -66,12 +66,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // Get unread count
-    const { data: unreadCount = 0, refetch: refetchUnreadCount } =
-        trpc.chat.getUnreadCount.useQuery(
-            undefined,
-            { enabled: !!session, refetchInterval: 4000 }, // Refetch every 4 seconds
-        );
+    // Get unread count - commented out as chat is not currently being used
+    // const { data: unreadCount = 0, refetch: refetchUnreadCount } =
+    //     trpc.chat.getUnreadCount.useQuery(
+    //         undefined,
+    //         { enabled: !!session, refetchInterval: 4000 }, // Refetch every 4 seconds
+    //     );
 
     // Toggle chat open/closed
     const toggleChat = useCallback(() => {
@@ -145,7 +145,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 openChat,
                 activeThreadId,
                 setActiveThreadId,
-                unreadCount,
+                unreadCount: 0,
                 isMinimized,
                 toggleMinimize,
                 isNewChatOpen,
