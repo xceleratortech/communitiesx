@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { router, adminProcedure, authProcedure } from '../trpc';
 import { users, orgs, accounts, verifications } from '@/server/db/auth-schema';
 import { initTRPC, TRPCError } from '@trpc/server';
-import { eq, count, or, ilike } from 'drizzle-orm';
+import { eq, count, or, ilike, and, desc, asc } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
@@ -11,7 +11,144 @@ import { communityMembers } from '@/server/db/schema';
 import { Context } from '../context';
 
 export const adminRouter = router({
-    // Get all users
+    // Get paginated users with search and filtering
+    getUsersPaginated: adminProcedure
+        .input(
+            z.object({
+                page: z.number().min(1).default(1),
+                limit: z.number().min(1).max(100).default(10),
+                search: z.string().optional(),
+                role: z
+                    .enum(['all', 'super-admin', 'org-admin', 'user'])
+                    .default('all'),
+                orgId: z.string().optional(),
+                verified: z
+                    .enum(['all', 'verified', 'unverified'])
+                    .default('all'),
+                sortBy: z
+                    .enum(['name', 'email', 'createdAt', 'role'])
+                    .default('createdAt'),
+                sortOrder: z.enum(['asc', 'desc']).default('desc'),
+            }),
+        )
+        .query(async ({ input }) => {
+            try {
+                const {
+                    page,
+                    limit,
+                    search,
+                    role,
+                    orgId,
+                    verified,
+                    sortBy,
+                    sortOrder,
+                } = input;
+                const offset = (page - 1) * limit;
+
+                // Build where conditions
+                const whereConditions = [];
+
+                // Search condition
+                if (search && search.trim()) {
+                    whereConditions.push(
+                        or(
+                            ilike(users.name, `%${search}%`),
+                            ilike(users.email, `%${search}%`),
+                        ),
+                    );
+                }
+
+                // Role filtering
+                if (role !== 'all') {
+                    if (role === 'super-admin') {
+                        whereConditions.push(eq(users.appRole, 'admin'));
+                    } else if (role === 'org-admin') {
+                        whereConditions.push(
+                            and(
+                                eq(users.role, 'admin'),
+                                eq(users.appRole, 'user'),
+                            ),
+                        );
+                    } else if (role === 'user') {
+                        whereConditions.push(
+                            and(
+                                eq(users.role, 'user'),
+                                eq(users.appRole, 'user'),
+                            ),
+                        );
+                    }
+                }
+
+                // Organization filtering
+                if (orgId && orgId !== 'all') {
+                    whereConditions.push(eq(users.orgId, orgId));
+                }
+
+                // Verification filtering
+                if (verified !== 'all') {
+                    if (verified === 'verified') {
+                        whereConditions.push(eq(users.emailVerified, true));
+                    } else {
+                        whereConditions.push(eq(users.emailVerified, false));
+                    }
+                }
+
+                const whereClause =
+                    whereConditions.length > 0
+                        ? and(...whereConditions)
+                        : undefined;
+
+                // Build order by
+                const sortableColumns = {
+                    name: users.name,
+                    email: users.email,
+                    createdAt: users.createdAt,
+                    role: users.role,
+                };
+                const column = sortableColumns[sortBy];
+                const order = sortOrder === 'asc' ? asc : desc;
+                const orderByClause = order(column);
+
+                // Get total count for pagination
+                const totalCountResult = await db
+                    .select({ count: count() })
+                    .from(users)
+                    .where(whereClause);
+
+                const totalCount = totalCountResult[0]?.count || 0;
+
+                // Get paginated users
+                const paginatedUsers = await db.query.users.findMany({
+                    where: whereClause,
+                    with: {
+                        organization: true,
+                    },
+                    orderBy: [orderByClause],
+                    limit: limit,
+                    offset: offset,
+                });
+
+                return {
+                    users: paginatedUsers,
+                    pagination: {
+                        page,
+                        limit,
+                        total: totalCount,
+                        totalPages: Math.ceil(totalCount / limit),
+                        hasNext: page < Math.ceil(totalCount / limit),
+                        hasPrev: page > 1,
+                    },
+                };
+            } catch (error) {
+                console.error('Error fetching paginated users:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch users',
+                });
+            }
+        }),
+
+    // Get all users (keeping for backward compatibility)
     getUsers: adminProcedure.query(async ({ ctx }) => {
         try {
             const allUsers = await db.query.users.findMany({
