@@ -50,7 +50,7 @@ export function InviteEmailDialog({
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
     const [form, setForm] = useState({
         email: '',
-        role: 'member' as 'member' | 'moderator',
+        role: 'member' as 'member' | 'moderator' | 'admin',
         senderName: '',
     });
 
@@ -230,7 +230,8 @@ export function InviteEmailDialog({
                                             ...form,
                                             role: role as
                                                 | 'member'
-                                                | 'moderator',
+                                                | 'moderator'
+                                                | 'admin',
                                         })
                                     }
                                     disabled={!isAdmin}
@@ -250,13 +251,19 @@ export function InviteEmailDialog({
                                                 Moderator
                                             </SelectItem>
                                         )}
+                                        {isAdmin && (
+                                            <SelectItem value="admin">
+                                                Admin
+                                            </SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             {!isAdmin && (
                                 <p className="text-muted-foreground text-center text-xs">
-                                    Only admins can invite moderators
+                                    Only admins can invite moderators and admin
+                                    users
                                 </p>
                             )}
 
