@@ -25,6 +25,8 @@ import {
     CalendarDays,
     ShieldCheck,
     Loader2,
+    Bell,
+    BellOff,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
@@ -33,10 +35,12 @@ import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
 import type { Community } from '@/types/models';
 import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 // Define CommunityCardProps type
 interface CommunityCardProps {
     community: Community;
+    showNotificationToggle?: boolean; // Optional prop to control notification toggle visibility
 }
 
 export default function CommunitiesPage() {
@@ -367,6 +371,7 @@ export default function CommunitiesPage() {
                                         <CommunityCard
                                             key={community.id}
                                             community={community as Community}
+                                            showNotificationToggle={true}
                                         />
                                     ))}
                                 </div>
@@ -516,10 +521,73 @@ export default function CommunitiesPage() {
     );
 }
 
-function CommunityCard({ community }: CommunityCardProps) {
+function CommunityCard({
+    community,
+    showNotificationToggle = false,
+}: CommunityCardProps) {
+    const [notificationsDisabled, setNotificationsDisabled] = useState(false);
+    const [isUpdatingNotification, setIsUpdatingNotification] = useState(false);
+
+    // Get current user's notification status for this community (only if toggle should be shown)
+    const { data: notificationStatus } =
+        trpc.communities.getCommunityNotificationStatus.useQuery(
+            { communityId: community.id },
+            { enabled: !!community.id && showNotificationToggle },
+        );
+
+    // Initialize notification state from API response
+    useEffect(() => {
+        if (notificationStatus) {
+            setNotificationsDisabled(notificationStatus.notificationsDisabled);
+        }
+    }, [notificationStatus]);
+
+    const disableNotificationsMutation =
+        trpc.communities.disableCommunityNotifications.useMutation({
+            onSuccess: () => {
+                toast.success(`Notifications disabled for ${community.name}`);
+            },
+            onError: (error) => {
+                toast.error('Failed to disable notifications');
+                // Revert the local state
+                setNotificationsDisabled(false);
+            },
+        });
+
+    const enableNotificationsMutation =
+        trpc.communities.enableCommunityNotifications.useMutation({
+            onSuccess: () => {
+                toast.success(`Notifications enabled for ${community.name}`);
+            },
+            onError: (error) => {
+                toast.error('Failed to enable notifications');
+                // Revert the local state
+                setNotificationsDisabled(true);
+            },
+        });
+
+    const handleNotificationToggle = async (disabled: boolean) => {
+        setNotificationsDisabled(disabled);
+        setIsUpdatingNotification(true);
+
+        try {
+            if (disabled) {
+                await disableNotificationsMutation.mutateAsync({
+                    communityId: community.id,
+                });
+            } else {
+                await enableNotificationsMutation.mutateAsync({
+                    communityId: community.id,
+                });
+            }
+        } finally {
+            setIsUpdatingNotification(false);
+        }
+    };
+
     return (
         <Link href={`/communities/${community.slug}`} className="block">
-            <Card className="group flex h-[380px] cursor-pointer flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
+            <Card className="group relative flex h-[380px] cursor-pointer flex-col overflow-hidden pt-0 transition-all hover:shadow-md">
                 <div className="relative h-24 w-full">
                     {community.banner ? (
                         <img
@@ -541,6 +609,37 @@ function CommunityCard({ community }: CommunityCardProps) {
                             </AvatarFallback>
                         </Avatar>
                     </div>
+
+                    {/* Notification toggle overlay - only show for My Communities */}
+                    {showNotificationToggle && (
+                        <div className="absolute top-2 right-2">
+                            <div
+                                className="bg-background/90 rounded-lg border p-2 shadow-sm backdrop-blur-sm"
+                                onClick={(e) => e.preventDefault()}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNotificationToggle(
+                                                !notificationsDisabled,
+                                            );
+                                        }}
+                                        disabled={isUpdatingNotification}
+                                        className="h-6 w-6 p-0"
+                                    >
+                                        {notificationsDisabled ? (
+                                            <BellOff className="text-muted-foreground h-4 w-4" />
+                                        ) : (
+                                            <Bell className="text-primary h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <CardHeader className="pt-8 pb-2">
                     <div className="flex flex-col items-start justify-between">
