@@ -10,6 +10,8 @@ export const PERMISSIONS = {
 
     MANAGE_COMMUNITY_MEMBERS: 'manage_community_members',
     INVITE_COMMUNITY_MEMBERS: 'invite_community_members',
+    REMOVE_COMMUNITY_CREATOR: 'remove_community_creator',
+    ASSIGN_COMMUNITY_ADMIN: 'assign_community_admin',
 
     VIEW_ORG: 'view_org',
     UPDATE_ORG: 'update_org',
