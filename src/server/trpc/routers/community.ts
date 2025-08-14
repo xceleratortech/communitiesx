@@ -1236,10 +1236,11 @@ export const communityRouter = router({
             const permission = await ServerPermissions.fromUserId(
                 ctx.session.user.id,
             );
-            const canUpdateCommunity = permission.checkCommunityPermission(
-                input.communityId.toString(),
-                PERMISSIONS.EDIT_COMMUNITY,
-            );
+            const canUpdateCommunity =
+                await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.EDIT_COMMUNITY,
+                );
 
             if (!canUpdateCommunity) {
                 throw new TRPCError({
@@ -1291,10 +1292,11 @@ export const communityRouter = router({
             const permission = await ServerPermissions.fromUserId(
                 ctx.session.user.id,
             );
-            const canAssignModerator = permission.checkCommunityPermission(
-                input.communityId.toString(),
-                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-            );
+            const canAssignModerator =
+                await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
             if (!canAssignModerator) {
                 throw new TRPCError({
@@ -1364,10 +1366,11 @@ export const communityRouter = router({
             const permission = await ServerPermissions.fromUserId(
                 ctx.session.user.id,
             );
-            const canRemoveModerator = permission.checkCommunityPermission(
-                input.communityId.toString(),
-                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
-            );
+            const canRemoveModerator =
+                await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                );
 
             if (!canRemoveModerator) {
                 throw new TRPCError({
@@ -1417,84 +1420,6 @@ export const communityRouter = router({
             }
         }),
 
-    // Remove admin role from a community member (super admin, org admin, or community admin only)
-    removeAdmin: authProcedure
-        .input(
-            z.object({
-                communityId: z.number(),
-                userId: z.string(),
-            }),
-        )
-        .mutation(async ({ input, ctx }) => {
-            const permission = await ServerPermissions.fromUserId(
-                ctx.session.user.id,
-            );
-            const canAssignAdmin = permission.checkCommunityPermission(
-                input.communityId.toString(),
-                PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
-            );
-
-            if (!canAssignAdmin) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'You do not have permission to remove admin role',
-                });
-            }
-
-            // Check if the target user is an admin of the community
-            const targetMembership = await db.query.communityMembers.findFirst({
-                where: and(
-                    eq(communityMembers.userId, input.userId),
-                    eq(communityMembers.communityId, input.communityId),
-                ),
-            });
-
-            if (!targetMembership) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'This user is not an admin of the community',
-                });
-            }
-
-            // Don't allow removing the community creator's admin role
-            const community = await db.query.communities.findFirst({
-                where: eq(communities.id, input.communityId),
-                columns: { createdBy: true },
-            });
-
-            if (community?.createdBy === input.userId) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message:
-                        'Cannot remove admin role from the community creator',
-                });
-            }
-
-            try {
-                const [updatedMembership] = await db
-                    .update(communityMembers)
-                    .set({
-                        role: 'member',
-                        updatedAt: new Date(),
-                    })
-                    .where(
-                        and(
-                            eq(communityMembers.userId, input.userId),
-                            eq(communityMembers.communityId, input.communityId),
-                        ),
-                    )
-                    .returning();
-
-                return updatedMembership;
-            } catch (error) {
-                console.error('Error removing admin:', error);
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to remove admin role',
-                });
-            }
-        }),
-
     // Create invite link for a community (admin and moderator)
     createInviteLink: authProcedure
         .input(
@@ -1512,7 +1437,7 @@ export const communityRouter = router({
             );
 
             // Check if user can create invite links
-            const canCreateInvite = permission.checkCommunityPermission(
+            const canCreateInvite = await permission.checkCommunityPermission(
                 input.communityId.toString(),
                 PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
             );
@@ -1527,10 +1452,11 @@ export const communityRouter = router({
 
             // Check if user can assign admin role (if trying to create admin invite)
             if (input.role === 'admin') {
-                const canAssignAdmin = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
-                );
+                const canAssignAdmin =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
+                    );
 
                 if (!canAssignAdmin) {
                     throw new TRPCError({
@@ -1832,10 +1758,11 @@ export const communityRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canAssignAdmin = permission.checkCommunityPermission(
-                    input.communityId.toString(),
-                    PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
-                );
+                const canAssignAdmin =
+                    await permission.checkCommunityPermission(
+                        input.communityId.toString(),
+                        PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
+                    );
 
                 if (!canAssignAdmin) {
                     throw new TRPCError({

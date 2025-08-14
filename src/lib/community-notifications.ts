@@ -14,18 +14,9 @@ import { eq, and, inArray } from 'drizzle-orm';
 /**
  * Community Post Notification System
  *
- * NOTIFICATION RULES:
- * 1. Post creator NEVER receives notifications about their own posts
- * 2. Community members receive notifications (unless they've disabled them)
- * 3. Organization admins of the community's org receive notifications (unless they've disabled them)
- * 4. Super admins (users with appRole='admin') receive notifications for ALL communities (unless they've disabled them)
- * 5. Regular org members who are NOT in the community do NOT receive notifications
- *
- * This ensures that:
- * - Users don't get notified about their own posts
- * - Only relevant users get notifications
- * - Org admins stay informed about their communities
- * - Super admins stay informed about ALL communities regardless of which org they belong to
+ * Recipients: Community members, org admins of community's org, super admins (appRole='admin')
+ * Post creator is always excluded from notifications
+ * Users can opt-out per community via notification preferences
  */
 
 webpush.setVapidDetails(
@@ -161,19 +152,7 @@ async function getUsersToNotifyForCommunity(
             return [];
         }
 
-        const userIds: string[] = [];
-        let orgAdmins: { userId: string }[] = []; // Declare in broader scope
-
-        // 1. Get community members (excluding post creator and those who have explicitly disabled notifications)
-        const memberPreferences = await db
-            .select({
-                userId: notificationPreferences.userId,
-                enabled: notificationPreferences.enabled,
-            })
-            .from(notificationPreferences)
-            .where(eq(notificationPreferences.communityId, communityId));
-
-        // Get all community members
+        // 1. Get all potential recipients first
         const allMembers = await db
             .select({
                 userId: communityMembers.userId,
@@ -187,24 +166,8 @@ async function getUsersToNotifyForCommunity(
                 ),
             );
 
-        // Add members who haven't disabled notifications (default behavior) - EXCLUDE POST CREATOR
-        allMembers.forEach((member) => {
-            // Skip the post creator
-            if (member.userId === authorId) {
-                return;
-            }
-
-            const pref = memberPreferences.find(
-                (p) => p.userId === member.userId,
-            );
-            // If no preference exists or preference is true (enabled), add to notifications
-            if (!pref || pref.enabled) {
-                userIds.push(member.userId);
-            }
-        });
-
         // 2. Get org admins for the community's organization (if any)
-        // Only org admins of the community's organization should get notifications
+        let orgAdmins: { userId: string }[] = [];
         if (community.orgId) {
             orgAdmins = await db
                 .select({
@@ -218,42 +181,9 @@ async function getUsersToNotifyForCommunity(
                         eq(orgMembers.status, 'active'),
                     ),
                 );
-
-            // Check if any org admins have disabled notifications for this community
-            const orgAdminPreferences = await db
-                .select({
-                    userId: notificationPreferences.userId,
-                    enabled: notificationPreferences.enabled,
-                })
-                .from(notificationPreferences)
-                .where(
-                    and(
-                        eq(notificationPreferences.communityId, communityId),
-                        inArray(
-                            notificationPreferences.userId,
-                            orgAdmins.map((a) => a.userId),
-                        ),
-                    ),
-                );
-
-            // Add org admins who haven't disabled notifications - EXCLUDE POST CREATOR
-            orgAdmins.forEach((admin) => {
-                // Skip the post creator
-                if (admin.userId === authorId) {
-                    return;
-                }
-
-                const pref = orgAdminPreferences.find(
-                    (p) => p.userId === admin.userId,
-                );
-                if (!pref || pref.enabled) {
-                    userIds.push(admin.userId);
-                }
-            });
         }
 
         // 3. Get super admins (users with appRole 'admin' - these have access across all organizations)
-        // These are users who are super admins regardless of which org they belong to
         const superAdmins = await db
             .select({
                 userId: users.id,
@@ -266,40 +196,59 @@ async function getUsersToNotifyForCommunity(
                 ),
             );
 
-        // Check if any super admins have disabled notifications for this community
-        const superAdminPreferences = await db
-            .select({
-                userId: notificationPreferences.userId,
-                enabled: notificationPreferences.enabled,
-            })
-            .from(notificationPreferences)
-            .where(
-                and(
-                    eq(notificationPreferences.communityId, communityId),
-                    inArray(
-                        notificationPreferences.userId,
-                        superAdmins.map((a) => a.userId),
-                    ),
-                ),
-            );
+        // 4. Collect all potential recipient IDs (excluding post creator)
+        const allPotentialRecipients: string[] = [];
 
-        // Add super admins who haven't disabled notifications - EXCLUDE POST CREATOR
-        superAdmins.forEach((admin) => {
-            // Skip the post creator
-            if (admin.userId === authorId) {
-                return;
-            }
-
-            const pref = superAdminPreferences.find(
-                (p) => p.userId === admin.userId,
-            );
-            if (!pref || pref.enabled) {
-                userIds.push(admin.userId);
+        // Add community members (excluding post creator)
+        allMembers.forEach((member) => {
+            if (member.userId !== authorId) {
+                allPotentialRecipients.push(member.userId);
             }
         });
 
-        // Remove duplicates
-        const finalUserIds = [...new Set(userIds)];
+        // Add org admins (excluding post creator)
+        orgAdmins.forEach((admin) => {
+            if (admin.userId !== authorId) {
+                allPotentialRecipients.push(admin.userId);
+            }
+        });
+
+        // Add super admins (excluding post creator)
+        superAdmins.forEach((admin) => {
+            if (admin.userId !== authorId) {
+                allPotentialRecipients.push(admin.userId);
+            }
+        });
+
+        // Remove duplicates from potential recipients
+        const uniquePotentialRecipients = [...new Set(allPotentialRecipients)];
+
+        // 5. Make a single query to get all notification preferences for all potential recipients
+        let allPreferences: { userId: string; enabled: boolean }[] = [];
+        if (uniquePotentialRecipients.length > 0) {
+            allPreferences = await db
+                .select({
+                    userId: notificationPreferences.userId,
+                    enabled: notificationPreferences.enabled,
+                })
+                .from(notificationPreferences)
+                .where(
+                    and(
+                        eq(notificationPreferences.communityId, communityId),
+                        inArray(
+                            notificationPreferences.userId,
+                            uniquePotentialRecipients,
+                        ),
+                    ),
+                );
+        }
+
+        // 6. Filter recipients based on preferences (default is enabled if no preference exists)
+        const finalUserIds = uniquePotentialRecipients.filter((userId) => {
+            const pref = allPreferences.find((p) => p.userId === userId);
+            // If no preference exists or preference is true (enabled), include in notifications
+            return !pref || pref.enabled;
+        });
 
         return finalUserIds;
     } catch (error) {

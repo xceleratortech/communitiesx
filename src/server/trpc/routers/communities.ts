@@ -17,6 +17,44 @@ import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
+// Helper function to check if user has access to modify notification preferences for a community
+async function hasNotificationPreferenceAccess(
+    userId: string,
+    communityId: number,
+): Promise<boolean> {
+    // Check if user is a member of the community
+    const membership = await db.query.communityMembers.findFirst({
+        where: and(
+            eq(communityMembers.userId, userId),
+            eq(communityMembers.communityId, communityId),
+            eq(communityMembers.status, 'active'),
+        ),
+    });
+
+    if (membership) {
+        return true;
+    }
+
+    // Check if user is org admin for this community
+    const community = await db.query.communities.findFirst({
+        where: eq(communities.id, communityId),
+    });
+
+    if (community?.orgId) {
+        const orgAdminCheck = await db.query.orgMembers.findFirst({
+            where: and(
+                eq(orgMembers.userId, userId),
+                eq(orgMembers.orgId, community.orgId),
+                eq(orgMembers.role, 'admin'),
+                eq(orgMembers.status, 'active'),
+            ),
+        });
+        return !!orgAdminCheck;
+    }
+
+    return false;
+}
+
 export const communitiesRouter = router({
     // Search communities by name
     search: publicProcedure
@@ -1712,34 +1750,11 @@ export const communitiesRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             try {
-                // Check if user has access to the community
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, input.communityId),
-                        eq(communityMembers.status, 'active'),
-                    ),
-                });
-
-                // Also check if user is org admin for this community
-                const community = await db.query.communities.findFirst({
-                    where: eq(communities.id, input.communityId),
-                });
-
-                let hasAccess = false;
-                if (membership) {
-                    hasAccess = true;
-                } else if (community?.orgId) {
-                    const orgAdminCheck = await db.query.orgMembers.findFirst({
-                        where: and(
-                            eq(orgMembers.userId, ctx.session.user.id),
-                            eq(orgMembers.orgId, community.orgId),
-                            eq(orgMembers.role, 'admin'),
-                            eq(orgMembers.status, 'active'),
-                        ),
-                    });
-                    hasAccess = !!orgAdminCheck;
-                }
+                // Check if user has access to modify notification preferences for this community
+                const hasAccess = await hasNotificationPreferenceAccess(
+                    ctx.session.user.id,
+                    input.communityId,
+                );
 
                 if (!hasAccess) {
                     throw new TRPCError({
@@ -1791,33 +1806,11 @@ export const communitiesRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             try {
-                // Check if user has access to the community (same logic as above)
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, input.communityId),
-                        eq(communityMembers.status, 'active'),
-                    ),
-                });
-
-                const community = await db.query.communities.findFirst({
-                    where: eq(communities.id, input.communityId),
-                });
-
-                let hasAccess = false;
-                if (membership) {
-                    hasAccess = true;
-                } else if (community?.orgId) {
-                    const orgAdminCheck = await db.query.orgMembers.findFirst({
-                        where: and(
-                            eq(orgMembers.userId, ctx.session.user.id),
-                            eq(orgMembers.orgId, community.orgId),
-                            eq(orgMembers.role, 'admin'),
-                            eq(orgMembers.status, 'active'),
-                        ),
-                    });
-                    hasAccess = !!orgAdminCheck;
-                }
+                // Check if user has access to modify notification preferences for this community
+                const hasAccess = await hasNotificationPreferenceAccess(
+                    ctx.session.user.id,
+                    input.communityId,
+                );
 
                 if (!hasAccess) {
                     throw new TRPCError({
