@@ -460,13 +460,34 @@ export const notifications = pgTable('notifications', {
     title: text('title').notNull(),
     body: text('body').notNull(),
 
-    type: text('type').notNull(), // e.g., 'dm', 'mention', 'comment'
-    data: text('data'), // e.g., threadId/messageId in JSON format
+    type: text('type').notNull(), // e.g., 'dm', 'mention', 'comment', 'post'
+    data: text('data'), // e.g., threadId/messageId/postId in JSON format
     isRead: boolean('is_read').notNull().default(false),
 
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
+
+// Notification preferences for community posts (opt-out model)
+export const notificationPreferences = pgTable(
+    'notification_preferences',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        communityId: integer('community_id')
+            .notNull()
+            .references(() => communities.id, { onDelete: 'cascade' }),
+        enabled: boolean('enabled').notNull().default(false), // false = notifications disabled for this community
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        uniqueUserCommunity: primaryKey({
+            columns: [table.userId, table.communityId],
+        }),
+    }),
+);
 
 // Add tags relations
 export const tagsRelations = relations(tags, ({ one, many }) => ({

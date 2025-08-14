@@ -166,7 +166,7 @@ Strongly opinionated configurations for consistent code style:
 
 - Ensure your editor runs ESLint and Prettier on save (e.g., enable "Format on Save" in VSCode).
 - Recommended VSCode extensions: ESLint, Prettier, EditorConfig.
-- Lint or formatting failures will prevent commits; fix issues before staging..
+- Lint or formatting failures will prevent commits; fix issues before staging.
 
 ## Project Structure
 

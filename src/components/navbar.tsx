@@ -300,7 +300,7 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        {/* <NotificationButton variant="popover" /> */}
+                                                        <NotificationButton variant="popover" />
 
                                                         <Link
                                                             href="/organization"
@@ -477,7 +477,7 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        {/* <NotificationButton variant="popover" /> */}
+                                                        <NotificationButton variant="popover" />
 
                                                         <Link
                                                             href="/organization"

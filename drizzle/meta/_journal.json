@@ -155,6 +155,20 @@
             "when": 1754231616661,
             "tag": "0021_neat_red_skull",
             "breakpoints": true
+        },
+        {
+            "idx": 22,
+            "version": "7",
+            "when": 1755090860645,
+            "tag": "0022_odd_carmella_unuscione",
+            "breakpoints": true
+        },
+        {
+            "idx": 23,
+            "version": "7",
+            "when": 1755090929820,
+            "tag": "0023_narrow_saracen",
+            "breakpoints": true
         }
     ]
 }
