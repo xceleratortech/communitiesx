@@ -32,6 +32,7 @@ import {
     Tag,
     Building,
     X,
+    Crown,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
@@ -240,6 +241,11 @@ export default function CommunityDetailPage() {
         PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
         community?.orgId,
     );
+    const canManageCommunityAdmins = checkCommunityPermission(
+        community?.id?.toString() ?? '',
+        PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
+        community?.orgId,
+    );
     const canInviteCommunityMembers = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.INVITE_COMMUNITY_MEMBERS,
@@ -408,6 +414,29 @@ export default function CommunityDetailPage() {
             },
         });
 
+    const assignAdminMutation = trpc.communities.assignAdmin.useMutation({
+        onSuccess: () => {
+            refetch();
+            toast.success('Admin role assigned successfully');
+        },
+        onError: (error) => {
+            toast.error(error.message || 'Failed to assign admin role');
+        },
+        onSettled: () => {
+            setIsActionInProgress(false);
+        },
+    });
+
+    const removeAdminMutation = trpc.communities.removeAdmin.useMutation({
+        onSuccess: () => {
+            refetch();
+            toast.success('Admin role removed successfully');
+        },
+        onError: (error) => {
+            toast.error(error.message || 'Failed to remove admin role');
+        },
+    });
+
     const removeModeratorMutation =
         trpc.communities.removeModerator.useMutation({
             onSuccess: () => {
@@ -477,6 +506,22 @@ export default function CommunityDetailPage() {
     const handleAssignModerator = (userId: string) => {
         if (!community) return;
         assignModeratorMutation.mutate({
+            communityId: community.id,
+            userId,
+        });
+    };
+
+    const handleAssignAdmin = (userId: string) => {
+        if (!community) return;
+        assignAdminMutation.mutate({
+            communityId: community.id,
+            userId,
+        });
+    };
+
+    const handleRemoveAdmin = (userId: string) => {
+        if (!community) return;
+        removeAdminMutation.mutate({
             communityId: community.id,
             userId,
         });
@@ -1840,17 +1885,32 @@ export default function CommunityDetailPage() {
                                                                         <DropdownMenuContent align="end">
                                                                             {member.role ===
                                                                                 'member' && (
-                                                                                <DropdownMenuItem
-                                                                                    onClick={() =>
-                                                                                        handleAssignModerator(
-                                                                                            member.userId,
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    <Shield className="mr-2 h-4 w-4" />
-                                                                                    Make
-                                                                                    Moderator
-                                                                                </DropdownMenuItem>
+                                                                                <>
+                                                                                    <DropdownMenuItem
+                                                                                        onClick={() =>
+                                                                                            handleAssignModerator(
+                                                                                                member.userId,
+                                                                                            )
+                                                                                        }
+                                                                                    >
+                                                                                        <Shield className="mr-2 h-4 w-4" />
+                                                                                        Make
+                                                                                        Moderator
+                                                                                    </DropdownMenuItem>
+                                                                                    {canManageCommunityAdmins && (
+                                                                                        <DropdownMenuItem
+                                                                                            onClick={() =>
+                                                                                                handleAssignAdmin(
+                                                                                                    member.userId,
+                                                                                                )
+                                                                                            }
+                                                                                        >
+                                                                                            <Crown className="mr-2 h-4 w-4" />
+                                                                                            Make
+                                                                                            Admin
+                                                                                        </DropdownMenuItem>
+                                                                                    )}
+                                                                                </>
                                                                             )}
                                                                             {member.role ===
                                                                                 'moderator' && (
@@ -1866,6 +1926,21 @@ export default function CommunityDetailPage() {
                                                                                     Mod
                                                                                 </DropdownMenuItem>
                                                                             )}
+                                                                            {member.role ===
+                                                                                'admin' &&
+                                                                                canManageCommunityAdmins && (
+                                                                                    <DropdownMenuItem
+                                                                                        onClick={() =>
+                                                                                            handleRemoveAdmin(
+                                                                                                member.userId,
+                                                                                            )
+                                                                                        }
+                                                                                    >
+                                                                                        <UserMinus className="mr-2 h-4 w-4" />
+                                                                                        Remove
+                                                                                        Admin
+                                                                                    </DropdownMenuItem>
+                                                                                )}
                                                                             <DropdownMenuSeparator />
                                                                             <DropdownMenuItem
                                                                                 onClick={() =>
@@ -2081,7 +2156,7 @@ export default function CommunityDetailPage() {
                             onOpenChange={setIsInviteEmailDialogOpen}
                             communityId={community.id}
                             communityName={community.name}
-                            isAdmin={isAdmin}
+                            isAdmin={canManageCommunityAdmins}
                         />
                     </TabsContent>
 
