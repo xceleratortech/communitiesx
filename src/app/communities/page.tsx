@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 // Define CommunityCardProps type
 interface CommunityCardProps {
     community: Community;
+    showNotificationToggle?: boolean; // Optional prop to control notification toggle visibility
 }
 
 export default function CommunitiesPage() {
@@ -370,6 +371,7 @@ export default function CommunitiesPage() {
                                         <CommunityCard
                                             key={community.id}
                                             community={community as Community}
+                                            showNotificationToggle={true}
                                         />
                                     ))}
                                 </div>
@@ -519,15 +521,18 @@ export default function CommunitiesPage() {
     );
 }
 
-function CommunityCard({ community }: CommunityCardProps) {
+function CommunityCard({
+    community,
+    showNotificationToggle = false,
+}: CommunityCardProps) {
     const [notificationsDisabled, setNotificationsDisabled] = useState(false);
     const [isUpdatingNotification, setIsUpdatingNotification] = useState(false);
 
-    // Get current user's notification status for this community
+    // Get current user's notification status for this community (only if toggle should be shown)
     const { data: notificationStatus } =
         trpc.communities.getCommunityNotificationStatus.useQuery(
             { communityId: community.id },
-            { enabled: !!community.id },
+            { enabled: !!community.id && showNotificationToggle },
         );
 
     // Initialize notification state from API response
@@ -605,40 +610,36 @@ function CommunityCard({ community }: CommunityCardProps) {
                         </Avatar>
                     </div>
 
-                    {/* Notification toggle overlay - positioned in top-right */}
-                    <div className="absolute top-2 right-2">
-                        <div
-                            className="bg-background/90 rounded-lg border p-2 shadow-sm backdrop-blur-sm"
-                            onClick={(e) => e.preventDefault()}
-                        >
-                            <div className="flex items-center gap-2">
-                                {/* {notificationsDisabled ? (
-                                    <BellOff className="h-4 w-4 text-muted-foreground" />
-                                ) : (
-                                    <Bell className="h-4 w-4 text-primary" />
-                                )} */}
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        handleNotificationToggle(
-                                            !notificationsDisabled,
-                                        );
-                                    }}
-                                    disabled={isUpdatingNotification}
-                                    className="h-6 w-6 p-0"
-                                >
-                                    {/* {notificationsDisabled ? '🔕' : '🔔'} */}
-                                    {notificationsDisabled ? (
-                                        <BellOff className="text-muted-foreground h-4 w-4" />
-                                    ) : (
-                                        <Bell className="text-primary h-4 w-4" />
-                                    )}
-                                </Button>
+                    {/* Notification toggle overlay - only show for My Communities */}
+                    {showNotificationToggle && (
+                        <div className="absolute top-2 right-2">
+                            <div
+                                className="bg-background/90 rounded-lg border p-2 shadow-sm backdrop-blur-sm"
+                                onClick={(e) => e.preventDefault()}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            handleNotificationToggle(
+                                                !notificationsDisabled,
+                                            );
+                                        }}
+                                        disabled={isUpdatingNotification}
+                                        className="h-6 w-6 p-0"
+                                    >
+                                        {notificationsDisabled ? (
+                                            <BellOff className="text-muted-foreground h-4 w-4" />
+                                        ) : (
+                                            <Bell className="text-primary h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
                 </div>
                 <CardHeader className="pt-8 pb-2">
                     <div className="flex flex-col items-start justify-between">
