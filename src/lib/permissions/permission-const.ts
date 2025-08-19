@@ -7,6 +7,7 @@ export const PERMISSIONS = {
     VIEW_COMMUNITY: 'view_community',
     MANAGE_ORG_MEMBERS: 'manage_org_members',
     INVITE_ORG_MEMBERS: 'invite_org_members',
+    CREATE_ORG_USERS: 'create_org_users', // New permission for creating users
 
     MANAGE_COMMUNITY_MEMBERS: 'manage_community_members',
     INVITE_COMMUNITY_MEMBERS: 'invite_community_members',

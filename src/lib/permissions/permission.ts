@@ -11,6 +11,7 @@ export const permissions = {
             'delete_org',
             'manage_org_members',
             'invite_org_members',
+            'create_org_users', // New permission for creating users
 
             'view_community',
             'edit_community',
