@@ -29,6 +29,7 @@ import {
     ChevronRight,
     ChevronsLeft,
     ChevronsRight,
+    Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -53,6 +54,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import debounce from 'lodash/debounce';
 
 export default function OrganizationCommunitiesPage() {
@@ -67,6 +77,16 @@ export default function OrganizationCommunitiesPage() {
     >('all');
     const [currentMemberPage, setCurrentMemberPage] = useState(1);
     const [membersPerPage] = useState(10);
+
+    // State for create user dialog
+    const [isCreateUserDialogOpen, setIsCreateUserDialogOpen] = useState(false);
+    const [newUser, setNewUser] = useState({
+        name: '',
+        email: '',
+        password: '',
+        role: 'user' as 'admin' | 'user',
+    });
+    const [isCreatingUser, setIsCreatingUser] = useState(false);
 
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
@@ -102,6 +122,7 @@ export default function OrganizationCommunitiesPage() {
         trpc.organizations.removeOrgMember.useMutation();
     const deleteCommunityMutation =
         trpc.organizations.deleteCommunity.useMutation();
+    const createUserMutation = trpc.organizations.createUser.useMutation();
 
     // Reset to first page when filters change
     useEffect(() => {
@@ -205,6 +226,42 @@ export default function OrganizationCommunitiesPage() {
         );
     };
 
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!orgData?.id) {
+            toast.error('Organization ID not found');
+            return;
+        }
+
+        setIsCreatingUser(true);
+        try {
+            await createUserMutation.mutateAsync({
+                ...newUser,
+                orgId: orgData.id,
+            });
+
+            toast.success('User created successfully');
+            setIsCreateUserDialogOpen(false);
+            setNewUser({
+                name: '',
+                email: '',
+                password: '',
+                role: 'user',
+            });
+
+            // Refresh the members list
+            utils.organizations.getOrganizationMembersPaginated.invalidate({
+                orgId: orgData.id,
+            });
+        } catch (error: any) {
+            toast.error('Failed to create user', {
+                description: error.message,
+            });
+        } finally {
+            setIsCreatingUser(false);
+        }
+    };
+
     const { checkOrgPermission } = usePermission();
     const canUpdateCommunity = checkOrgPermission(PERMISSIONS.EDIT_COMMUNITY);
     const canCreateCommunity = checkOrgPermission(PERMISSIONS.CREATE_COMMUNITY);
@@ -212,6 +269,7 @@ export default function OrganizationCommunitiesPage() {
     const canManageMembers = checkOrgPermission(PERMISSIONS.MANAGE_ORG_MEMBERS);
     const canInviteMembers = checkOrgPermission(PERMISSIONS.INVITE_ORG_MEMBERS);
     const canManageBadges = checkOrgPermission('view_badge');
+    const canCreateUsers = checkOrgPermission(PERMISSIONS.CREATE_ORG_USERS);
 
     if (isLoading) return <Loading />;
     if (!orgData) return <div>Organization not found</div>;
@@ -398,13 +456,163 @@ export default function OrganizationCommunitiesPage() {
                                     View and manage organization members.
                                 </p>
                             </div>
-                            {canInviteMembers && (
-                                <InviteUserDialog orgs={[orgData]}>
-                                    <Button variant="default">
-                                        Invite Member
-                                    </Button>
-                                </InviteUserDialog>
-                            )}
+                            <div className="flex flex-col gap-2">
+                                {canInviteMembers && (
+                                    <InviteUserDialog orgs={[orgData]}>
+                                        <Button variant="default">
+                                            Invite Member
+                                        </Button>
+                                    </InviteUserDialog>
+                                )}
+                                {canCreateUsers && (
+                                    <Dialog
+                                        open={isCreateUserDialogOpen}
+                                        onOpenChange={setIsCreateUserDialogOpen}
+                                    >
+                                        <DialogTrigger asChild>
+                                            <Button variant="outline">
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Create Member
+                                            </Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>
+                                                    Create New Member
+                                                </DialogTitle>
+                                                <DialogDescription>
+                                                    Create a new user account
+                                                    within your organization.
+                                                </DialogDescription>
+                                            </DialogHeader>
+                                            <form
+                                                onSubmit={handleCreateUser}
+                                                className="space-y-4"
+                                            >
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="name">
+                                                        Name
+                                                    </Label>
+                                                    <Input
+                                                        id="name"
+                                                        value={newUser.name}
+                                                        onChange={(e) =>
+                                                            setNewUser({
+                                                                ...newUser,
+                                                                name: e.target
+                                                                    .value,
+                                                            })
+                                                        }
+                                                        placeholder="Full Name"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="email">
+                                                        Email
+                                                    </Label>
+                                                    <Input
+                                                        id="email"
+                                                        type="email"
+                                                        value={newUser.email}
+                                                        onChange={(e) =>
+                                                            setNewUser({
+                                                                ...newUser,
+                                                                email: e.target
+                                                                    .value,
+                                                            })
+                                                        }
+                                                        placeholder="user@example.com"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="password">
+                                                        Password
+                                                    </Label>
+                                                    <Input
+                                                        id="password"
+                                                        type="password"
+                                                        value={newUser.password}
+                                                        onChange={(e) =>
+                                                            setNewUser({
+                                                                ...newUser,
+                                                                password:
+                                                                    e.target
+                                                                        .value,
+                                                            })
+                                                        }
+                                                        placeholder="Password"
+                                                        required
+                                                        minLength={8}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="role">
+                                                        Role
+                                                    </Label>
+                                                    <Select
+                                                        value={newUser.role}
+                                                        onValueChange={(
+                                                            value: string,
+                                                        ) =>
+                                                            setNewUser({
+                                                                ...newUser,
+                                                                role: value as
+                                                                    | 'admin'
+                                                                    | 'user',
+                                                            })
+                                                        }
+                                                    >
+                                                        <SelectTrigger>
+                                                            <SelectValue placeholder="Select role" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="user">
+                                                                User
+                                                            </SelectItem>
+                                                            <SelectItem value="admin">
+                                                                Admin
+                                                            </SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <DialogFooter>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            setIsCreateUserDialogOpen(
+                                                                false,
+                                                            )
+                                                        }
+                                                        disabled={
+                                                            isCreatingUser
+                                                        }
+                                                    >
+                                                        Cancel
+                                                    </Button>
+                                                    <Button
+                                                        type="submit"
+                                                        disabled={
+                                                            isCreatingUser
+                                                        }
+                                                    >
+                                                        {isCreatingUser ? (
+                                                            <>
+                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                Creating...
+                                                            </>
+                                                        ) : (
+                                                            'Create User'
+                                                        )}
+                                                    </Button>
+                                                </DialogFooter>
+                                            </form>
+                                        </DialogContent>
+                                    </Dialog>
+                                )}
+                            </div>
                         </div>
 
                         {/* Search and Filter Controls */}
