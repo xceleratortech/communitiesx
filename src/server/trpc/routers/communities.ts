@@ -1978,7 +1978,8 @@ export const communitiesRouter = router({
 
                 // Filter out users who are already in the community
                 const availableMembers = orgMembersList.filter(
-                    (member: any) => !existingMemberIds.has(member.id),
+                    (member: (typeof orgMembersList)[number]) =>
+                        !existingMemberIds.has(member.id),
                 );
 
                 return availableMembers;
