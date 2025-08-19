@@ -286,14 +286,14 @@ export default function CommunitiesPage() {
 
                 <div className="flex flex-col gap-6 lg:flex-row">
                     {/* Main content area - 70% on desktop, full width on mobile */}
-                    <div className="w-full lg:w-[70%]">
+                    <div className="w-full lg:w-[100%]">
                         {/* All TabsContent sections remain the same */}
                         <TabsContent value="all" className="space-y-4">
                             {isLoadingCommunities &&
                             communities.length === 0 &&
                             !isSearching ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                                    {Array(3)
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                                    {Array(4)
                                         .fill(0)
                                         .map((_, i) => (
                                             <CommunityCardSkeleton key={i} />
@@ -301,7 +301,7 @@ export default function CommunitiesPage() {
                                 </div>
                             ) : communitiesToRender.length ? (
                                 <>
-                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                         {communitiesToRender.map(
                                             (community: any) => (
                                                 <CommunityCard
@@ -358,7 +358,7 @@ export default function CommunitiesPage() {
                             {isLoadingCommunities &&
                             communities.length === 0 &&
                             !isSearching ? (
-                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                                     {Array(2)
                                         .fill(0)
                                         .map((_, i) => (
@@ -393,7 +393,7 @@ export default function CommunitiesPage() {
                     </div>
 
                     {/* Organization sidebar - now at the same level as TabsContent */}
-                    <div className="mt-2 w-full lg:w-[30%]">
+                    {/* <div className="mt-2 w-full lg:w-[30%]">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
@@ -514,7 +514,7 @@ export default function CommunitiesPage() {
                                 )}
                             </CardContent>
                         </Card>
-                    </div>
+                    </div> */}
                 </div>
             </Tabs>
         </div>

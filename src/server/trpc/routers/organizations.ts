@@ -4,7 +4,6 @@ import { router, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
 import {
-    users,
     orgs,
     posts,
     comments,
@@ -23,8 +22,8 @@ import {
     pushSubscriptions,
     loginEvents,
     sessions,
-    accounts,
 } from '@/server/db/schema';
+import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
 import { SQL } from 'drizzle-orm';
 
@@ -644,5 +643,139 @@ export const organizationsRouter = router({
                 message:
                     'User has been permanently removed from the organization',
             };
+        }),
+
+    // Create a new user within the organization (for org admins)
+    createUser: publicProcedure
+        .input(
+            z.object({
+                name: z.string().min(1),
+                email: z.string().email(),
+                password: z.string().min(8),
+                role: z.enum(['admin', 'user']),
+                orgId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message: 'You must be logged in to perform this action',
+                });
+            }
+
+            try {
+                // Get the current user's details
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, role: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Check if user is super admin or org admin of the target organization
+                const isSuperAdmin = currentUser.appRole === 'admin';
+                const isOrgAdmin =
+                    currentUser.role === 'admin' &&
+                    currentUser.orgId === input.orgId;
+
+                if (!isSuperAdmin && !isOrgAdmin) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to create users in this organization',
+                    });
+                }
+
+                // Verify the organization exists
+                const org = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, input.orgId),
+                });
+
+                if (!org) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Organization not found',
+                    });
+                }
+
+                // Check if user with same email already exists
+                const existingUser = await db.query.users.findFirst({
+                    where: eq(users.email, input.email),
+                });
+
+                if (existingUser) {
+                    // Check if the existing user belongs to a different organization
+                    if (
+                        existingUser.orgId &&
+                        existingUser.orgId !== input.orgId
+                    ) {
+                        throw new TRPCError({
+                            code: 'CONFLICT',
+                            message:
+                                'User already belongs to another organization',
+                        });
+                    } else if (existingUser.orgId === input.orgId) {
+                        throw new TRPCError({
+                            code: 'CONFLICT',
+                            message: 'User already exists in this organization',
+                        });
+                    }
+                }
+
+                // Import nanoid for generating user ID
+                const { nanoid } = await import('nanoid');
+                const { hashPassword } = await import('better-auth/crypto');
+
+                // Create user manually
+                const userId = nanoid();
+                const now = new Date();
+
+                // Hash the password
+                const hashedPassword = await hashPassword(input.password);
+
+                // Create the user
+                const userInsert = {
+                    id: userId,
+                    name: input.name,
+                    email: input.email,
+                    emailVerified: true, // Admin-created users are pre-verified
+                    role: input.role,
+                    appRole: 'user', // Org admins can only create regular users
+                    orgId: input.orgId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+
+                const [user] = await db
+                    .insert(users)
+                    .values(userInsert)
+                    .returning();
+
+                // Create account with password
+                await db.insert(accounts).values({
+                    id: nanoid(),
+                    userId: userId,
+                    providerId: 'credential',
+                    accountId: userId,
+                    password: hashedPassword,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+
+                return user;
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error creating user:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create user',
+                });
+            }
         }),
 });
