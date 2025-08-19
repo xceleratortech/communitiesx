@@ -1,0 +1,228 @@
+name: Build and Deploy Container
+
+on:
+    push:
+        branches:
+            - main
+            - dev
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+    build-and-push:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: read
+            packages: write
+
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to Container Registry
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Extract metadata
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      # For main branch: latest and main tags
+                      type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+                      type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+                      # For other branches: use branch name
+                      type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' }}
+                      # For PRs: use pr number
+                      type=ref,event=pr
+                      # For tags: use tag name
+                      type=ref,event=tag
+                  labels: |
+                      org.opencontainers.image.title=Projex
+                      org.opencontainers.image.description=Project management application
+                      org.opencontainers.image.vendor=Moonshot
+
+            - name: Build and push Docker image
+              uses: docker/build-push-action@v5
+              with:
+                  context: .
+                  platforms: linux/amd64
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha
+                  cache-to: type=gha,mode=max
+                  build-args: |
+                      BUILDKIT_INLINE_CACHE=1
+
+            - name: Generate summary
+              run: |
+                  echo "## 🚀 Container Build Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "**Repository:** ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
+                  echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+                  echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "### 📦 Published Images" >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+                  echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "### 🔧 Pull Commands" >> $GITHUB_STEP_SUMMARY
+                  echo '```bash' >> $GITHUB_STEP_SUMMARY
+                  echo "# Pull the image:" >> $GITHUB_STEP_SUMMARY
+                  if [[ "${{ github.ref_name }}" == "main" ]]; then
+                    echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+                  else
+                    echo "docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+                  fi
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "# Run the container:" >> $GITHUB_STEP_SUMMARY
+                  if [[ "${{ github.ref_name }}" == "main" ]]; then
+                    echo "docker run -p 3000:3000 --env-file .env ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+                  else
+                      echo "docker run -p 3000:3000 --env-file .env ghcr.io/${{ github.repository }}:${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+                  fi
+                  echo '```' >> $GITHUB_STEP_SUMMARY
+
+            - name: Deploy to Development
+              id: deploy
+              if: success()
+              run: |
+                  echo "🚀 Triggering deployment..."
+
+                  # Set deployment parameters based on branch
+                  if [[ "${{ github.ref_name }}" == "dev" ]]; then                    
+                    DEPLOY_URL="${{ vars.DEPLOY_URL }}"
+                    STACK_NAME="${{ vars.STACK_NAME }}"
+                    ENDPOINT_ID="${{ vars.ENDPOINT_ID }}"
+                    ENVIRONMENT="development"
+                  fi
+
+                  echo "Deploying to $ENVIRONMENT environment"
+                  echo "Deploy URL: $DEPLOY_URL"
+                  echo "Stack Name: $STACK_NAME"
+                  echo "Endpoint ID: $ENDPOINT_ID"
+
+                  RESPONSE=$(curl -s -w "%{http_code}" -X POST "$DEPLOY_URL" \
+                    -H "Content-Type: application/json" \
+                    -H "x-api-key:${{ secrets.KARUVI_API_KEY }}" \
+                    -d "{\"stack_name\":\"$STACK_NAME\",\"endpoint_id\":$ENDPOINT_ID}")
+
+                  HTTP_CODE="${RESPONSE: -3}"
+                  RESPONSE_BODY="${RESPONSE%???}"
+
+                  echo "HTTP Status: $HTTP_CODE"
+                  echo "Response: $RESPONSE_BODY"
+
+                  if [[ "$HTTP_CODE" -ge 200 && "$HTTP_CODE" -lt 300 ]]; then
+                    echo "✅ Deployment triggered successfully"
+                    echo "DEPLOY_STATUS=success" >> $GITHUB_OUTPUT
+                    echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+                  else
+                    echo "❌ Deployment trigger failed"
+                    echo "DEPLOY_STATUS=failed" >> $GITHUB_OUTPUT
+                    echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_OUTPUT
+                    exit 1
+                  fi
+
+            - name: Notify Discord - Success
+              if: success()
+              run: |
+                  # Set environment display name
+                  if [[ "${{ github.ref_name }}" == "main" ]]; then
+                    ENVIRONMENT="🚀 Production"
+                    COLOR=3066993
+                  else
+                    ENVIRONMENT="🧪 Development"
+                    COLOR=3447003
+                  fi
+
+                  # Use jq to create proper JSON
+                  PAYLOAD=$(jq -n \
+                    --arg title "✅ Deployment Successful" \
+                    --arg description "Container build and deployment completed successfully!" \
+                    --argjson color "$COLOR" \
+                    --arg repository "${{ github.repository }}" \
+                    --arg branch "${{ github.ref_name }}" \
+                    --arg environment "$ENVIRONMENT" \
+                    --arg commit_sha "${{ github.sha }}" \
+                    --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
+                    --arg image_tag "ghcr.io/${{ github.repository }}:${{ github.ref_name }}" \
+                    --arg triggered_by "${{ github.actor }}" \
+                    --arg timestamp "${{ github.event.head_commit.timestamp }}" \
+                    '{
+                      embeds: [{
+                        title: $title,
+                        description: $description,
+                        color: $color,
+                        fields: [
+                          {name: "Repository", value: $repository, inline: true},
+                          {name: "Branch", value: $branch, inline: true},
+                          {name: "Environment", value: $environment, inline: true},
+                          {name: "Commit", value: ("[`" + $commit_sha + "`](" + $commit_url + ")"), inline: true},
+                          {name: "Image Tag", value: ("`" + $image_tag + "`"), inline: false},
+                          {name: "Triggered by", value: $triggered_by, inline: true}
+                        ],
+                        timestamp: $timestamp,
+                        footer: {text: "GitHub Actions"}
+                      }]
+                    }')
+
+                  curl -X POST "https://discord.com/api/webhooks/1405293922070167729/OeWWCuNrpfcfqmEzPB_B5psTKfUIeEd2te79fD8GvlaYqbiS88xXbztiJj26aPjf48JW" \
+                    -H "Content-Type: application/json" \
+                    -d "$PAYLOAD"
+
+            - name: Notify Discord - Failure
+              if: failure()
+              run: |
+                  # Set environment display name
+                  if [[ "${{ github.ref_name }}" == "main" ]]; then
+                    ENVIRONMENT="🚀 Production"
+                  else
+                    ENVIRONMENT="🧪 Development"
+                  fi
+
+                  # Use jq to create proper JSON
+                  PAYLOAD=$(jq -n \
+                    --arg title "❌ Deployment Failed" \
+                    --arg description "Container build or deployment encountered an error!" \
+                    --argjson color 15158332 \
+                    --arg repository "${{ github.repository }}" \
+                    --arg branch "${{ github.ref_name }}" \
+                    --arg environment "$ENVIRONMENT" \
+                    --arg commit_sha "${{ github.sha }}" \
+                    --arg commit_url "https://github.com/${{ github.repository }}/commit/${{ github.sha }}" \
+                    --arg workflow_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+                    --arg triggered_by "${{ github.actor }}" \
+                    --arg timestamp "${{ github.event.head_commit.timestamp }}" \
+                    '{
+                      embeds: [{
+                        title: $title,
+                        description: $description,
+                        color: $color,
+                        fields: [
+                          {name: "Repository", value: $repository, inline: true},
+                          {name: "Branch", value: $branch, inline: true},
+                          {name: "Environment", value: $environment, inline: true},
+                          {name: "Commit", value: ("[`" + $commit_sha + "`](" + $commit_url + ")"), inline: true},
+                          {name: "Workflow Run", value: ("[View Details](" + $workflow_url + ")"), inline: false},
+                          {name: "Triggered by", value: $triggered_by, inline: true}
+                        ],
+                        timestamp: $timestamp,
+                        footer: {text: "GitHub Actions"}
+                      }]
+                    }')
+
+                  curl -X POST "https://discord.com/api/webhooks/1405293922070167729/OeWWCuNrpfcfqmEzPB_B5psTKfUIeEd2te79fD8GvlaYqbiS88xXbztiJj26aPjf48JW" \
+                    -H "Content-Type: application/json" \
+                    -d "$PAYLOAD"
