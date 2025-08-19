@@ -713,7 +713,7 @@ export default function CommunityDetailPage() {
                 </div>
 
                 {/* Overlapping Content Container */}
-                <div className="relative -mt-8 px-4 sm:-mt-10 sm:px-6 md:-mt-12 md:px-8 lg:-mt-16">
+                <div className="relative -mt-8 px-4 sm:-mt-10 sm:px-6 md:-mt-12 md:px-8 lg:-mt-10">
                     {/* Mobile Layout */}
                     <div className="block lg:hidden">
                         <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -869,8 +869,8 @@ export default function CommunityDetailPage() {
                                         .toUpperCase()}
                                 </AvatarFallback>
                             </Avatar>
-                            <div className="pb-3">
-                                <div className="mb-2 flex items-center gap-3">
+                            <div className="pb-2">
+                                <div className="mb-1 flex items-center gap-3">
                                     <h1 className="text-foreground text-3xl font-bold xl:text-4xl">
                                         {community.name}
                                     </h1>
