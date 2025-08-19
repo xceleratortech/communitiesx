@@ -1,6 +1,6 @@
 import { eq, count, and, like, ilike, or, desc, asc } from 'drizzle-orm';
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure, authProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
 import {
@@ -646,7 +646,7 @@ export const organizationsRouter = router({
         }),
 
     // Create a new user within the organization (for org admins)
-    createUser: publicProcedure
+    createUser: authProcedure
         .input(
             z.object({
                 name: z.string().min(1),
@@ -657,13 +657,6 @@ export const organizationsRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to perform this action',
-                });
-            }
-
             try {
                 // Get the current user's details
                 const currentUser = await db.query.users.findFirst({

@@ -36,6 +36,7 @@ import {
     Crown,
     UserPlus,
     Search,
+    Loader2,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
@@ -1876,7 +1877,7 @@ export default function CommunityDetailPage() {
                                                             ) : (
                                                                 availableOrgMembers?.map(
                                                                     (
-                                                                        member: any,
+                                                                        member: (typeof availableOrgMembers)[number],
                                                                     ) => (
                                                                         <label
                                                                             key={
@@ -1922,31 +1923,34 @@ export default function CommunityDetailPage() {
                                                                                 <Avatar className="h-6 w-6">
                                                                                     <AvatarImage
                                                                                         src={
-                                                                                            member.image
+                                                                                            member.image ||
+                                                                                            undefined
                                                                                         }
                                                                                         alt={
-                                                                                            member.name
+                                                                                            member.name ||
+                                                                                            'User'
                                                                                         }
                                                                                     />
                                                                                     <AvatarFallback>
                                                                                         {member.name
-                                                                                            ?.substring(
-                                                                                                0,
-                                                                                                2,
-                                                                                            )
-                                                                                            .toUpperCase()}
+                                                                                            ? member.name
+                                                                                                  .substring(
+                                                                                                      0,
+                                                                                                      2,
+                                                                                                  )
+                                                                                                  .toUpperCase()
+                                                                                            : 'U'}
                                                                                     </AvatarFallback>
                                                                                 </Avatar>
                                                                                 <span className="text-sm font-medium">
-                                                                                    {
-                                                                                        member.name
-                                                                                    }
+                                                                                    {member.name ||
+                                                                                        'Unknown User'}
                                                                                 </span>
                                                                                 <span className="text-muted-foreground text-xs">
                                                                                     (
-                                                                                    {
-                                                                                        member.email
-                                                                                    }
+                                                                                    {member.email ||
+                                                                                        'No email'}
+
                                                                                     )
                                                                                 </span>
                                                                             </div>
@@ -2023,7 +2027,7 @@ export default function CommunityDetailPage() {
                                                         >
                                                             {isAddingMembers ? (
                                                                 <>
-                                                                    <Plus className="mr-2 h-4 w-4 animate-spin" />
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                                     Adding...
                                                                 </>
                                                             ) : (
