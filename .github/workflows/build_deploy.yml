@@ -178,9 +178,10 @@ jobs:
                       }]
                     }')
 
-                  curl -X POST "https://discord.com/api/webhooks/1405293922070167729/OeWWCuNrpfcfqmEzPB_B5psTKfUIeEd2te79fD8GvlaYqbiS88xXbztiJj26aPjf48JW" \
+                  curl -X POST "${{ vars.DISCORD_WEBHOOK_URL }}" \
                     -H "Content-Type: application/json" \
                     -d "$PAYLOAD"
+                    
 
             - name: Notify Discord - Failure
               if: failure()
@@ -223,6 +224,6 @@ jobs:
                       }]
                     }')
 
-                  curl -X POST "https://discord.com/api/webhooks/1405293922070167729/OeWWCuNrpfcfqmEzPB_B5psTKfUIeEd2te79fD8GvlaYqbiS88xXbztiJj26aPjf48JW" \
+                  curl -X POST "${{ vars.DISCORD_WEBHOOK_URL }}" \
                     -H "Content-Type: application/json" \
-                    -d "$PAYLOAD"
+                    -d "$PAYLOAD"                    
