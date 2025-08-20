@@ -122,6 +122,14 @@ export default function AdminDashboard() {
         orgId: '',
     });
 
+    // State for bulk CSV upload
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [csvData, setCsvData] = useState<any[]>([]);
+    const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+    const [isUploadingBulk, setIsUploadingBulk] = useState(false);
+    const [csvErrors, setCsvErrors] = useState<string[]>([]);
+    const [csvPreview, setCsvPreview] = useState<any[]>([]);
+
     // State for create org dialog
     const [isCreateOrgDialogOpen, setIsCreateOrgDialogOpen] = useState(false);
     const [newOrg, setNewOrg] = useState({
@@ -244,6 +252,166 @@ export default function AdminDashboard() {
             utils.admin.getUsersPaginated.invalidate();
         },
     });
+
+    // CSV processing functions
+    const processCsvFile = (file: File) => {
+        setIsProcessingCsv(true);
+        setCsvErrors([]);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const csv = e.target?.result as string;
+                const lines = csv.split('\n');
+                const headers = lines[0]
+                    .split(',')
+                    .map((h) => h.trim().toLowerCase());
+
+                // Validate required headers
+                const requiredHeaders = [
+                    'name',
+                    'email',
+                    'password',
+                    'role',
+                    'orgname',
+                ];
+                const missingHeaders = requiredHeaders.filter(
+                    (h) => !headers.includes(h),
+                );
+
+                if (missingHeaders.length > 0) {
+                    setCsvErrors([
+                        `Missing required headers: ${missingHeaders.join(', ')}`,
+                    ]);
+                    setIsProcessingCsv(false);
+                    return;
+                }
+
+                const data = lines
+                    .slice(1)
+                    .filter((line) => line.trim())
+                    .map((line, index) => {
+                        const values = line.split(',').map((v) => v.trim());
+                        const row: any = {};
+
+                        headers.forEach((header, i) => {
+                            row[header] = values[i] || '';
+                        });
+
+                        // Validate row data
+                        if (
+                            !row.name ||
+                            !row.email ||
+                            !row.password ||
+                            !row.orgname
+                        ) {
+                            setCsvErrors((prev) => [
+                                ...prev,
+                                `Row ${index + 2}: Missing name, email, password, or orgname`,
+                            ]);
+                        }
+
+                        if (row.password && row.password.length < 8) {
+                            setCsvErrors((prev) => [
+                                ...prev,
+                                `Row ${index + 2}: Password must be at least 8 characters long`,
+                            ]);
+                        }
+
+                        if (
+                            row.role &&
+                            !['admin', 'user'].includes(row.role.toLowerCase())
+                        ) {
+                            row.role = 'user'; // Default to user if invalid role
+                        } else if (!row.role) {
+                            row.role = 'user';
+                        }
+
+                        return row;
+                    });
+
+                setCsvData(data);
+                setCsvPreview(data.slice(0, 5)); // Show first 5 rows as preview
+                setIsProcessingCsv(false);
+            } catch (error) {
+                setCsvErrors([
+                    'Failed to process CSV file. Please check the format.',
+                ]);
+                setIsProcessingCsv(false);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+                toast.error('Please select a valid CSV file');
+                return;
+            }
+            setCsvFile(file);
+            processCsvFile(file);
+        }
+    };
+
+    const handleBulkUpload = async () => {
+        if (csvData.length === 0 || !orgs) return;
+
+        setIsUploadingBulk(true);
+        try {
+            // Create users one by one
+            for (const user of csvData) {
+                // Find organization by name (case-insensitive)
+                const org = orgs.find((org) => {
+                    const orgName = org.name.trim();
+                    const csvOrgName = user.orgname.trim();
+
+                    // Simple case-insensitive match
+                    return orgName.toLowerCase() === csvOrgName.toLowerCase();
+                });
+
+                if (!org) {
+                    // Provide helpful error message with available organization names
+                    const availableOrgs = orgs.map((o) => o.name).join(', ');
+                    throw new Error(
+                        `Organization "${user.orgname}" not found. ` +
+                            `Available organizations: ${availableOrgs}. ` +
+                            `Please check the organization name spelling.`,
+                    );
+                }
+
+                await createUserMutation.mutateAsync({
+                    name: user.name,
+                    email: user.email,
+                    password: user.password,
+                    role: user.role.toLowerCase() as 'admin' | 'user',
+                    orgId: org.id,
+                });
+            }
+
+            toast.success(`Successfully created ${csvData.length} users`);
+            setIsCreateUserDialogOpen(false);
+            resetBulkUploadState();
+
+            // Refresh the users list
+            utils.admin.getUsersPaginated.invalidate();
+        } catch (error: any) {
+            toast.error('Failed to create some users', {
+                description: error.message,
+            });
+        } finally {
+            setIsUploadingBulk(false);
+        }
+    };
+
+    const resetBulkUploadState = () => {
+        setCsvFile(null);
+        setCsvData([]);
+        setCsvPreview([]);
+        setCsvErrors([]);
+    };
 
     const createOrgMutation = trpc.admin.createOrg.useMutation({
         onSuccess: () => {
@@ -441,168 +609,583 @@ export default function AdminDashboard() {
                                 <div className="space-x-2">
                                     <Dialog
                                         open={isCreateUserDialogOpen}
-                                        onOpenChange={setIsCreateUserDialogOpen}
+                                        onOpenChange={(open) => {
+                                            setIsCreateUserDialogOpen(open);
+                                            if (!open) {
+                                                // Reset all states when dialog closes
+                                                setNewUser({
+                                                    name: '',
+                                                    email: '',
+                                                    password: '',
+                                                    role: 'user',
+                                                    orgId: '',
+                                                });
+                                                resetBulkUploadState();
+                                            }
+                                        }}
                                     >
                                         <DialogTrigger asChild>
                                             <Button>Create User</Button>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
                                             <DialogHeader>
                                                 <DialogTitle>
-                                                    Create User
+                                                    Create User(s)
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Create a new user account.
-                                                    Fill in the details and
-                                                    click Create User.
+                                                    Create individual users or
+                                                    upload multiple users via
+                                                    CSV file.
                                                 </DialogDescription>
                                             </DialogHeader>
-                                            <form
-                                                onSubmit={handleCreateUser}
-                                                className="space-y-4"
+
+                                            <Tabs
+                                                defaultValue="individual"
+                                                className="w-full"
                                             >
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="name">
-                                                        Name
-                                                    </Label>
-                                                    <Input
-                                                        id="name"
-                                                        value={newUser.name}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                name: e.target
-                                                                    .value,
-                                                            })
+                                                <TabsList className="grid w-full grid-cols-2">
+                                                    <TabsTrigger value="individual">
+                                                        Individual
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="bulk">
+                                                        Bulk Upload
+                                                    </TabsTrigger>
+                                                </TabsList>
+
+                                                <TabsContent
+                                                    value="individual"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <form
+                                                        onSubmit={
+                                                            handleCreateUser
                                                         }
-                                                        placeholder="Full Name"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="email">
-                                                        Email
-                                                    </Label>
-                                                    <Input
-                                                        id="email"
-                                                        type="email"
-                                                        value={newUser.email}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                email: e.target
-                                                                    .value,
-                                                            })
-                                                        }
-                                                        placeholder="user@example.com"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="password">
-                                                        Password
-                                                    </Label>
-                                                    <Input
-                                                        id="password"
-                                                        type="password"
-                                                        value={newUser.password}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                password:
-                                                                    e.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        placeholder="Password"
-                                                        required
-                                                        minLength={8}
-                                                        className="w-full"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="role">
-                                                        Role
-                                                    </Label>
-                                                    <Select
-                                                        value={newUser.role}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                role: value as
-                                                                    | 'admin'
-                                                                    | 'user',
-                                                            })
-                                                        }
+                                                        className="space-y-4"
                                                     >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select role" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="user">
-                                                                User
-                                                            </SelectItem>
-                                                            <SelectItem value="admin">
-                                                                Admin
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="org">
-                                                        Organization
-                                                    </Label>
-                                                    <Select
-                                                        value={newUser.orgId}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                orgId: value,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select organization" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {orgs?.map(
-                                                                (
-                                                                    org: Organization,
-                                                                ) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            org.id
-                                                                        }
-                                                                        value={
-                                                                            org.id
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            org.name
-                                                                        }
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="name">
+                                                                Name
+                                                            </Label>
+                                                            <Input
+                                                                id="name"
+                                                                value={
+                                                                    newUser.name
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        name: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Full Name"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="email">
+                                                                Email
+                                                            </Label>
+                                                            <Input
+                                                                id="email"
+                                                                type="email"
+                                                                value={
+                                                                    newUser.email
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        email: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="user@example.com"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="password">
+                                                                Password
+                                                            </Label>
+                                                            <Input
+                                                                id="password"
+                                                                type="password"
+                                                                value={
+                                                                    newUser.password
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        password:
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Password"
+                                                                required
+                                                                minLength={8}
+                                                                className="w-full"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="role">
+                                                                Role
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    newUser.role
+                                                                }
+                                                                onValueChange={(
+                                                                    value: string,
+                                                                ) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        role: value as
+                                                                            | 'admin'
+                                                                            | 'user',
+                                                                    })
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select role" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="user">
+                                                                        User
                                                                     </SelectItem>
-                                                                ),
+                                                                    <SelectItem value="admin">
+                                                                        Admin
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="org">
+                                                                Organization
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    newUser.orgId
+                                                                }
+                                                                onValueChange={(
+                                                                    value: string,
+                                                                ) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        orgId: value,
+                                                                    })
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select organization" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {orgs?.map(
+                                                                        (
+                                                                            org: Organization,
+                                                                        ) => (
+                                                                            <SelectItem
+                                                                                key={
+                                                                                    org.id
+                                                                                }
+                                                                                value={
+                                                                                    org.id
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    org.name
+                                                                                }
+                                                                            </SelectItem>
+                                                                        ),
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    setIsCreateUserDialogOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    createUserMutation.isPending
+                                                                }
+                                                                className="w-full sm:w-auto"
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={
+                                                                    createUserMutation.isPending
+                                                                }
+                                                                className="w-full sm:w-auto"
+                                                            >
+                                                                {createUserMutation.isPending
+                                                                    ? 'Creating...'
+                                                                    : 'Create User'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </form>
+                                                </TabsContent>
+
+                                                <TabsContent
+                                                    value="bulk"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <div className="space-y-4">
+                                                        {/* File Upload */}
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="csv-file">
+                                                                CSV File
+                                                            </Label>
+                                                            <Input
+                                                                id="csv-file"
+                                                                type="file"
+                                                                accept=".csv"
+                                                                onChange={
+                                                                    handleFileChange
+                                                                }
+                                                            />
+                                                            <p className="text-muted-foreground text-xs">
+                                                                CSV should have
+                                                                columns: name,
+                                                                email, password,
+                                                                role, orgname.
+                                                                <Button
+                                                                    variant="link"
+                                                                    className="ml-1 h-auto p-0 text-xs"
+                                                                    onClick={() => {
+                                                                        const csvContent =
+                                                                            'name,email,password,role,orgname\nJohn Doe,john@example.com,password123,user,Acme Corporation\nJane Smith,jane@example.com,secure456,admin,Tech Solutions';
+                                                                        const blob =
+                                                                            new Blob(
+                                                                                [
+                                                                                    csvContent,
+                                                                                ],
+                                                                                {
+                                                                                    type: 'text/csv',
+                                                                                },
+                                                                            );
+                                                                        const url =
+                                                                            window.URL.createObjectURL(
+                                                                                blob,
+                                                                            );
+                                                                        const a =
+                                                                            document.createElement(
+                                                                                'a',
+                                                                            );
+                                                                        a.href =
+                                                                            url;
+                                                                        a.download =
+                                                                            'users_template.csv';
+                                                                        a.click();
+                                                                        window.URL.revokeObjectURL(
+                                                                            url,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Download
+                                                                    Template
+                                                                </Button>
+                                                            </p>
+
+                                                            {/* Show available organization names */}
+                                                            {orgs &&
+                                                                orgs.length >
+                                                                    0 && (
+                                                                    <div className="bg-muted/30 mt-2 rounded-md p-2 sm:p-3">
+                                                                        <p className="mb-2 text-xs font-medium">
+                                                                            Available
+                                                                            Organization
+                                                                            Names:
+                                                                        </p>
+                                                                        <div
+                                                                            className={`text-muted-foreground space-y-1 text-xs ${orgs.length > 5 ? 'max-h-32 overflow-y-auto' : ''}`}
+                                                                        >
+                                                                            {orgs.map(
+                                                                                (
+                                                                                    org,
+                                                                                    index,
+                                                                                ) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            org.id
+                                                                                        }
+                                                                                        className="flex flex-wrap items-center gap-1 sm:gap-2"
+                                                                                    >
+                                                                                        <span className="bg-background rounded px-1 py-1 font-mono text-xs break-all sm:px-2">
+                                                                                            {
+                                                                                                org.name
+                                                                                            }
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ),
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-muted-foreground mt-2 text-xs">
+                                                                            Use
+                                                                            the
+                                                                            exact
+                                                                            organization
+                                                                            names
+                                                                            shown
+                                                                            above
+                                                                            in
+                                                                            your
+                                                                            CSV
+                                                                            file.
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                        </div>
+
+                                                        {/* CSV Preview */}
+                                                        {csvPreview.length >
+                                                            0 && (
+                                                            <div className="space-y-2">
+                                                                <Label>
+                                                                    Preview
+                                                                    (first 5
+                                                                    rows)
+                                                                </Label>
+                                                                <div className="max-h-48 overflow-auto rounded-md border p-2 sm:p-3">
+                                                                    {/* Mobile: Card Layout */}
+                                                                    <div className="block space-y-3 sm:hidden">
+                                                                        {csvPreview.map(
+                                                                            (
+                                                                                row,
+                                                                                index,
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        index
+                                                                                    }
+                                                                                    className="bg-muted/20 rounded-md border p-3"
+                                                                                >
+                                                                                    <div className="grid grid-cols-1 gap-2 text-xs">
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Name:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.name
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Email:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.email
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Password:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.password
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Role:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.role
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Org
+                                                                                                Name:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.orgname
+                                                                                            }
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ),
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Desktop: Table Layout */}
+                                                                    <table className="hidden w-full text-sm sm:table">
+                                                                        <thead>
+                                                                            <tr className="border-b">
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Name
+                                                                                </th>
+                                                                                <th className="w-2/5 p-2 text-left">
+                                                                                    Email
+                                                                                </th>
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Password
+                                                                                </th>
+                                                                                <th className="w-1/10 p-2 text-left">
+                                                                                    Role
+                                                                                </th>
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Org
+                                                                                    Name
+                                                                                </th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {csvPreview.map(
+                                                                                (
+                                                                                    row,
+                                                                                    index,
+                                                                                ) => (
+                                                                                    <tr
+                                                                                        key={
+                                                                                            index
+                                                                                        }
+                                                                                        className="border-b"
+                                                                                    >
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.name
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.email
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.password
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs">
+                                                                                            {
+                                                                                                row.role
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.orgname
+                                                                                            }
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ),
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Errors */}
+                                                        {csvErrors.length >
+                                                            0 && (
+                                                            <div className="space-y-2">
+                                                                <Label className="text-destructive">
+                                                                    Errors Found
+                                                                </Label>
+                                                                <div className="border-destructive/20 bg-destructive/5 max-h-32 overflow-y-auto rounded-md border p-3">
+                                                                    {csvErrors.map(
+                                                                        (
+                                                                            error,
+                                                                            index,
+                                                                        ) => (
+                                                                            <p
+                                                                                key={
+                                                                                    index
+                                                                                }
+                                                                                className="text-destructive text-sm"
+                                                                            >
+                                                                                {
+                                                                                    error
+                                                                                }
+                                                                            </p>
+                                                                        ),
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Summary */}
+                                                        {csvData.length > 0 && (
+                                                            <div className="bg-muted/50 rounded-md p-3">
+                                                                <p className="text-sm">
+                                                                    <strong>
+                                                                        {
+                                                                            csvData.length
+                                                                        }
+                                                                    </strong>{' '}
+                                                                    users will
+                                                                    be created.
+                                                                    {csvErrors.length >
+                                                                        0 && (
+                                                                        <span className="text-destructive ml-2">
+                                                                            Please
+                                                                            fix
+                                                                            errors
+                                                                            before
+                                                                            proceeding.
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setIsCreateUserDialogOpen(
+                                                                    false,
+                                                                );
+                                                                resetBulkUploadState();
+                                                            }}
+                                                            disabled={
+                                                                isUploadingBulk
+                                                            }
+                                                            className="w-full sm:w-auto"
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                        <Button
+                                                            onClick={
+                                                                handleBulkUpload
+                                                            }
+                                                            disabled={
+                                                                isUploadingBulk ||
+                                                                csvData.length ===
+                                                                    0 ||
+                                                                csvErrors.length >
+                                                                    0
+                                                            }
+                                                            className="w-full sm:w-auto"
+                                                        >
+                                                            {isUploadingBulk ? (
+                                                                <>
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                    Creating{' '}
+                                                                    {
+                                                                        csvData.length
+                                                                    }{' '}
+                                                                    users...
+                                                                </>
+                                                            ) : (
+                                                                `Create ${csvData.length} Users`
                                                             )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <DialogFooter>
-                                                    <Button
-                                                        type="submit"
-                                                        disabled={
-                                                            createUserMutation.isPending
-                                                        }
-                                                    >
-                                                        {createUserMutation.isPending
-                                                            ? 'Creating...'
-                                                            : 'Create User'}
-                                                    </Button>
-                                                </DialogFooter>
-                                            </form>
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </TabsContent>
+                                            </Tabs>
                                         </DialogContent>
                                     </Dialog>
                                 </div>

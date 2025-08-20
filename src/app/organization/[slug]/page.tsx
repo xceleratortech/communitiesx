@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
 import { Button } from '@/components/ui/button';
@@ -87,6 +87,15 @@ export default function OrganizationCommunitiesPage() {
         role: 'user' as 'admin' | 'user',
     });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
+
+    // State for bulk CSV upload (now handled within the Create Member dialog)
+    const [csvFile, setCsvFile] = useState<File | null>(null);
+    const [csvData, setCsvData] = useState<any[]>([]);
+    const [isProcessingCsv, setIsProcessingCsv] = useState(false);
+    const [isUploadingBulk, setIsUploadingBulk] = useState(false);
+    const [csvErrors, setCsvErrors] = useState<string[]>([]);
+    const [csvPreview, setCsvPreview] = useState<any[]>([]);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
@@ -259,6 +268,152 @@ export default function OrganizationCommunitiesPage() {
             });
         } finally {
             setIsCreatingUser(false);
+        }
+    };
+
+    // CSV processing functions
+    const processCsvFile = (file: File) => {
+        setIsProcessingCsv(true);
+        setCsvErrors([]);
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const csv = e.target?.result as string;
+                const lines = csv.split('\n');
+                const headers = lines[0]
+                    .split(',')
+                    .map((h) => h.trim().toLowerCase());
+
+                // Validate required headers
+                const requiredHeaders = ['name', 'email', 'password', 'role'];
+                const missingHeaders = requiredHeaders.filter(
+                    (h) => !headers.includes(h),
+                );
+
+                if (missingHeaders.length > 0) {
+                    setCsvErrors([
+                        `Missing required headers: ${missingHeaders.join(', ')}`,
+                    ]);
+                    setIsProcessingCsv(false);
+                    return;
+                }
+
+                const data = lines
+                    .slice(1)
+                    .filter((line) => line.trim())
+                    .map((line, index) => {
+                        const values = line.split(',').map((v) => v.trim());
+                        const row: any = {};
+
+                        headers.forEach((header, i) => {
+                            row[header] = values[i] || '';
+                        });
+
+                        // Validate row data
+                        if (!row.name || !row.email || !row.password) {
+                            setCsvErrors((prev) => [
+                                ...prev,
+                                `Row ${index + 2}: Missing name, email, or password`,
+                            ]);
+                        }
+
+                        // Validate password length
+                        if (row.password && row.password.length < 8) {
+                            setCsvErrors((prev) => [
+                                ...prev,
+                                `Row ${index + 2}: Password must be at least 8 characters long`,
+                            ]);
+                        }
+
+                        if (
+                            row.role &&
+                            !['admin', 'user'].includes(row.role.toLowerCase())
+                        ) {
+                            row.role = 'user'; // Default to user if invalid role
+                        } else if (!row.role) {
+                            row.role = 'user';
+                        }
+
+                        return row;
+                    });
+
+                setCsvData(data);
+                setCsvPreview(data.slice(0, 5)); // Show first 5 rows as preview
+                setIsProcessingCsv(false);
+            } catch (error) {
+                setCsvErrors([
+                    'Failed to process CSV file. Please check the format.',
+                ]);
+                setIsProcessingCsv(false);
+            }
+        };
+
+        reader.readAsText(file);
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
+                toast.error('Please select a valid CSV file');
+                return;
+            }
+            setCsvFile(file);
+            processCsvFile(file);
+        }
+    };
+
+    const handleBulkUpload = async () => {
+        if (!orgData?.id || csvData.length === 0) return;
+
+        setIsUploadingBulk(true);
+        try {
+            // Create users one by one
+            for (const user of csvData) {
+                await createUserMutation.mutateAsync({
+                    name: user.name,
+                    email: user.email,
+                    password: user.password,
+                    role: user.role.toLowerCase() as 'admin' | 'user',
+                    orgId: orgData.id,
+                });
+            }
+
+            toast.success(`Successfully created ${csvData.length} users`);
+            setIsCreateUserDialogOpen(false);
+            resetBulkUploadState();
+
+            // Refresh the members list
+            utils.organizations.getOrganizationMembersPaginated.invalidate({
+                orgId: orgData.id,
+            });
+        } catch (error: any) {
+            toast.error('Failed to create some users', {
+                description: error.message,
+            });
+        } finally {
+            setIsUploadingBulk(false);
+        }
+    };
+
+    const generateRandomPassword = () => {
+        const chars =
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+        let password = '';
+        for (let i = 0; i < 12; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return password;
+    };
+
+    const resetBulkUploadState = () => {
+        setCsvFile(null);
+        setCsvData([]);
+        setCsvPreview([]);
+        setCsvErrors([]);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
         }
     };
 
@@ -467,7 +622,19 @@ export default function OrganizationCommunitiesPage() {
                                 {canCreateUsers && (
                                     <Dialog
                                         open={isCreateUserDialogOpen}
-                                        onOpenChange={setIsCreateUserDialogOpen}
+                                        onOpenChange={(open) => {
+                                            setIsCreateUserDialogOpen(open);
+                                            if (!open) {
+                                                // Reset all states when dialog closes
+                                                setNewUser({
+                                                    name: '',
+                                                    email: '',
+                                                    password: '',
+                                                    role: 'user',
+                                                });
+                                                resetBulkUploadState();
+                                            }
+                                        }}
                                     >
                                         <DialogTrigger asChild>
                                             <Button variant="outline">
@@ -475,140 +642,406 @@ export default function OrganizationCommunitiesPage() {
                                                 Create Member
                                             </Button>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent className="max-w-2xl">
                                             <DialogHeader>
                                                 <DialogTitle>
-                                                    Create New Member
+                                                    Create Member(s)
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Create a new user account
-                                                    within your organization.
+                                                    Create individual members or
+                                                    upload multiple members via
+                                                    CSV file.
                                                 </DialogDescription>
                                             </DialogHeader>
-                                            <form
-                                                onSubmit={handleCreateUser}
-                                                className="space-y-4"
+
+                                            <Tabs
+                                                defaultValue="individual"
+                                                className="w-full"
                                             >
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="name">
-                                                        Name
-                                                    </Label>
-                                                    <Input
-                                                        id="name"
-                                                        value={newUser.name}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                name: e.target
-                                                                    .value,
-                                                            })
+                                                <TabsList className="grid w-full grid-cols-2">
+                                                    <TabsTrigger value="individual">
+                                                        Individual
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="bulk">
+                                                        Bulk Upload
+                                                    </TabsTrigger>
+                                                </TabsList>
+
+                                                <TabsContent
+                                                    value="individual"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <form
+                                                        onSubmit={
+                                                            handleCreateUser
                                                         }
-                                                        placeholder="Full Name"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="email">
-                                                        Email
-                                                    </Label>
-                                                    <Input
-                                                        id="email"
-                                                        type="email"
-                                                        value={newUser.email}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                email: e.target
-                                                                    .value,
-                                                            })
-                                                        }
-                                                        placeholder="user@example.com"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="password">
-                                                        Password
-                                                    </Label>
-                                                    <Input
-                                                        id="password"
-                                                        type="password"
-                                                        value={newUser.password}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                password:
-                                                                    e.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        placeholder="Password"
-                                                        required
-                                                        minLength={8}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="role">
-                                                        Role
-                                                    </Label>
-                                                    <Select
-                                                        value={newUser.role}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                role: value as
-                                                                    | 'admin'
-                                                                    | 'user',
-                                                            })
-                                                        }
+                                                        className="space-y-4"
                                                     >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select role" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="user">
-                                                                User
-                                                            </SelectItem>
-                                                            <SelectItem value="admin">
-                                                                Admin
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <DialogFooter>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            setIsCreateUserDialogOpen(
-                                                                false,
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            isCreatingUser
-                                                        }
-                                                    >
-                                                        Cancel
-                                                    </Button>
-                                                    <Button
-                                                        type="submit"
-                                                        disabled={
-                                                            isCreatingUser
-                                                        }
-                                                    >
-                                                        {isCreatingUser ? (
-                                                            <>
-                                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                                Creating...
-                                                            </>
-                                                        ) : (
-                                                            'Create User'
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="name">
+                                                                Name
+                                                            </Label>
+                                                            <Input
+                                                                id="name"
+                                                                value={
+                                                                    newUser.name
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        name: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Full Name"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="email">
+                                                                Email
+                                                            </Label>
+                                                            <Input
+                                                                id="email"
+                                                                type="email"
+                                                                value={
+                                                                    newUser.email
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        email: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="user@example.com"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="password">
+                                                                Password
+                                                            </Label>
+                                                            <Input
+                                                                id="password"
+                                                                type="password"
+                                                                value={
+                                                                    newUser.password
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        password:
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Password"
+                                                                required
+                                                                minLength={8}
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="role">
+                                                                Role
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    newUser.role
+                                                                }
+                                                                onValueChange={(
+                                                                    value: string,
+                                                                ) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        role: value as
+                                                                            | 'admin'
+                                                                            | 'user',
+                                                                    })
+                                                                }
+                                                            >
+                                                                <SelectTrigger>
+                                                                    <SelectValue placeholder="Select role" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="user">
+                                                                        User
+                                                                    </SelectItem>
+                                                                    <SelectItem value="admin">
+                                                                        Admin
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <DialogFooter>
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    setIsCreateUserDialogOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    isCreatingUser
+                                                                }
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={
+                                                                    isCreatingUser
+                                                                }
+                                                            >
+                                                                {isCreatingUser ? (
+                                                                    <>
+                                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                        Creating...
+                                                                    </>
+                                                                ) : (
+                                                                    'Create User'
+                                                                )}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </form>
+                                                </TabsContent>
+
+                                                <TabsContent
+                                                    value="bulk"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <div className="space-y-4">
+                                                        {/* File Upload */}
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="csv-file">
+                                                                CSV File
+                                                            </Label>
+                                                            <Input
+                                                                id="csv-file"
+                                                                type="file"
+                                                                accept=".csv"
+                                                                onChange={
+                                                                    handleFileChange
+                                                                }
+                                                                ref={
+                                                                    fileInputRef
+                                                                }
+                                                            />
+                                                            <p className="text-muted-foreground text-xs">
+                                                                CSV should have
+                                                                columns: name,
+                                                                email, password,
+                                                                role.
+                                                                <Button
+                                                                    variant="link"
+                                                                    className="ml-1 h-auto p-0 text-xs"
+                                                                    onClick={() => {
+                                                                        const csvContent =
+                                                                            'name,email,password,role\nJohn Doe,john@example.com,password123,user\nJane Smith,jane@example.com,secure456,admin';
+                                                                        const blob =
+                                                                            new Blob(
+                                                                                [
+                                                                                    csvContent,
+                                                                                ],
+                                                                                {
+                                                                                    type: 'text/csv',
+                                                                                },
+                                                                            );
+                                                                        const url =
+                                                                            window.URL.createObjectURL(
+                                                                                blob,
+                                                                            );
+                                                                        const a =
+                                                                            document.createElement(
+                                                                                'a',
+                                                                            );
+                                                                        a.href =
+                                                                            url;
+                                                                        a.download =
+                                                                            'members_template.csv';
+                                                                        a.click();
+                                                                        window.URL.revokeObjectURL(
+                                                                            url,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Download
+                                                                    Template
+                                                                </Button>
+                                                            </p>
+                                                        </div>
+
+                                                        {/* CSV Preview */}
+                                                        {csvPreview.length >
+                                                            0 && (
+                                                            <div className="space-y-2">
+                                                                <Label>
+                                                                    Preview
+                                                                    (first 5
+                                                                    rows)
+                                                                </Label>
+                                                                <div className="max-h-40 overflow-y-auto rounded-md border p-3">
+                                                                    <table className="w-full text-sm">
+                                                                        <thead>
+                                                                            <tr className="border-b">
+                                                                                <th className="p-2 text-left">
+                                                                                    Name
+                                                                                </th>
+                                                                                <th className="p-2 text-left">
+                                                                                    Email
+                                                                                </th>
+                                                                                <th className="p-2 text-left">
+                                                                                    Password
+                                                                                </th>
+                                                                                <th className="p-2 text-left">
+                                                                                    Role
+                                                                                </th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {csvPreview.map(
+                                                                                (
+                                                                                    row,
+                                                                                    index,
+                                                                                ) => (
+                                                                                    <tr
+                                                                                        key={
+                                                                                            index
+                                                                                        }
+                                                                                        className="border-b"
+                                                                                    >
+                                                                                        <td className="p-2">
+                                                                                            {
+                                                                                                row.name
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2">
+                                                                                            {
+                                                                                                row.email
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2">
+                                                                                            {
+                                                                                                row.password
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2">
+                                                                                            {
+                                                                                                row.role
+                                                                                            }
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ),
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
                                                         )}
-                                                    </Button>
-                                                </DialogFooter>
-                                            </form>
+
+                                                        {/* Errors */}
+                                                        {csvErrors.length >
+                                                            0 && (
+                                                            <div className="space-y-2">
+                                                                <Label className="text-destructive">
+                                                                    Errors Found
+                                                                </Label>
+                                                                <div className="border-destructive/20 bg-destructive/5 max-h-32 overflow-y-auto rounded-md border p-3">
+                                                                    {csvErrors.map(
+                                                                        (
+                                                                            error,
+                                                                            index,
+                                                                        ) => (
+                                                                            <p
+                                                                                key={
+                                                                                    index
+                                                                                }
+                                                                                className="text-destructive text-sm"
+                                                                            >
+                                                                                {
+                                                                                    error
+                                                                                }
+                                                                            </p>
+                                                                        ),
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Summary */}
+                                                        {csvData.length > 0 && (
+                                                            <div className="bg-muted/50 rounded-md p-3">
+                                                                <p className="text-sm">
+                                                                    <strong>
+                                                                        {
+                                                                            csvData.length
+                                                                        }
+                                                                    </strong>{' '}
+                                                                    members will
+                                                                    be created.
+                                                                    {csvErrors.length >
+                                                                        0 && (
+                                                                        <span className="text-destructive ml-2">
+                                                                            Please
+                                                                            fix
+                                                                            errors
+                                                                            before
+                                                                            proceeding.
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <DialogFooter>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setIsCreateUserDialogOpen(
+                                                                    false,
+                                                                );
+                                                                resetBulkUploadState();
+                                                            }}
+                                                            disabled={
+                                                                isUploadingBulk
+                                                            }
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                        <Button
+                                                            onClick={
+                                                                handleBulkUpload
+                                                            }
+                                                            disabled={
+                                                                isUploadingBulk ||
+                                                                csvData.length ===
+                                                                    0 ||
+                                                                csvErrors.length >
+                                                                    0
+                                                            }
+                                                        >
+                                                            {isUploadingBulk ? (
+                                                                <>
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                    Creating{' '}
+                                                                    {
+                                                                        csvData.length
+                                                                    }{' '}
+                                                                    members...
+                                                                </>
+                                                            ) : (
+                                                                `Create ${csvData.length} Members`
+                                                            )}
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </TabsContent>
+                                            </Tabs>
                                         </DialogContent>
                                     </Dialog>
                                 )}
