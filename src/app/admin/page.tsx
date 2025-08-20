@@ -68,6 +68,7 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import debounce from 'lodash/debounce';
+import Papa from 'papaparse';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -102,6 +103,14 @@ type Organization = {
     name: string;
 };
 
+interface CsvUserRow {
+    name: string;
+    email: string;
+    password: string;
+    role: 'admin' | 'user';
+    orgname: string;
+}
+
 export default function AdminDashboard() {
     const router = useRouter();
     const { data: session } = useSession();
@@ -124,11 +133,15 @@ export default function AdminDashboard() {
 
     // State for bulk CSV upload
     const [csvFile, setCsvFile] = useState<File | null>(null);
-    const [csvData, setCsvData] = useState<any[]>([]);
+    const [csvData, setCsvData] = useState<CsvUserRow[]>([]);
     const [isProcessingCsv, setIsProcessingCsv] = useState(false);
     const [isUploadingBulk, setIsUploadingBulk] = useState(false);
     const [csvErrors, setCsvErrors] = useState<string[]>([]);
-    const [csvPreview, setCsvPreview] = useState<any[]>([]);
+    const [csvPreview, setCsvPreview] = useState<CsvUserRow[]>([]);
+    const [uploadResults, setUploadResults] = useState<{
+        successful: CsvUserRow[];
+        failed: Array<{ user: CsvUserRow; error: string; row: number }>;
+    } | null>(null);
 
     // State for create org dialog
     const [isCreateOrgDialogOpen, setIsCreateOrgDialogOpen] = useState(false);
@@ -258,90 +271,120 @@ export default function AdminDashboard() {
         setIsProcessingCsv(true);
         setCsvErrors([]);
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const csv = e.target?.result as string;
-                const lines = csv.split('\n');
-                const headers = lines[0]
-                    .split(',')
-                    .map((h) => h.trim().toLowerCase());
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                try {
+                    const { data, errors } = results;
 
-                // Validate required headers
-                const requiredHeaders = [
-                    'name',
-                    'email',
-                    'password',
-                    'role',
-                    'orgname',
-                ];
-                const missingHeaders = requiredHeaders.filter(
-                    (h) => !headers.includes(h),
-                );
+                    // Check for parsing errors
+                    if (errors.length > 0) {
+                        const parsingErrors = errors.map((error) => {
+                            const rowNumber =
+                                error.row !== undefined
+                                    ? error.row + 1
+                                    : 'unknown';
+                            return `Row ${rowNumber}: ${error.message}`;
+                        });
+                        setCsvErrors(parsingErrors);
+                        setIsProcessingCsv(false);
+                        return;
+                    }
 
-                if (missingHeaders.length > 0) {
+                    // Validate required headers
+                    const requiredHeaders = [
+                        'name',
+                        'email',
+                        'password',
+                        'role',
+                        'orgname',
+                    ];
+
+                    const headers = Object.keys(data[0] || {}).map((h) =>
+                        h.trim().toLowerCase(),
+                    );
+                    const missingHeaders = requiredHeaders.filter(
+                        (h) => !headers.includes(h),
+                    );
+
+                    if (missingHeaders.length > 0) {
+                        setCsvErrors([
+                            `Missing required headers: ${missingHeaders.join(', ')}`,
+                        ]);
+                        setIsProcessingCsv(false);
+                        return;
+                    }
+
+                    // Process and validate each row
+                    const processedData = data.map(
+                        (row: any, index: number): CsvUserRow => {
+                            // Normalize headers and values
+                            const name = (row.name || row.Name || '').trim();
+                            const email = (row.email || row.Email || '').trim();
+                            const password = (
+                                row.password ||
+                                row.Password ||
+                                ''
+                            ).trim();
+                            const role = (row.role || row.Role || 'user')
+                                .trim()
+                                .toLowerCase();
+                            const orgname = (
+                                row.orgname ||
+                                row.orgname ||
+                                row.OrgName ||
+                                ''
+                            ).trim();
+
+                            // Validate row data
+                            if (!name || !email || !password || !orgname) {
+                                setCsvErrors((prev) => [
+                                    ...prev,
+                                    `Row ${index + 2}: Missing name, email, password, or orgname`,
+                                ]);
+                            }
+
+                            if (password && password.length < 8) {
+                                setCsvErrors((prev) => [
+                                    ...prev,
+                                    `Row ${index + 2}: Password must be at least 8 characters long`,
+                                ]);
+                            }
+
+                            // Validate and normalize role
+                            const normalizedRole: 'admin' | 'user' = [
+                                'admin',
+                                'user',
+                            ].includes(role)
+                                ? (role as 'admin' | 'user')
+                                : 'user';
+
+                            return {
+                                name,
+                                email,
+                                password,
+                                role: normalizedRole,
+                                orgname,
+                            };
+                        },
+                    );
+
+                    setCsvData(processedData);
+                    setCsvPreview(processedData.slice(0, 5)); // Show first 5 rows as preview
+                    setIsProcessingCsv(false);
+                } catch (error) {
                     setCsvErrors([
-                        `Missing required headers: ${missingHeaders.join(', ')}`,
+                        'Failed to process CSV file. Please check the format.',
                     ]);
                     setIsProcessingCsv(false);
-                    return;
                 }
-
-                const data = lines
-                    .slice(1)
-                    .filter((line) => line.trim())
-                    .map((line, index) => {
-                        const values = line.split(',').map((v) => v.trim());
-                        const row: any = {};
-
-                        headers.forEach((header, i) => {
-                            row[header] = values[i] || '';
-                        });
-
-                        // Validate row data
-                        if (
-                            !row.name ||
-                            !row.email ||
-                            !row.password ||
-                            !row.orgname
-                        ) {
-                            setCsvErrors((prev) => [
-                                ...prev,
-                                `Row ${index + 2}: Missing name, email, password, or orgname`,
-                            ]);
-                        }
-
-                        if (row.password && row.password.length < 8) {
-                            setCsvErrors((prev) => [
-                                ...prev,
-                                `Row ${index + 2}: Password must be at least 8 characters long`,
-                            ]);
-                        }
-
-                        if (
-                            row.role &&
-                            !['admin', 'user'].includes(row.role.toLowerCase())
-                        ) {
-                            row.role = 'user'; // Default to user if invalid role
-                        } else if (!row.role) {
-                            row.role = 'user';
-                        }
-
-                        return row;
-                    });
-
-                setCsvData(data);
-                setCsvPreview(data.slice(0, 5)); // Show first 5 rows as preview
+            },
+            error: (error) => {
+                setCsvErrors([`Failed to parse CSV file: ${error.message}`]);
                 setIsProcessingCsv(false);
-            } catch (error) {
-                setCsvErrors([
-                    'Failed to process CSV file. Please check the format.',
-                ]);
-                setIsProcessingCsv(false);
-            }
-        };
-
-        reader.readAsText(file);
+            },
+        });
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -360,45 +403,120 @@ export default function AdminDashboard() {
         if (csvData.length === 0 || !orgs) return;
 
         setIsUploadingBulk(true);
+
+        const results = {
+            successful: [] as CsvUserRow[],
+            failed: [] as Array<{
+                user: CsvUserRow;
+                error: string;
+                row: number;
+            }>,
+        };
+
         try {
-            // Create users one by one
-            for (const user of csvData) {
-                // Find organization by name (case-insensitive)
-                const org = orgs.find((org) => {
-                    const orgName = org.name.trim();
-                    const csvOrgName = user.orgname.trim();
+            // Process all rows and collect results
+            for (let i = 0; i < csvData.length; i++) {
+                const user = csvData[i];
+                const rowNumber = i + 1;
 
-                    // Simple case-insensitive match
-                    return orgName.toLowerCase() === csvOrgName.toLowerCase();
-                });
+                try {
+                    // Find organization by name (case-insensitive)
+                    const org = orgs.find((org) => {
+                        const orgName = org.name.trim();
+                        const csvOrgName = user.orgname.trim();
 
-                if (!org) {
-                    // Provide helpful error message with available organization names
-                    const availableOrgs = orgs.map((o) => o.name).join(', ');
-                    throw new Error(
-                        `Organization "${user.orgname}" not found. ` +
-                            `Available organizations: ${availableOrgs}. ` +
-                            `Please check the organization name spelling.`,
-                    );
+                        // Simple case-insensitive match
+                        return (
+                            orgName.toLowerCase() === csvOrgName.toLowerCase()
+                        );
+                    });
+
+                    if (!org) {
+                        // Provide helpful error message with available organization names
+                        const availableOrgs = orgs
+                            .map((o) => o.name)
+                            .join(', ');
+                        throw new Error(
+                            `Organization "${user.orgname}" not found. ` +
+                                `Available organizations: ${availableOrgs}. ` +
+                                `Please check the organization name spelling.`,
+                        );
+                    }
+
+                    await createUserMutation.mutateAsync({
+                        name: user.name,
+                        email: user.email,
+                        password: user.password,
+                        role: user.role,
+                        orgId: org.id,
+                    });
+
+                    // Success - add to successful results
+                    results.successful.push(user);
+                } catch (error: any) {
+                    // Failure - add to failed results with error details
+                    results.failed.push({
+                        user,
+                        error: error.message || 'Unknown error occurred',
+                        row: rowNumber,
+                    });
                 }
-
-                await createUserMutation.mutateAsync({
-                    name: user.name,
-                    email: user.email,
-                    password: user.password,
-                    role: user.role.toLowerCase() as 'admin' | 'user',
-                    orgId: org.id,
-                });
             }
 
-            toast.success(`Successfully created ${csvData.length} users`);
-            setIsCreateUserDialogOpen(false);
-            resetBulkUploadState();
+            // Store results for display
+            setUploadResults(results);
 
-            // Refresh the users list
-            utils.admin.getUsersPaginated.invalidate();
+            // Process results and show appropriate messages
+            if (results.successful.length > 0 && results.failed.length === 0) {
+                // All successful
+                toast.success(
+                    `Successfully created ${results.successful.length} users`,
+                );
+                setIsCreateUserDialogOpen(false);
+                resetBulkUploadState();
+                setUploadResults(null);
+            } else if (
+                results.successful.length > 0 &&
+                results.failed.length > 0
+            ) {
+                // Partial success
+                toast.success(
+                    `Created ${results.successful.length} users successfully`,
+                    {
+                        description: `${results.failed.length} users failed. Check the error details below.`,
+                    },
+                );
+
+                // Update CSV data to only show failed rows for easy fixing
+                setCsvData(results.failed.map((f) => f.user));
+                setCsvPreview(results.failed.map((f) => f.user));
+
+                // Show detailed error summary
+                const errorMessages = results.failed.map(
+                    (f) => `Row ${f.row}: ${f.error}`,
+                );
+                setCsvErrors(errorMessages);
+            } else {
+                // All failed
+                toast.error('Failed to create any users', {
+                    description:
+                        'All rows had errors. Please fix the issues and try again.',
+                });
+
+                // Show all errors
+                const errorMessages = results.failed.map(
+                    (f) => `Row ${f.row}: ${f.error}`,
+                );
+                setCsvErrors(errorMessages);
+            }
+
+            // Refresh the users list if any users were created
+            if (results.successful.length > 0) {
+                utils.admin.getUsersPaginated.invalidate();
+            }
         } catch (error: any) {
-            toast.error('Failed to create some users', {
+            // This catch block handles any unexpected errors in the overall process
+            toast.error('An unexpected error occurred during bulk upload', {
                 description: error.message,
             });
         } finally {
@@ -411,6 +529,17 @@ export default function AdminDashboard() {
         setCsvData([]);
         setCsvPreview([]);
         setCsvErrors([]);
+        setUploadResults(null);
+    };
+
+    // Helper function to get detailed error context
+    const getErrorContext = (user: CsvUserRow, orgs: Organization[]) => {
+        const availableOrgs = orgs.map((o) => o.name).join(', ');
+        return {
+            availableOrgs,
+            userEmail: user.email,
+            userOrg: user.orgname,
+        };
     };
 
     const createOrgMutation = trpc.admin.createOrg.useMutation({
@@ -858,12 +987,22 @@ export default function AdminDashboard() {
                                                                 columns: name,
                                                                 email, password,
                                                                 role, orgname.
+                                                                <br />
+                                                                <span className="text-muted-foreground/80 text-xs">
+                                                                    Fields with
+                                                                    commas will
+                                                                    be
+                                                                    automatically
+                                                                    handled if
+                                                                    properly
+                                                                    quoted.
+                                                                </span>
                                                                 <Button
                                                                     variant="link"
                                                                     className="ml-1 h-auto p-0 text-xs"
                                                                     onClick={() => {
                                                                         const csvContent =
-                                                                            'name,email,password,role,orgname\nJohn Doe,john@example.com,password123,user,Acme Corporation\nJane Smith,jane@example.com,secure456,admin,Tech Solutions';
+                                                                            'name,email,password,role,orgname\n"John Doe",john@example.com,password123,user,Acme Corporation\n"Jane Smith",jane@example.com,secure456,admin,Tech Solutions\n"Doe, John",john.doe@example.com,password789,user,"Tech Corp, Inc."';
                                                                         const blob =
                                                                             new Blob(
                                                                                 [
@@ -1138,6 +1277,193 @@ export default function AdminDashboard() {
                                                                 </p>
                                                             </div>
                                                         )}
+
+                                                        {/* Upload Results Summary */}
+                                                        {uploadResults && (
+                                                            <div className="space-y-3">
+                                                                <Label className="text-base font-semibold">
+                                                                    Upload
+                                                                    Results
+                                                                </Label>
+
+                                                                {/* Success Summary */}
+                                                                {uploadResults
+                                                                    .successful
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <CheckCircle className="h-5 w-5 text-green-600" />
+                                                                            <span className="font-medium text-green-800">
+                                                                                Successfully
+                                                                                Created:{' '}
+                                                                                {
+                                                                                    uploadResults
+                                                                                        .successful
+                                                                                        .length
+                                                                                }{' '}
+                                                                                users
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-green-700">
+                                                                            {uploadResults.successful
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        user,
+                                                                                        index,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    user.name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-green-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    user.email
+                                                                                                }
+                                                                                                )
+                                                                                            </span>
+                                                                                            <Badge
+                                                                                                variant="secondary"
+                                                                                                className="text-xs"
+                                                                                            >
+                                                                                                {
+                                                                                                    user.role
+                                                                                                }
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {uploadResults
+                                                                                .successful
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-green-600">
+                                                                                    ...and{' '}
+                                                                                    {uploadResults
+                                                                                        .successful
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Failure Summary */}
+                                                                {uploadResults
+                                                                    .failed
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <UserMinus className="h-5 w-5 text-red-600" />
+                                                                            <span className="font-medium text-red-800">
+                                                                                Failed
+                                                                                to
+                                                                                Create:{' '}
+                                                                                {
+                                                                                    uploadResults
+                                                                                        .failed
+                                                                                        .length
+                                                                                }{' '}
+                                                                                users
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-red-700">
+                                                                            {uploadResults.failed
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        failure,
+                                                                                        index,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .user
+                                                                                                        .name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-red-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .user
+                                                                                                        .email
+                                                                                                }
+                                                                                                )
+                                                                                            </span>
+                                                                                            <Badge
+                                                                                                variant="secondary"
+                                                                                                className="text-xs"
+                                                                                            >
+                                                                                                Row{' '}
+                                                                                                {
+                                                                                                    failure.row
+                                                                                                }
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {uploadResults
+                                                                                .failed
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-red-600">
+                                                                                    ...and{' '}
+                                                                                    {uploadResults
+                                                                                        .failed
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="mt-2 text-xs text-red-600">
+                                                                            <strong>
+                                                                                Tip:
+                                                                            </strong>{' '}
+                                                                            Fix
+                                                                            the
+                                                                            errors
+                                                                            above
+                                                                            and
+                                                                            try
+                                                                            uploading
+                                                                            again.
+                                                                            Only
+                                                                            failed
+                                                                            rows
+                                                                            will
+                                                                            be
+                                                                            processed.
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
@@ -1157,6 +1483,33 @@ export default function AdminDashboard() {
                                                         >
                                                             Cancel
                                                         </Button>
+
+                                                        {/* Retry Failed Rows Button */}
+                                                        {uploadResults &&
+                                                            uploadResults.failed
+                                                                .length > 0 && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        // Clear results and errors to allow retry
+                                                                        setUploadResults(
+                                                                            null,
+                                                                        );
+                                                                        setCsvErrors(
+                                                                            [],
+                                                                        );
+                                                                    }}
+                                                                    disabled={
+                                                                        isUploadingBulk
+                                                                    }
+                                                                    className="w-full sm:w-auto"
+                                                                >
+                                                                    Retry Failed
+                                                                    Rows
+                                                                </Button>
+                                                            )}
+
                                                         <Button
                                                             onClick={
                                                                 handleBulkUpload
@@ -1179,6 +1532,12 @@ export default function AdminDashboard() {
                                                                     }{' '}
                                                                     users...
                                                                 </>
+                                                            ) : uploadResults &&
+                                                              uploadResults
+                                                                  .failed
+                                                                  .length >
+                                                                  0 ? (
+                                                                `Retry ${csvData.length} Failed Users`
                                                             ) : (
                                                                 `Create ${csvData.length} Users`
                                                             )}
