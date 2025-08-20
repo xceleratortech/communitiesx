@@ -1,11 +1,12 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { admin, customSession } from 'better-auth/plugins';
+import { admin, customSession, emailOTP } from 'better-auth/plugins';
 import { sendEmail } from '@/lib/email';
 import {
     createVerificationEmail,
     createResetPasswordEmail,
+    createOTPEmail,
 } from '@/lib/email-templates';
 import { db, getUser } from '@/server/db';
 
@@ -30,6 +31,16 @@ export const auth = betterAuth({
         admin({
             defaultRole: 'user',
             impersonationSessionDuration: 60 * 60 * 24,
+        }),
+        emailOTP({
+            otpLength: 6,
+            expiresIn: 300, // 5 minutes
+            allowedAttempts: 3,
+            disableSignUp: true, // Only for existing users
+            async sendVerificationOTP({ email, otp, type }) {
+                const { subject, html } = createOTPEmail(email, otp, type);
+                await sendEmail({ to: email, subject, html });
+            },
         }),
         customSession(async ({ session, user }) => {
             // Custom session logic can be added here

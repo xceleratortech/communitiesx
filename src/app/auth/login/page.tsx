@@ -13,10 +13,11 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Smartphone } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Loading } from '@/components/ui/loading';
+import { OTPAuth } from '@/components/otp-auth';
 
 function LoginForm() {
     const [email, setEmail] = useState('');
@@ -25,6 +26,7 @@ function LoginForm() {
     const [error, setError] = useState<string | null>(null);
     const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
     const [verificationSuccess, setVerificationSuccess] = useState(false);
+    const [showOTP, setShowOTP] = useState(false);
     const router = useRouter();
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get('callbackUrl') || '/posts';
@@ -54,7 +56,6 @@ function LoginForm() {
             }
         } catch (err) {
             setError('An unexpected error occurred');
-            console.error(err);
         } finally {
             setLoading(false);
         }
@@ -94,6 +95,41 @@ function LoginForm() {
             setIsVerifyingEmail(false);
         }
     };
+
+    const handleOTPSuccess = () => {
+        router.push(callbackUrl);
+    };
+
+    if (showOTP) {
+        return (
+            <div className="flex min-h-screen items-center justify-center p-4">
+                <div className="w-full max-w-md space-y-6">
+                    <div className="text-center">
+                        <div className="mb-6 flex justify-center">
+                            <Image
+                                src="/diamond-192.png"
+                                alt="CommunitiesX Logo"
+                                width={80}
+                                height={80}
+                                className="rounded-lg"
+                            />
+                        </div>
+                        <h1 className="text-3xl font-bold tracking-tight">
+                            CommunityX
+                        </h1>
+                        <p className="text-muted-foreground mt-2">
+                            Powered by Xcelerator
+                        </p>
+                    </div>
+                    <OTPAuth
+                        email={email}
+                        onBack={() => setShowOTP(false)}
+                        onSuccess={handleOTPSuccess}
+                    />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex min-h-screen items-center justify-center p-4">
@@ -243,7 +279,6 @@ function LoginForm() {
                                         setError(
                                             'Failed to sign in with Google',
                                         );
-                                        console.error(err);
                                     }
                                 }}
                                 disabled={loading}
@@ -270,6 +305,25 @@ function LoginForm() {
                                     />
                                 </svg>
                                 Continue with Google
+                            </Button>
+
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full"
+                                onClick={() => {
+                                    if (!email) {
+                                        setError(
+                                            'Please enter your email address first',
+                                        );
+                                        return;
+                                    }
+                                    setShowOTP(true);
+                                }}
+                                disabled={!email}
+                            >
+                                <Smartphone className="mr-2 h-4 w-4" />
+                                Sign in with OTP
                             </Button>
 
                             <div className="text-center text-sm">
