@@ -191,9 +191,15 @@ export default function CommunityDetailPage() {
         community?.orgId,
     );
 
+    // Check if user is SuperAdmin
+    const isSuperAdmin = (session?.user as any)?.appRole === 'admin';
+
     // Check if user can create posts based on role hierarchy
     const canCreatePost = useMemo(() => {
         if (!session?.user?.id || !community) return false;
+
+        // SuperAdmin can always create posts
+        if (isSuperAdmin) return true;
 
         // If org admin, allow post creation
         if (isOrgAdminForCommunityCheck) return true;
@@ -222,7 +228,12 @@ export default function CommunityDetailPage() {
             ] || 1;
 
         return userRoleLevel >= minRoleLevel;
-    }, [session?.user?.id, community]);
+    }, [
+        session?.user?.id,
+        community,
+        isSuperAdmin,
+        isOrgAdminForCommunityCheck,
+    ]);
     const canEditPost = (post: any) => {
         if (!session) return false;
 
@@ -771,9 +782,11 @@ export default function CommunityDetailPage() {
     const userMembership = community.members?.find(
         (m) => m.userId === session.user.id,
     );
+
     const isMember =
         (!!userMembership && userMembership.membershipType === 'member') ||
-        isOrgAdminForCommunityCheck;
+        isOrgAdminForCommunityCheck ||
+        isSuperAdmin; // SuperAdmin is always considered a member
     const isFollower =
         !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
