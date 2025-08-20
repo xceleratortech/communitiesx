@@ -17,6 +17,11 @@ import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
+// Helper function to check if user is SuperAdmin
+function isSuperAdmin(session: any): boolean {
+    return session?.user?.appRole === 'admin';
+}
+
 // Helper function to check if user has access to modify notification preferences for a community
 async function hasNotificationPreferenceAccess(
     userId: string,
@@ -68,13 +73,19 @@ export const communitiesRouter = router({
         .query(async ({ ctx, input }) => {
             const { search, limit, offset } = input;
 
+            // Check if user is SuperAdmin
+            const isSuperAdminUser = isSuperAdmin(ctx.session);
+
             // orgId is included in the user object via selectUserFields and customSession in better-auth config
             const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
 
             // This includes public communities and communities from their org
             let baseFilter: any;
 
-            if (orgId) {
+            if (isSuperAdminUser) {
+                // SuperAdmin can see ALL communities
+                baseFilter = undefined; // No filter needed
+            } else if (orgId) {
                 // Get all community IDs where this org is allowed
                 const allowedCommunityRows = await db
                     .select({ communityId: communityAllowedOrgs.communityId })
@@ -104,13 +115,19 @@ export const communitiesRouter = router({
             const totalCountResult = await db
                 .select({ count: sql<number>`count(*)` })
                 .from(communities)
-                .where(and(baseFilter, searchFilter));
+                .where(
+                    isSuperAdminUser
+                        ? searchFilter
+                        : and(baseFilter, searchFilter),
+                );
 
             const totalCount = totalCountResult[0]?.count || 0;
 
             // Fetch paginated results
             const searchResults = await db.query.communities.findMany({
-                where: and(baseFilter, searchFilter),
+                where: isSuperAdminUser
+                    ? searchFilter
+                    : and(baseFilter, searchFilter),
                 with: {
                     members: true,
                     posts: {
@@ -152,35 +169,52 @@ export const communitiesRouter = router({
             const limit = input?.limit ?? 6;
             const cursor = input?.cursor;
 
+            // Check if user is SuperAdmin
+            const isSuperAdminUser = isSuperAdmin(ctx.session);
+
             // orgId is included in the user object via selectUserFields and customSession in better-auth config
             const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
-            if (!orgId) {
+
+            // If not SuperAdmin and no orgId, return empty
+            if (!isSuperAdmin && !orgId) {
                 return { items: [], nextCursor: undefined };
             }
 
-            // Get all community IDs where this org is allowed
-            const allowedCommunityRows = await db
-                .select({ communityId: communityAllowedOrgs.communityId })
-                .from(communityAllowedOrgs)
-                .where(eq(communityAllowedOrgs.orgId, orgId));
-            const allowedCommunityIds = allowedCommunityRows.map(
-                (row) => row.communityId,
-            );
+            let filter: any;
 
-            // Compose filter: orgId match OR allowed orgs
-            const filter = or(
-                eq(communities.orgId, orgId),
-                allowedCommunityIds.length > 0
-                    ? inArray(communities.id, allowedCommunityIds)
-                    : sql`false`,
-            );
+            if (isSuperAdminUser) {
+                // SuperAdmin can see ALL communities
+                filter = undefined; // No filter needed
+            } else if (orgId) {
+                // Get all community IDs where this org is allowed
+                const allowedCommunityRows = await db
+                    .select({ communityId: communityAllowedOrgs.communityId })
+                    .from(communityAllowedOrgs)
+                    .where(eq(communityAllowedOrgs.orgId, orgId));
+                const allowedCommunityIds = allowedCommunityRows.map(
+                    (row) => row.communityId,
+                );
+
+                // Compose filter: orgId match OR allowed orgs
+                filter = or(
+                    eq(communities.orgId, orgId),
+                    allowedCommunityIds.length > 0
+                        ? inArray(communities.id, allowedCommunityIds)
+                        : sql`false`,
+                );
+            } else {
+                // This should never happen due to the check above, but TypeScript needs this
+                return { items: [], nextCursor: undefined };
+            }
 
             let query = db.query.communities;
 
             // If cursor is provided, fetch items after the cursor
             if (cursor) {
                 const allCommunities = await query.findMany({
-                    where: and(filter, lt(communities.id, cursor)),
+                    where: isSuperAdminUser
+                        ? lt(communities.id, cursor)
+                        : and(filter, lt(communities.id, cursor)),
                     with: {
                         members: true,
                         posts: {
@@ -210,7 +244,7 @@ export const communitiesRouter = router({
             } else {
                 // First page
                 const allCommunities = await query.findMany({
-                    where: filter,
+                    where: isSuperAdminUser ? undefined : filter,
                     with: {
                         posts: {
                             where: eq(posts.isDeleted, false),
@@ -396,26 +430,43 @@ export const communitiesRouter = router({
                 if (community.type === 'private' && ctx.session?.user) {
                     const userId = ctx.session.user.id;
                     const userOrgId = (ctx.session.user as any).orgId;
-                    const userRole = (ctx.session.user as any).role;
 
-                    // Check if user is a member or follower
-                    const membership = community.members.find(
-                        (m) => m.userId === userId && m.status === 'active',
-                    );
+                    // Check if user is SuperAdmin first
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.id, userId),
+                        columns: {
+                            appRole: true,
+                            role: true,
+                        },
+                    });
 
-                    // --- ORG ADMIN OVERRIDE ---
-                    const isOrgAdminForCommunity =
-                        userRole === 'admin' &&
-                        userOrgId &&
-                        community.orgId &&
-                        userOrgId === community.orgId;
+                    // SuperAdmin can access all communities
+                    if (user?.appRole === 'admin') {
+                        // Continue to load posts normally
+                    } else {
+                        // Check if user is a member or follower
+                        const membership = community.members.find(
+                            (m) => m.userId === userId && m.status === 'active',
+                        );
 
-                    // If user is not a member/follower and not org admin, hide posts
-                    if (!membership && !isOrgAdminForCommunity) {
-                        return {
-                            ...community,
-                            posts: [],
-                        };
+                        // --- ORG ADMIN OVERRIDE ---
+                        // Check if user is org admin for this community
+                        let isOrgAdminForCommunity = false;
+                        if (
+                            userOrgId &&
+                            community.orgId &&
+                            userOrgId === community.orgId
+                        ) {
+                            isOrgAdminForCommunity = user?.role === 'admin';
+                        }
+
+                        // If user is not a member/follower and not org admin, hide posts
+                        if (!membership && !isOrgAdminForCommunity) {
+                            return {
+                                ...community,
+                                posts: [],
+                            };
+                        }
                     }
                 } else if (community.type === 'private' && !ctx.session?.user) {
                     // If community is private and user is not logged in, hide posts

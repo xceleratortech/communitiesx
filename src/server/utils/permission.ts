@@ -43,11 +43,7 @@ export class ServerPermissions {
     }
 
     isAppAdmin(): boolean {
-        return hasPermission(
-            'app',
-            this.permissionData.appRole,
-            '*' as PermissionAction,
-        );
+        return this.permissionData.appRole === 'admin';
     }
 
     checkAppPermission(action: PermissionAction): boolean {
