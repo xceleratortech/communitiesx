@@ -110,6 +110,9 @@ importers:
       '@types/nodemailer':
         specifier: ^6.4.17
         version: 6.4.17
+      '@types/papaparse':
+        specifier: ^5.3.16
+        version: 5.3.16
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.2
@@ -167,6 +170,9 @@ importers:
       nodemailer:
         specifier: ^7.0.3
         version: 7.0.5
+      papaparse:
+        specifier: ^5.5.3
+        version: 5.5.3
       pg:
         specifier: ^8.14.1
         version: 8.16.3
@@ -2970,6 +2976,9 @@ packages:
   '@types/nodemailer@6.4.17':
     resolution: {integrity: sha512-I9CCaIp6DTldEg7vyUTZi8+9Vo0hi1/T8gv3C89yk1rSAAzoKQ8H8ki/jBYJSFoH/BisgLP8tkZMlQ91CIquww==}
 
+  '@types/papaparse@5.3.16':
+    resolution: {integrity: sha512-T3VuKMC2H0lgsjI9buTB3uuKj3EMD2eap1MOuEQuBQ44EnDx/IkGhU6EwiTf9zG3za4SKlmwKAImdDKdNnCsXg==}
+
   '@types/pg-pool@2.0.6':
     resolution: {integrity: sha512-TaAUE5rq2VQYxab5Ts7WZhKNmuN78Q6PiFonTDdpbx8a1H0M1vhy3rhiMjl+e2iHmogyMw7jZF4FrE6eJUy5HQ==}
 
@@ -5083,6 +5092,9 @@ packages:
   p-locate@5.0.0:
     resolution: {integrity: sha512-LaNjtRWUBY++zB5nE/NwcaoMylSPk+S+ZHNB1TzdbMJMny6dynpAGt7X/tl/QYq3TIeE6nxHppbo2LGymrG5Pw==}
     engines: {node: '>=10'}
+
+  papaparse@5.5.3:
+    resolution: {integrity: sha512-5QvjGxYVjxO59MGU2lHVYpRWBBtKHnlIAcSe1uNFCkkptUh63NFRj0FJQm7nR67puEruUci/ZkjmEFrjCAyP4A==}
 
   parent-module@1.0.1:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
@@ -9342,6 +9354,10 @@ snapshots:
     dependencies:
       '@types/node': 20.19.9
 
+  '@types/papaparse@5.3.16':
+    dependencies:
+      '@types/node': 20.19.9
+
   '@types/pg-pool@2.0.6':
     dependencies:
       '@types/pg': 8.15.5
@@ -11525,6 +11541,8 @@ snapshots:
   p-locate@5.0.0:
     dependencies:
       p-limit: 3.1.0
+
+  papaparse@5.5.3: {}
 
   parent-module@1.0.1:
     dependencies:
