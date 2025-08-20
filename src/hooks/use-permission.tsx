@@ -69,8 +69,7 @@ export function usePermission() {
         }
     }, [fetched, error]);
 
-    const isAppAdmin = () =>
-        hasPermission('app', data.appRole, '*' as PermissionAction);
+    const isAppAdmin = () => data.appRole === 'admin';
 
     const checkAppPermission = (action: PermissionAction) =>
         isAppAdmin() || hasPermission('app', data.appRole, action);
@@ -113,7 +112,7 @@ export function usePermission() {
                 }
                 // Community doesn't belong to org admin's organization - fall through to regular checks
             } else {
-                // No communityOrgId provided - fall back to server-side validation
+                // No communityOrgId provided - assume org admin has access to their org's communities
                 // This maintains backward compatibility but server will validate properly
                 const communityAdminPerms = getAllPermissions('community', [
                     'admin',

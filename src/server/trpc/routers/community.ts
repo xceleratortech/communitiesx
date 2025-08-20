@@ -35,6 +35,11 @@ import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+
+// Helper function to check if user is SuperAdmin
+function isSuperAdmin(session: any): boolean {
+    return session?.user?.appRole === 'admin';
+}
 import {
     sendCommunityPostNotification,
     saveCommunityPostNotifications,
@@ -355,76 +360,165 @@ export const communityRouter = router({
     ),
 
     // Get posts from communities the user is a member of or following
-    getRelevantPosts: authProcedure.query(
-        async ({ ctx }): Promise<PostWithAuthor[]> => {
-            try {
-                const userId = ctx.session.user.id;
+    // NOTE: This procedure now returns paginated results. Consider using getAllRelevantPosts
+    // for more comprehensive post fetching with better pagination support.
+    getRelevantPosts: authProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(20),
+                offset: z.number().default(0),
+            }),
+        )
+        .query(
+            async ({
+                ctx,
+                input,
+            }): Promise<{
+                posts: PostWithAuthor[];
+                nextOffset: number | null;
+                hasNextPage: boolean;
+                totalCount: number;
+            }> => {
+                try {
+                    const { limit, offset } = input;
+                    const userId = ctx.session.user.id;
 
-                // Get all communities where the user is a member or follower
-                const userCommunities =
-                    await db.query.communityMembers.findMany({
+                    // Check if user is SuperAdmin
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.id, userId),
+                        columns: {
+                            role: true,
+                            orgId: true,
+                        },
+                    });
+
+                    // If SuperAdmin, get posts from ALL communities with pagination
+                    if (isSuperAdmin(ctx.session)) {
+                        const whereClause = eq(posts.isDeleted, false);
+
+                        // Fetch total count and paginated posts in parallel for efficiency
+                        const [totalCountResult, paginatedDbPosts] =
+                            await Promise.all([
+                                db
+                                    .select({ count: sql<number>`count(*)` })
+                                    .from(posts)
+                                    .where(whereClause),
+                                db.query.posts.findMany({
+                                    where: whereClause,
+                                    orderBy: [desc(posts.createdAt)],
+                                    limit,
+                                    offset,
+                                    with: {
+                                        author: true,
+                                        community: true,
+                                    },
+                                }),
+                            ]);
+
+                        const totalCount = totalCountResult[0]?.count || 0;
+
+                        const hasNextPage = offset + limit < totalCount;
+                        const nextOffset = hasNextPage ? offset + limit : null;
+
+                        return {
+                            posts: paginatedDbPosts as PostWithAuthor[],
+                            nextOffset,
+                            hasNextPage,
+                            totalCount,
+                        };
+                    }
+
+                    // Get all communities where the user is a member or follower
+                    const userCommunities =
+                        await db.query.communityMembers.findMany({
+                            where: and(
+                                eq(communityMembers.userId, userId),
+                                eq(communityMembers.status, 'active'),
+                            ),
+                            with: {
+                                community: true,
+                            },
+                        });
+
+                    // --- ORG ADMIN OVERRIDE ---
+                    // If user is org admin, also get communities from their org
+                    let additionalCommunityIds: number[] = [];
+                    if (user?.orgId) {
+                        if (user.role === 'admin') {
+                            additionalCommunityIds =
+                                await getCommunityIdsForOrg(user.orgId);
+                        }
+                    }
+
+                    // Extract community IDs from memberships
+                    const membershipCommunityIds = userCommunities.map(
+                        (membership) => membership.communityId,
+                    );
+
+                    // Combine membership communities with org admin communities
+                    const allCommunityIds = [
+                        ...new Set([
+                            ...membershipCommunityIds,
+                            ...additionalCommunityIds,
+                        ]),
+                    ];
+
+                    // If user isn't part of any communities and isn't org admin, return empty result
+                    if (allCommunityIds.length === 0) {
+                        return {
+                            posts: [],
+                            nextOffset: null,
+                            hasNextPage: false,
+                            totalCount: 0,
+                        };
+                    }
+
+                    // Get total count for pagination
+                    const totalCountResult = await db
+                        .select({ count: count() })
+                        .from(posts)
+                        .where(
+                            and(
+                                inArray(posts.communityId, allCommunityIds),
+                                eq(posts.isDeleted, false),
+                            ),
+                        );
+
+                    const totalCount = totalCountResult[0]?.count || 0;
+
+                    // Get posts from these communities with pagination
+                    const relevantPosts = await db.query.posts.findMany({
                         where: and(
-                            eq(communityMembers.userId, userId),
-                            eq(communityMembers.status, 'active'),
+                            inArray(posts.communityId, allCommunityIds),
+                            eq(posts.isDeleted, false),
                         ),
+                        orderBy: desc(posts.createdAt),
+                        limit: limit,
+                        offset: offset,
                         with: {
+                            author: true,
                             community: true,
                         },
                     });
 
-                // --- ORG ADMIN OVERRIDE ---
-                // If user is org admin, also get communities from their org
-                let additionalCommunityIds: number[] = [];
-                if (
-                    ctx.session.user.appRole === 'admin' &&
-                    ctx.session.user.orgId
-                ) {
-                    additionalCommunityIds = await getCommunityIdsForOrg(
-                        ctx.session.user.orgId,
-                    );
+                    const hasNextPage = offset + limit < totalCount;
+                    const nextOffset = hasNextPage ? offset + limit : null;
+
+                    return {
+                        posts: relevantPosts as PostWithAuthor[],
+                        nextOffset,
+                        hasNextPage,
+                        totalCount,
+                    };
+                } catch (error) {
+                    console.error('Error fetching relevant posts:', error);
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to fetch relevant posts',
+                    });
                 }
-
-                // Extract community IDs from memberships
-                const membershipCommunityIds = userCommunities.map(
-                    (membership) => membership.communityId,
-                );
-
-                // Combine membership communities with org admin communities
-                const allCommunityIds = [
-                    ...new Set([
-                        ...membershipCommunityIds,
-                        ...additionalCommunityIds,
-                    ]),
-                ];
-
-                // If user isn't part of any communities and isn't org admin, return an empty array
-                if (allCommunityIds.length === 0) {
-                    return [];
-                }
-
-                // Get posts from these communities
-                const relevantPosts = await db.query.posts.findMany({
-                    where: and(
-                        inArray(posts.communityId, allCommunityIds),
-                        eq(posts.isDeleted, false),
-                    ),
-                    orderBy: desc(posts.createdAt),
-                    with: {
-                        author: true,
-                        community: true,
-                    },
-                });
-
-                return relevantPosts as PostWithAuthor[];
-            } catch (error) {
-                console.error('Error fetching relevant posts:', error);
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch relevant posts',
-                });
-            }
-        },
-    ),
+            },
+        ),
 
     // Get all posts relevant to user (org-wide + community posts)
     getAllRelevantPosts: authProcedure
@@ -439,8 +533,77 @@ export const communityRouter = router({
                 const { limit, offset } = input;
                 const userId = ctx.session.user.id;
 
+                // Check if user is SuperAdmin
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, userId),
+                    columns: {
+                        role: true,
+                        orgId: true,
+                    },
+                });
+
+                // If SuperAdmin, get posts from ALL communities and organizations
+                if (isSuperAdmin(ctx.session)) {
+                    const whereClause = eq(posts.isDeleted, false);
+
+                    // Fetch total count and paginated posts in parallel for efficiency
+                    const [totalCountResult, paginatedDbPosts] =
+                        await Promise.all([
+                            db
+                                .select({ count: sql<number>`count(*)` })
+                                .from(posts)
+                                .where(whereClause),
+                            db.query.posts.findMany({
+                                where: whereClause,
+                                orderBy: [desc(posts.createdAt)],
+                                limit,
+                                offset,
+                                with: {
+                                    author: {
+                                        with: {
+                                            organization: true,
+                                        },
+                                    },
+                                    community: true,
+                                    comments: true,
+                                    postTags: {
+                                        with: {
+                                            tag: true,
+                                        },
+                                    },
+                                },
+                            }),
+                        ]);
+
+                    const totalCount = totalCountResult[0]?.count || 0;
+
+                    // Add source information to the paginated posts
+                    const postsWithSource = paginatedDbPosts.map((post) => ({
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag),
+                        source: {
+                            type: post.communityId ? 'community' : 'org',
+                            orgId: post.orgId,
+                            communityId: post.communityId,
+                            reason: post.communityId
+                                ? `SuperAdmin access to ${post.community?.name || 'community'}`
+                                : `SuperAdmin access to organization`,
+                        },
+                    }));
+
+                    const hasNextPage = offset + limit < totalCount;
+                    const nextOffset = hasNextPage ? offset + limit : null;
+
+                    return {
+                        posts: postsWithSource,
+                        nextOffset,
+                        hasNextPage,
+                        totalCount,
+                    };
+                }
+
                 // Get user's org ID
-                const orgId = ctx.session.user.orgId;
+                const orgId = user?.orgId;
 
                 if (!orgId) {
                     throw new TRPCError({
@@ -464,14 +627,11 @@ export const communityRouter = router({
                 // --- ORG ADMIN OVERRIDE ---
                 // If user is org admin, also get communities from their org
                 let additionalCommunityIds: number[] = [];
-                {
-                    const currentUser = await db.query.users.findFirst({
-                        where: eq(users.id, userId),
-                        columns: { role: true },
-                    });
-                    if (currentUser?.role === 'admin' && orgId) {
-                        additionalCommunityIds =
-                            await getCommunityIdsForOrg(orgId);
+                if (user?.orgId) {
+                    if (user.role === 'admin') {
+                        additionalCommunityIds = await getCommunityIdsForOrg(
+                            user.orgId,
+                        );
                     }
                 }
 
@@ -865,42 +1025,91 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            // Find the post
-            const post = await db.query.posts.findFirst({
-                where: eq(posts.id, input.postId),
-            });
-            if (!post) {
+            try {
+                // Find the post with community information
+                const post = await db.query.posts.findFirst({
+                    where: eq(posts.id, input.postId),
+                    with: {
+                        community: true,
+                    },
+                });
+
+                if (!post) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Post not found',
+                    });
+                }
+
+                // Check permissions using ServerPermissions
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+
+                // Check if user can edit this post
+                let canEdit = false;
+
+                // Check if user is the post author
+                if (post.authorId === ctx.session.user.id) {
+                    canEdit = true;
+                } else if (post.communityId) {
+                    // Check community permissions
+                    canEdit = await permission.checkCommunityPermission(
+                        post.communityId.toString(),
+                        PERMISSIONS.EDIT_POST,
+                    );
+                } else {
+                    // Check org permissions for org-wide posts
+                    canEdit = permission.checkOrgPermission(
+                        PERMISSIONS.EDIT_POST,
+                    );
+                }
+
+                if (!canEdit) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'You do not have permission to edit this post',
+                    });
+                }
+
+                // Update post content/title
+                const [updatedPost] = await db
+                    .update(posts)
+                    .set({
+                        title: input.title,
+                        content: input.content,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(posts.id, input.postId))
+                    .returning();
+
+                // Update tags if provided
+                if (input.tagIds) {
+                    // Remove existing tags
+                    await db
+                        .delete(postTags)
+                        .where(eq(postTags.postId, input.postId));
+                    // Add new tags
+                    if (input.tagIds.length > 0) {
+                        const postTagValues = input.tagIds.map((tagId) => ({
+                            postId: input.postId,
+                            tagId,
+                        }));
+                        await db.insert(postTags).values(postTagValues);
+                    }
+                }
+
+                return updatedPost;
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error editing post:', error);
                 throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Post not found',
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to edit post',
                 });
             }
-            // Update post content/title
-            const [updatedPost] = await db
-                .update(posts)
-                .set({
-                    title: input.title,
-                    content: input.content,
-                    updatedAt: new Date(),
-                })
-                .where(eq(posts.id, input.postId))
-                .returning();
-            // Update tags if provided
-            if (input.tagIds) {
-                // Remove existing tags
-                await db
-                    .delete(postTags)
-                    .where(eq(postTags.postId, input.postId));
-                // Add new tags
-                if (input.tagIds.length > 0) {
-                    const postTagValues = input.tagIds.map((tagId) => ({
-                        postId: input.postId,
-                        tagId,
-                    }));
-                    await db.insert(postTags).values(postTagValues);
-                }
-            }
-            return updatedPost;
         }),
 
     // Soft delete a comment
@@ -911,25 +1120,57 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const commentToDelete = await db.query.comments.findFirst({
-                where: eq(comments.id, input.commentId),
-            });
-
-            if (!commentToDelete) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Comment not found',
-                });
-            }
-
-            if (commentToDelete.authorId !== ctx.session.user.id) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'You are not authorized to delete this comment',
-                });
-            }
-
             try {
+                const commentToDelete = await db.query.comments.findFirst({
+                    where: eq(comments.id, input.commentId),
+                    with: {
+                        post: {
+                            with: {
+                                community: true,
+                            },
+                        },
+                    },
+                });
+
+                if (!commentToDelete) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Comment not found',
+                    });
+                }
+
+                // Check permissions using ServerPermissions
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+
+                // Check if user can delete this comment
+                let canDelete = false;
+
+                // Check if user is the comment author
+                if (commentToDelete.authorId === ctx.session.user.id) {
+                    canDelete = true;
+                } else if (commentToDelete.post.communityId) {
+                    // Check community permissions
+                    canDelete = await permission.checkCommunityPermission(
+                        commentToDelete.post.communityId.toString(),
+                        PERMISSIONS.DELETE_POST, // Use DELETE_POST permission for comments too
+                    );
+                } else {
+                    // Check org permissions for org-wide posts
+                    canDelete = permission.checkOrgPermission(
+                        PERMISSIONS.DELETE_POST,
+                    );
+                }
+
+                if (!canDelete) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You are not authorized to delete this comment',
+                    });
+                }
+
                 const [updatedComment] = await db
                     .update(comments)
                     .set({
@@ -941,6 +1182,9 @@ export const communityRouter = router({
 
                 return updatedComment;
             } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
                 console.error('Error deleting comment:', error);
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
@@ -957,18 +1201,54 @@ export const communityRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const postToDelete = await db.query.posts.findFirst({
-                where: eq(posts.id, input.postId),
-            });
-
-            if (!postToDelete) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Post not found',
-                });
-            }
-
             try {
+                // Find the post with community information
+                const postToDelete = await db.query.posts.findFirst({
+                    where: eq(posts.id, input.postId),
+                    with: {
+                        community: true,
+                    },
+                });
+
+                if (!postToDelete) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Post not found',
+                    });
+                }
+
+                // Check permissions using ServerPermissions
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+
+                // Check if user can delete this post
+                let canDelete = false;
+
+                // Check if user is the post author
+                if (postToDelete.authorId === ctx.session.user.id) {
+                    canDelete = true;
+                } else if (postToDelete.communityId) {
+                    // Check community permissions
+                    canDelete = await permission.checkCommunityPermission(
+                        postToDelete.communityId.toString(),
+                        PERMISSIONS.DELETE_POST,
+                    );
+                } else {
+                    // Check org permissions for org-wide posts
+                    canDelete = permission.checkOrgPermission(
+                        PERMISSIONS.DELETE_POST,
+                    );
+                }
+
+                if (!canDelete) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to delete this post',
+                    });
+                }
+
                 const [updatedPost] = await db
                     .update(posts)
                     .set({
@@ -980,6 +1260,9 @@ export const communityRouter = router({
 
                 return updatedPost;
             } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
                 console.error('Error deleting post:', error);
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
@@ -1132,9 +1415,16 @@ export const communityRouter = router({
             const permission = await ServerPermissions.fromUserId(
                 ctx.session.user.id,
             );
-            const canCreateCommunity = permission.checkOrgPermission(
-                PERMISSIONS.CREATE_COMMUNITY,
-            );
+
+            // SuperAdmin can create communities anywhere, others need org permission
+            let canCreateCommunity = false;
+            if (permission.isAppAdmin()) {
+                canCreateCommunity = true;
+            } else {
+                canCreateCommunity = permission.checkOrgPermission(
+                    PERMISSIONS.CREATE_COMMUNITY,
+                );
+            }
 
             if (!canCreateCommunity) {
                 throw new TRPCError({
