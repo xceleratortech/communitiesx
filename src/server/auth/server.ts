@@ -19,7 +19,14 @@ export const auth = betterAuth({
         provider: 'pg',
         usePlural: true,
     }),
-    selectUserFields: ['id', 'name', 'email', ['org_id', 'orgId'], 'role'],
+    selectUserFields: [
+        'id',
+        'name',
+        'email',
+        ['org_id', 'orgId'],
+        'role',
+        'appRole',
+    ],
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID!,
