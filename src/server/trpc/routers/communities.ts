@@ -17,6 +17,11 @@ import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
+// Helper function to check if user is SuperAdmin
+function isSuperAdmin(session: any): boolean {
+    return session?.user?.appRole === 'admin';
+}
+
 // Helper function to check if user has access to modify notification preferences for a community
 async function hasNotificationPreferenceAccess(
     userId: string,
@@ -69,16 +74,7 @@ export const communitiesRouter = router({
             const { search, limit, offset } = input;
 
             // Check if user is SuperAdmin
-            let isSuperAdmin = false;
-            if (ctx.session?.user) {
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, ctx.session.user.id),
-                    columns: {
-                        appRole: true,
-                    },
-                });
-                isSuperAdmin = user?.appRole === 'admin';
-            }
+            const isSuperAdminUser = isSuperAdmin(ctx.session);
 
             // orgId is included in the user object via selectUserFields and customSession in better-auth config
             const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
@@ -86,7 +82,7 @@ export const communitiesRouter = router({
             // This includes public communities and communities from their org
             let baseFilter: any;
 
-            if (isSuperAdmin) {
+            if (isSuperAdminUser) {
                 // SuperAdmin can see ALL communities
                 baseFilter = undefined; // No filter needed
             } else if (orgId) {
@@ -120,14 +116,16 @@ export const communitiesRouter = router({
                 .select({ count: sql<number>`count(*)` })
                 .from(communities)
                 .where(
-                    isSuperAdmin ? searchFilter : and(baseFilter, searchFilter),
+                    isSuperAdminUser
+                        ? searchFilter
+                        : and(baseFilter, searchFilter),
                 );
 
             const totalCount = totalCountResult[0]?.count || 0;
 
             // Fetch paginated results
             const searchResults = await db.query.communities.findMany({
-                where: isSuperAdmin
+                where: isSuperAdminUser
                     ? searchFilter
                     : and(baseFilter, searchFilter),
                 with: {
@@ -172,16 +170,7 @@ export const communitiesRouter = router({
             const cursor = input?.cursor;
 
             // Check if user is SuperAdmin
-            let isSuperAdmin = false;
-            if (ctx.session?.user) {
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, ctx.session.user.id),
-                    columns: {
-                        appRole: true,
-                    },
-                });
-                isSuperAdmin = user?.appRole === 'admin';
-            }
+            const isSuperAdminUser = isSuperAdmin(ctx.session);
 
             // orgId is included in the user object via selectUserFields and customSession in better-auth config
             const orgId = (ctx.session?.user as { orgId?: string })?.orgId;
@@ -193,7 +182,7 @@ export const communitiesRouter = router({
 
             let filter: any;
 
-            if (isSuperAdmin) {
+            if (isSuperAdminUser) {
                 // SuperAdmin can see ALL communities
                 filter = undefined; // No filter needed
             } else if (orgId) {
@@ -223,7 +212,7 @@ export const communitiesRouter = router({
             // If cursor is provided, fetch items after the cursor
             if (cursor) {
                 const allCommunities = await query.findMany({
-                    where: isSuperAdmin
+                    where: isSuperAdminUser
                         ? lt(communities.id, cursor)
                         : and(filter, lt(communities.id, cursor)),
                     with: {
@@ -255,7 +244,7 @@ export const communitiesRouter = router({
             } else {
                 // First page
                 const allCommunities = await query.findMany({
-                    where: isSuperAdmin ? undefined : filter,
+                    where: isSuperAdminUser ? undefined : filter,
                     with: {
                         posts: {
                             where: eq(posts.isDeleted, false),

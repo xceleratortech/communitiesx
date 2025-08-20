@@ -35,6 +35,11 @@ import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+
+// Helper function to check if user is SuperAdmin
+function isSuperAdmin(session: any): boolean {
+    return session?.user?.appRole === 'admin';
+}
 import {
     sendCommunityPostNotification,
     saveCommunityPostNotifications,
@@ -355,98 +360,165 @@ export const communityRouter = router({
     ),
 
     // Get posts from communities the user is a member of or following
-    getRelevantPosts: authProcedure.query(
-        async ({ ctx }): Promise<PostWithAuthor[]> => {
-            try {
-                const userId = ctx.session.user.id;
+    // NOTE: This procedure now returns paginated results. Consider using getAllRelevantPosts
+    // for more comprehensive post fetching with better pagination support.
+    getRelevantPosts: authProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(20),
+                offset: z.number().default(0),
+            }),
+        )
+        .query(
+            async ({
+                ctx,
+                input,
+            }): Promise<{
+                posts: PostWithAuthor[];
+                nextOffset: number | null;
+                hasNextPage: boolean;
+                totalCount: number;
+            }> => {
+                try {
+                    const { limit, offset } = input;
+                    const userId = ctx.session.user.id;
 
-                // Check if user is SuperAdmin
-                const user = await db.query.users.findFirst({
-                    where: eq(users.id, userId),
-                    columns: {
-                        appRole: true,
-                        role: true,
-                        orgId: true,
-                    },
-                });
+                    // Check if user is SuperAdmin
+                    const user = await db.query.users.findFirst({
+                        where: eq(users.id, userId),
+                        columns: {
+                            role: true,
+                            orgId: true,
+                        },
+                    });
 
-                // If SuperAdmin, get posts from ALL communities
-                if (user?.appRole === 'admin') {
-                    const allPosts = await db.query.posts.findMany({
-                        where: eq(posts.isDeleted, false),
+                    // If SuperAdmin, get posts from ALL communities with pagination
+                    if (isSuperAdmin(ctx.session)) {
+                        const whereClause = eq(posts.isDeleted, false);
+
+                        // Fetch total count and paginated posts in parallel for efficiency
+                        const [totalCountResult, paginatedDbPosts] =
+                            await Promise.all([
+                                db
+                                    .select({ count: sql<number>`count(*)` })
+                                    .from(posts)
+                                    .where(whereClause),
+                                db.query.posts.findMany({
+                                    where: whereClause,
+                                    orderBy: [desc(posts.createdAt)],
+                                    limit,
+                                    offset,
+                                    with: {
+                                        author: true,
+                                        community: true,
+                                    },
+                                }),
+                            ]);
+
+                        const totalCount = totalCountResult[0]?.count || 0;
+
+                        const hasNextPage = offset + limit < totalCount;
+                        const nextOffset = hasNextPage ? offset + limit : null;
+
+                        return {
+                            posts: paginatedDbPosts as PostWithAuthor[],
+                            nextOffset,
+                            hasNextPage,
+                            totalCount,
+                        };
+                    }
+
+                    // Get all communities where the user is a member or follower
+                    const userCommunities =
+                        await db.query.communityMembers.findMany({
+                            where: and(
+                                eq(communityMembers.userId, userId),
+                                eq(communityMembers.status, 'active'),
+                            ),
+                            with: {
+                                community: true,
+                            },
+                        });
+
+                    // --- ORG ADMIN OVERRIDE ---
+                    // If user is org admin, also get communities from their org
+                    let additionalCommunityIds: number[] = [];
+                    if (user?.orgId) {
+                        if (user.role === 'admin') {
+                            additionalCommunityIds =
+                                await getCommunityIdsForOrg(user.orgId);
+                        }
+                    }
+
+                    // Extract community IDs from memberships
+                    const membershipCommunityIds = userCommunities.map(
+                        (membership) => membership.communityId,
+                    );
+
+                    // Combine membership communities with org admin communities
+                    const allCommunityIds = [
+                        ...new Set([
+                            ...membershipCommunityIds,
+                            ...additionalCommunityIds,
+                        ]),
+                    ];
+
+                    // If user isn't part of any communities and isn't org admin, return empty result
+                    if (allCommunityIds.length === 0) {
+                        return {
+                            posts: [],
+                            nextOffset: null,
+                            hasNextPage: false,
+                            totalCount: 0,
+                        };
+                    }
+
+                    // Get total count for pagination
+                    const totalCountResult = await db
+                        .select({ count: count() })
+                        .from(posts)
+                        .where(
+                            and(
+                                inArray(posts.communityId, allCommunityIds),
+                                eq(posts.isDeleted, false),
+                            ),
+                        );
+
+                    const totalCount = totalCountResult[0]?.count || 0;
+
+                    // Get posts from these communities with pagination
+                    const relevantPosts = await db.query.posts.findMany({
+                        where: and(
+                            inArray(posts.communityId, allCommunityIds),
+                            eq(posts.isDeleted, false),
+                        ),
                         orderBy: desc(posts.createdAt),
+                        limit: limit,
+                        offset: offset,
                         with: {
                             author: true,
                             community: true,
                         },
                     });
-                    return allPosts as PostWithAuthor[];
-                }
 
-                // Get all communities where the user is a member or follower
-                const userCommunities =
-                    await db.query.communityMembers.findMany({
-                        where: and(
-                            eq(communityMembers.userId, userId),
-                            eq(communityMembers.status, 'active'),
-                        ),
-                        with: {
-                            community: true,
-                        },
+                    const hasNextPage = offset + limit < totalCount;
+                    const nextOffset = hasNextPage ? offset + limit : null;
+
+                    return {
+                        posts: relevantPosts as PostWithAuthor[],
+                        nextOffset,
+                        hasNextPage,
+                        totalCount,
+                    };
+                } catch (error) {
+                    console.error('Error fetching relevant posts:', error);
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to fetch relevant posts',
                     });
-
-                // --- ORG ADMIN OVERRIDE ---
-                // If user is org admin, also get communities from their org
-                let additionalCommunityIds: number[] = [];
-                if (user?.orgId) {
-                    if (user.role === 'admin') {
-                        additionalCommunityIds = await getCommunityIdsForOrg(
-                            user.orgId,
-                        );
-                    }
                 }
-
-                // Extract community IDs from memberships
-                const membershipCommunityIds = userCommunities.map(
-                    (membership) => membership.communityId,
-                );
-
-                // Combine membership communities with org admin communities
-                const allCommunityIds = [
-                    ...new Set([
-                        ...membershipCommunityIds,
-                        ...additionalCommunityIds,
-                    ]),
-                ];
-
-                // If user isn't part of any communities and isn't org admin, return an empty array
-                if (allCommunityIds.length === 0) {
-                    return [];
-                }
-
-                // Get posts from these communities
-                const relevantPosts = await db.query.posts.findMany({
-                    where: and(
-                        inArray(posts.communityId, allCommunityIds),
-                        eq(posts.isDeleted, false),
-                    ),
-                    orderBy: desc(posts.createdAt),
-                    with: {
-                        author: true,
-                        community: true,
-                    },
-                });
-
-                return relevantPosts as PostWithAuthor[];
-            } catch (error) {
-                console.error('Error fetching relevant posts:', error);
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch relevant posts',
-                });
-            }
-        },
-    ),
+            },
+        ),
 
     // Get all posts relevant to user (org-wide + community posts)
     getAllRelevantPosts: authProcedure
@@ -465,35 +537,48 @@ export const communityRouter = router({
                 const user = await db.query.users.findFirst({
                     where: eq(users.id, userId),
                     columns: {
-                        appRole: true,
                         role: true,
                         orgId: true,
                     },
                 });
 
                 // If SuperAdmin, get posts from ALL communities and organizations
-                if (user?.appRole === 'admin') {
-                    const allPosts = await db.query.posts.findMany({
-                        where: eq(posts.isDeleted, false),
-                        orderBy: [desc(posts.createdAt)],
-                        with: {
-                            author: {
-                                with: {
-                                    organization: true,
-                                },
-                            },
-                            community: true,
-                            comments: true,
-                            postTags: {
-                                with: {
-                                    tag: true,
-                                },
-                            },
-                        },
-                    });
+                if (isSuperAdmin(ctx.session)) {
+                    const whereClause = eq(posts.isDeleted, false);
 
-                    // Add source information to all posts
-                    const postsWithSource = allPosts.map((post) => ({
+                    // Fetch total count and paginated posts in parallel for efficiency
+                    const [totalCountResult, paginatedDbPosts] =
+                        await Promise.all([
+                            db
+                                .select({ count: sql<number>`count(*)` })
+                                .from(posts)
+                                .where(whereClause),
+                            db.query.posts.findMany({
+                                where: whereClause,
+                                orderBy: [desc(posts.createdAt)],
+                                limit,
+                                offset,
+                                with: {
+                                    author: {
+                                        with: {
+                                            organization: true,
+                                        },
+                                    },
+                                    community: true,
+                                    comments: true,
+                                    postTags: {
+                                        with: {
+                                            tag: true,
+                                        },
+                                    },
+                                },
+                            }),
+                        ]);
+
+                    const totalCount = totalCountResult[0]?.count || 0;
+
+                    // Add source information to the paginated posts
+                    const postsWithSource = paginatedDbPosts.map((post) => ({
                         ...post,
                         tags: post.postTags.map((pt) => pt.tag),
                         source: {
@@ -506,17 +591,11 @@ export const communityRouter = router({
                         },
                     }));
 
-                    // Apply pagination
-                    const totalCount = postsWithSource.length;
-                    const paginatedPosts = postsWithSource.slice(
-                        offset,
-                        offset + limit,
-                    );
                     const hasNextPage = offset + limit < totalCount;
                     const nextOffset = hasNextPage ? offset + limit : null;
 
                     return {
-                        posts: paginatedPosts,
+                        posts: postsWithSource,
                         nextOffset,
                         hasNextPage,
                         totalCount,

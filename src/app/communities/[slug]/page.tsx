@@ -41,7 +41,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useSession } from '@/server/auth/client';
+import { useTypedSession } from '@/server/auth/client';
 import { toast } from 'sonner';
 import {
     AlertDialog,
@@ -136,7 +136,7 @@ export default function CommunityDetailPage() {
     const params = useParams();
     const router = useRouter();
     const slug = params.slug as string;
-    const sessionData = useSession();
+    const sessionData = useTypedSession();
     const session = sessionData.data;
 
     const {
@@ -192,7 +192,7 @@ export default function CommunityDetailPage() {
     );
 
     // Check if user is SuperAdmin
-    const isSuperAdmin = (session?.user as any)?.appRole === 'admin';
+    const isSuperAdmin = session?.user?.appRole === 'admin';
 
     // Check if user can create posts based on role hierarchy
     const canCreatePost = useMemo(() => {
@@ -330,7 +330,7 @@ export default function CommunityDetailPage() {
                         // Allow org admins to see pending requests
                         isOrgAdminForCommunityCheck ||
                         // Allow Super Admins to see pending requests for any community
-                        (session?.user as any)?.appRole === 'admin'),
+                        session?.user?.appRole === 'admin'),
             },
         );
 
