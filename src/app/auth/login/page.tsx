@@ -55,6 +55,7 @@ function LoginForm() {
                 router.push(callbackUrl);
             }
         } catch (err) {
+            console.error(err);
             setError('An unexpected error occurred');
         } finally {
             setLoading(false);

@@ -37,6 +37,7 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
                 setError(null);
             }
         } catch (err) {
+            console.error('Failed to send OTP:', err);
             setError('Failed to send OTP. Please try again.');
         } finally {
             setSendingOTP(false);
