@@ -280,12 +280,12 @@ function LoginForm() {
                             Sign in with OTP
                         </Button>
 
-                        <div className="text-center text-sm">
+                        {/* <div className="text-center text-sm">
                             Don't have an account?{' '}
                             <Link href="/auth/register" className="underline">
                                 Sign up
                             </Link>
-                        </div>
+                        </div> */}
                     </CardFooter>
                 </form>
             </Card>
