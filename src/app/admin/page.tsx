@@ -56,8 +56,6 @@ import {
     CheckCircle,
     UserMinus,
     Search,
-    Users,
-    Building,
     MoreHorizontal,
     ChevronLeft,
     ChevronRight,
@@ -79,6 +77,10 @@ import {
 import { InviteUserDialog } from '@/components/invite-user-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { BadgeManagement } from '@/components/badge-management';
+import {
+    useCsvBulkUpload,
+    CsvValidationRule,
+} from '@/hooks/use-csv-bulk-upload';
 
 type User = {
     id: string;
@@ -102,6 +104,15 @@ type Organization = {
     name: string;
 };
 
+interface CsvUserRow {
+    name: string;
+    email: string;
+    password: string;
+    role: 'admin' | 'user';
+    orgname: string;
+    [key: string]: string; // Index signature to satisfy CsvRow constraint
+}
+
 export default function AdminDashboard() {
     const router = useRouter();
     const { data: session } = useSession();
@@ -120,6 +131,68 @@ export default function AdminDashboard() {
         password: '',
         role: 'user' as 'admin' | 'user',
         orgId: '',
+    });
+
+    // CSV validation rules for admin users
+    const csvValidationRules: CsvValidationRule[] = [
+        { field: 'name', required: true },
+        { field: 'email', required: true },
+        { field: 'password', required: true, minLength: 8 },
+        {
+            field: 'role',
+            required: true,
+            allowedValues: ['admin', 'user'],
+            defaultValue: 'user',
+        },
+        { field: 'orgname', required: true },
+    ];
+
+    // CSV bulk upload hook
+    const csvBulkUpload = useCsvBulkUpload<CsvUserRow>({
+        requiredHeaders: ['name', 'email', 'password', 'role', 'orgname'],
+        validationRules: csvValidationRules,
+        processRow: async (user) => {
+            if (!orgs) {
+                throw new Error('No organizations available');
+            }
+
+            // Find organization by name (case-insensitive)
+            const org = orgs.find((org) => {
+                const orgName = org.name.trim();
+                const csvOrgName = user.orgname.trim();
+                return orgName.toLowerCase() === csvOrgName.toLowerCase();
+            });
+
+            if (!org) {
+                const availableOrgs = orgs.map((o) => o.name).join(', ');
+                throw new Error(
+                    `Organization "${user.orgname}" not found. ` +
+                        `Available organizations: ${availableOrgs}. ` +
+                        `Please check the organization name spelling.`,
+                );
+            }
+
+            await createUserMutation.mutateAsync({
+                name: user.name,
+                email: user.email,
+                password: user.password,
+                role: user.role,
+                orgId: org.id,
+            });
+        },
+        onSuccess: (successCount) => {
+            toast.success(`Successfully created ${successCount} users`);
+            setIsCreateUserDialogOpen(false);
+            csvBulkUpload.resetBulkUploadState();
+            utils.admin.getUsersPaginated.invalidate();
+        },
+        onComplete: (results) => {
+            // Handle partial success - update CSV data to show only failed rows
+            if (results.successful.length > 0 && results.failed.length > 0) {
+                csvBulkUpload.setCsvData(results.failed.map((f) => f.row));
+                csvBulkUpload.setCsvPreview(results.failed.map((f) => f.row));
+            }
+        },
     });
 
     // State for create org dialog
@@ -441,168 +514,841 @@ export default function AdminDashboard() {
                                 <div className="space-x-2">
                                     <Dialog
                                         open={isCreateUserDialogOpen}
-                                        onOpenChange={setIsCreateUserDialogOpen}
+                                        onOpenChange={(open) => {
+                                            setIsCreateUserDialogOpen(open);
+                                            if (!open) {
+                                                // Reset all states when dialog closes
+                                                setNewUser({
+                                                    name: '',
+                                                    email: '',
+                                                    password: '',
+                                                    role: 'user',
+                                                    orgId: '',
+                                                });
+                                                csvBulkUpload.resetBulkUploadState();
+                                            }
+                                        }}
                                     >
                                         <DialogTrigger asChild>
                                             <Button>Create User</Button>
                                         </DialogTrigger>
-                                        <DialogContent>
+                                        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
                                             <DialogHeader>
                                                 <DialogTitle>
-                                                    Create User
+                                                    Create User(s)
                                                 </DialogTitle>
                                                 <DialogDescription>
-                                                    Create a new user account.
-                                                    Fill in the details and
-                                                    click Create User.
+                                                    Create individual users or
+                                                    upload multiple users via
+                                                    CSV file.
                                                 </DialogDescription>
                                             </DialogHeader>
-                                            <form
-                                                onSubmit={handleCreateUser}
-                                                className="space-y-4"
+
+                                            <Tabs
+                                                defaultValue="individual"
+                                                className="w-full"
                                             >
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="name">
-                                                        Name
-                                                    </Label>
-                                                    <Input
-                                                        id="name"
-                                                        value={newUser.name}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                name: e.target
-                                                                    .value,
-                                                            })
+                                                <TabsList className="grid w-full grid-cols-2">
+                                                    <TabsTrigger value="individual">
+                                                        Individual
+                                                    </TabsTrigger>
+                                                    <TabsTrigger value="bulk">
+                                                        Bulk Upload
+                                                    </TabsTrigger>
+                                                </TabsList>
+
+                                                <TabsContent
+                                                    value="individual"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <form
+                                                        onSubmit={
+                                                            handleCreateUser
                                                         }
-                                                        placeholder="Full Name"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="email">
-                                                        Email
-                                                    </Label>
-                                                    <Input
-                                                        id="email"
-                                                        type="email"
-                                                        value={newUser.email}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                email: e.target
-                                                                    .value,
-                                                            })
-                                                        }
-                                                        placeholder="user@example.com"
-                                                        required
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="password">
-                                                        Password
-                                                    </Label>
-                                                    <Input
-                                                        id="password"
-                                                        type="password"
-                                                        value={newUser.password}
-                                                        onChange={(e) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                password:
-                                                                    e.target
-                                                                        .value,
-                                                            })
-                                                        }
-                                                        placeholder="Password"
-                                                        required
-                                                        minLength={8}
-                                                        className="w-full"
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="role">
-                                                        Role
-                                                    </Label>
-                                                    <Select
-                                                        value={newUser.role}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                role: value as
-                                                                    | 'admin'
-                                                                    | 'user',
-                                                            })
-                                                        }
+                                                        className="space-y-4"
                                                     >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select role" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="user">
-                                                                User
-                                                            </SelectItem>
-                                                            <SelectItem value="admin">
-                                                                Admin
-                                                            </SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="flex flex-col gap-2">
-                                                    <Label htmlFor="org">
-                                                        Organization
-                                                    </Label>
-                                                    <Select
-                                                        value={newUser.orgId}
-                                                        onValueChange={(
-                                                            value: string,
-                                                        ) =>
-                                                            setNewUser({
-                                                                ...newUser,
-                                                                orgId: value,
-                                                            })
-                                                        }
-                                                    >
-                                                        <SelectTrigger className="w-full">
-                                                            <SelectValue placeholder="Select organization" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {orgs?.map(
-                                                                (
-                                                                    org: Organization,
-                                                                ) => (
-                                                                    <SelectItem
-                                                                        key={
-                                                                            org.id
-                                                                        }
-                                                                        value={
-                                                                            org.id
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            org.name
-                                                                        }
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="name">
+                                                                Name
+                                                            </Label>
+                                                            <Input
+                                                                id="name"
+                                                                value={
+                                                                    newUser.name
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        name: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Full Name"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="email">
+                                                                Email
+                                                            </Label>
+                                                            <Input
+                                                                id="email"
+                                                                type="email"
+                                                                value={
+                                                                    newUser.email
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        email: e
+                                                                            .target
+                                                                            .value,
+                                                                    })
+                                                                }
+                                                                placeholder="user@example.com"
+                                                                required
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="password">
+                                                                Password
+                                                            </Label>
+                                                            <Input
+                                                                id="password"
+                                                                type="password"
+                                                                value={
+                                                                    newUser.password
+                                                                }
+                                                                onChange={(e) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        password:
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                    })
+                                                                }
+                                                                placeholder="Password"
+                                                                required
+                                                                minLength={8}
+                                                                className="w-full"
+                                                            />
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="role">
+                                                                Role
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    newUser.role
+                                                                }
+                                                                onValueChange={(
+                                                                    value: string,
+                                                                ) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        role: value as
+                                                                            | 'admin'
+                                                                            | 'user',
+                                                                    })
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select role" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="user">
+                                                                        User
                                                                     </SelectItem>
-                                                                ),
+                                                                    <SelectItem value="admin">
+                                                                        Admin
+                                                                    </SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="flex flex-col gap-2">
+                                                            <Label htmlFor="org">
+                                                                Organization
+                                                            </Label>
+                                                            <Select
+                                                                value={
+                                                                    newUser.orgId
+                                                                }
+                                                                onValueChange={(
+                                                                    value: string,
+                                                                ) =>
+                                                                    setNewUser({
+                                                                        ...newUser,
+                                                                        orgId: value,
+                                                                    })
+                                                                }
+                                                            >
+                                                                <SelectTrigger className="w-full">
+                                                                    <SelectValue placeholder="Select organization" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {orgs?.map(
+                                                                        (
+                                                                            org: Organization,
+                                                                        ) => (
+                                                                            <SelectItem
+                                                                                key={
+                                                                                    org.id
+                                                                                }
+                                                                                value={
+                                                                                    org.id
+                                                                                }
+                                                                            >
+                                                                                {
+                                                                                    org.name
+                                                                                }
+                                                                            </SelectItem>
+                                                                        ),
+                                                                    )}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                onClick={() =>
+                                                                    setIsCreateUserDialogOpen(
+                                                                        false,
+                                                                    )
+                                                                }
+                                                                disabled={
+                                                                    createUserMutation.isPending
+                                                                }
+                                                                className="w-full sm:w-auto"
+                                                            >
+                                                                Cancel
+                                                            </Button>
+                                                            <Button
+                                                                type="submit"
+                                                                disabled={
+                                                                    createUserMutation.isPending
+                                                                }
+                                                                className="w-full sm:w-auto"
+                                                            >
+                                                                {createUserMutation.isPending
+                                                                    ? 'Creating...'
+                                                                    : 'Create User'}
+                                                            </Button>
+                                                        </DialogFooter>
+                                                    </form>
+                                                </TabsContent>
+
+                                                <TabsContent
+                                                    value="bulk"
+                                                    className="mt-4 space-y-4"
+                                                >
+                                                    <div className="space-y-4">
+                                                        {/* File Upload */}
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="csv-file">
+                                                                CSV File
+                                                            </Label>
+                                                            <Input
+                                                                id="csv-file"
+                                                                type="file"
+                                                                accept=".csv"
+                                                                onChange={
+                                                                    csvBulkUpload.handleFileChange
+                                                                }
+                                                            />
+                                                            <p className="text-muted-foreground text-xs">
+                                                                CSV should have
+                                                                columns: name,
+                                                                email, password,
+                                                                role, orgname.
+                                                                <br />
+                                                                <span className="text-muted-foreground/80 text-xs">
+                                                                    Fields with
+                                                                    commas will
+                                                                    be
+                                                                    automatically
+                                                                    handled if
+                                                                    properly
+                                                                    quoted.
+                                                                </span>
+                                                                <Button
+                                                                    variant="link"
+                                                                    className="ml-1 h-auto p-0 text-xs"
+                                                                    onClick={() => {
+                                                                        const csvContent =
+                                                                            'name,email,password,role,orgname\n"John Doe",john@example.com,password123,user,Acme Corporation\n"Jane Smith",jane@example.com,secure456,admin,Tech Solutions\n"Doe, John",john.doe@example.com,password789,user,"Tech Corp, Inc."';
+                                                                        const blob =
+                                                                            new Blob(
+                                                                                [
+                                                                                    csvContent,
+                                                                                ],
+                                                                                {
+                                                                                    type: 'text/csv',
+                                                                                },
+                                                                            );
+                                                                        const url =
+                                                                            window.URL.createObjectURL(
+                                                                                blob,
+                                                                            );
+                                                                        const a =
+                                                                            document.createElement(
+                                                                                'a',
+                                                                            );
+                                                                        a.href =
+                                                                            url;
+                                                                        a.download =
+                                                                            'users_template.csv';
+                                                                        a.click();
+                                                                        window.URL.revokeObjectURL(
+                                                                            url,
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Download
+                                                                    Template
+                                                                </Button>
+                                                            </p>
+
+                                                            {/* Show available organization names */}
+                                                            {orgs &&
+                                                                orgs.length >
+                                                                    0 && (
+                                                                    <div className="bg-muted/30 mt-2 rounded-md p-2 sm:p-3">
+                                                                        <p className="mb-2 text-xs font-medium">
+                                                                            Available
+                                                                            Organization
+                                                                            Names:
+                                                                        </p>
+                                                                        <div
+                                                                            className={`text-muted-foreground space-y-1 text-xs ${orgs.length > 5 ? 'max-h-32 overflow-y-auto' : ''}`}
+                                                                        >
+                                                                            {orgs.map(
+                                                                                (
+                                                                                    org,
+                                                                                    index,
+                                                                                ) => (
+                                                                                    <div
+                                                                                        key={
+                                                                                            org.id
+                                                                                        }
+                                                                                        className="flex flex-wrap items-center gap-1 sm:gap-2"
+                                                                                    >
+                                                                                        <span className="bg-background rounded px-1 py-1 font-mono text-xs break-all sm:px-2">
+                                                                                            {
+                                                                                                org.name
+                                                                                            }
+                                                                                        </span>
+                                                                                    </div>
+                                                                                ),
+                                                                            )}
+                                                                        </div>
+                                                                        <p className="text-muted-foreground mt-2 text-xs">
+                                                                            Use
+                                                                            the
+                                                                            exact
+                                                                            organization
+                                                                            names
+                                                                            shown
+                                                                            above
+                                                                            in
+                                                                            your
+                                                                            CSV
+                                                                            file.
+                                                                        </p>
+                                                                    </div>
+                                                                )}
+                                                        </div>
+
+                                                        {/* CSV Preview */}
+                                                        {csvBulkUpload
+                                                            .csvPreview.length >
+                                                            0 && (
+                                                            <div className="space-y-2">
+                                                                <Label>
+                                                                    Preview
+                                                                    (first 5
+                                                                    rows)
+                                                                </Label>
+                                                                <div className="max-h-48 overflow-auto rounded-md border p-2 sm:p-3">
+                                                                    {/* Mobile: Card Layout */}
+                                                                    <div className="block space-y-3 sm:hidden">
+                                                                        {csvBulkUpload.csvPreview.map(
+                                                                            (
+                                                                                row: CsvUserRow,
+                                                                                index: number,
+                                                                            ) => (
+                                                                                <div
+                                                                                    key={
+                                                                                        index
+                                                                                    }
+                                                                                    className="bg-muted/20 rounded-md border p-3"
+                                                                                >
+                                                                                    <div className="grid grid-cols-1 gap-2 text-xs">
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Name:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.name
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Email:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.email
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Password:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.password
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Role:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.role
+                                                                                            }
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <span className="font-semibold">
+                                                                                                Org
+                                                                                                Name:
+                                                                                            </span>{' '}
+                                                                                            {
+                                                                                                row.orgname
+                                                                                            }
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ),
+                                                                        )}
+                                                                    </div>
+
+                                                                    {/* Desktop: Table Layout */}
+                                                                    <table className="hidden w-full text-sm sm:table">
+                                                                        <thead>
+                                                                            <tr className="border-b">
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Name
+                                                                                </th>
+                                                                                <th className="w-2/5 p-2 text-left">
+                                                                                    Email
+                                                                                </th>
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Password
+                                                                                </th>
+                                                                                <th className="w-1/10 p-2 text-left">
+                                                                                    Role
+                                                                                </th>
+                                                                                <th className="w-1/5 p-2 text-left">
+                                                                                    Org
+                                                                                    Name
+                                                                                </th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {csvBulkUpload.csvPreview.map(
+                                                                                (
+                                                                                    row: CsvUserRow,
+                                                                                    index: number,
+                                                                                ) => (
+                                                                                    <tr
+                                                                                        key={
+                                                                                            index
+                                                                                        }
+                                                                                        className="border-b"
+                                                                                    >
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.name
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.email
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.password
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs">
+                                                                                            {
+                                                                                                row.role
+                                                                                            }
+                                                                                        </td>
+                                                                                        <td className="p-2 text-xs break-words">
+                                                                                            {
+                                                                                                row.orgname
+                                                                                            }
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                ),
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Errors */}
+                                                        {csvBulkUpload.csvErrors
+                                                            .length > 0 && (
+                                                            <div className="space-y-2">
+                                                                <Label className="text-destructive">
+                                                                    Errors Found
+                                                                </Label>
+                                                                <div className="border-destructive/20 bg-destructive/5 max-h-32 overflow-y-auto rounded-md border p-3">
+                                                                    {csvBulkUpload.csvErrors.map(
+                                                                        (
+                                                                            error: string,
+                                                                            index: number,
+                                                                        ) => (
+                                                                            <p
+                                                                                key={
+                                                                                    index
+                                                                                }
+                                                                                className="text-destructive text-sm"
+                                                                            >
+                                                                                {
+                                                                                    error
+                                                                                }
+                                                                            </p>
+                                                                        ),
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Summary */}
+                                                        {csvBulkUpload.csvData
+                                                            .length > 0 && (
+                                                            <div className="bg-muted/50 rounded-md p-3">
+                                                                <p className="text-sm">
+                                                                    <strong>
+                                                                        {
+                                                                            csvBulkUpload
+                                                                                .csvData
+                                                                                .length
+                                                                        }
+                                                                    </strong>{' '}
+                                                                    users will
+                                                                    be created.
+                                                                    {csvBulkUpload
+                                                                        .csvErrors
+                                                                        .length >
+                                                                        0 && (
+                                                                        <span className="text-destructive ml-2">
+                                                                            Please
+                                                                            fix
+                                                                            errors
+                                                                            before
+                                                                            proceeding.
+                                                                        </span>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Upload Results Summary */}
+                                                        {csvBulkUpload.uploadResults && (
+                                                            <div className="space-y-3">
+                                                                <Label className="text-base font-semibold">
+                                                                    Upload
+                                                                    Results
+                                                                </Label>
+
+                                                                {/* Success Summary */}
+                                                                {csvBulkUpload
+                                                                    .uploadResults
+                                                                    .successful
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <CheckCircle className="h-5 w-5 text-green-600" />
+                                                                            <span className="font-medium text-green-800">
+                                                                                Successfully
+                                                                                Created:{' '}
+                                                                                {
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .successful
+                                                                                        .length
+                                                                                }{' '}
+                                                                                users
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-green-700">
+                                                                            {csvBulkUpload.uploadResults.successful
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        user: CsvUserRow,
+                                                                                        index: number,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    user.name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-green-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    user.email
+                                                                                                }
+
+                                                                                                )
+                                                                                            </span>
+                                                                                            <Badge
+                                                                                                variant="secondary"
+                                                                                                className="text-xs"
+                                                                                            >
+                                                                                                {
+                                                                                                    user.role
+                                                                                                }
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
+                                                                                .successful
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-green-600">
+                                                                                    ...and{' '}
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .successful
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Failure Summary */}
+                                                                {csvBulkUpload
+                                                                    .uploadResults
+                                                                    .failed
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <UserMinus className="h-5 w-5 text-red-600" />
+                                                                            <span className="font-medium text-red-800">
+                                                                                Failed
+                                                                                to
+                                                                                Create:{' '}
+                                                                                {
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .failed
+                                                                                        .length
+                                                                                }{' '}
+                                                                                users
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-red-700">
+                                                                            {csvBulkUpload.uploadResults.failed
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        failure: {
+                                                                                            row: CsvUserRow;
+                                                                                            error: string;
+                                                                                            rowNumber: number;
+                                                                                        },
+                                                                                        index: number,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .row
+                                                                                                        .name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-red-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .row
+                                                                                                        .email
+                                                                                                }
+
+                                                                                                )
+                                                                                            </span>
+                                                                                            <Badge
+                                                                                                variant="secondary"
+                                                                                                className="text-xs"
+                                                                                            >
+                                                                                                Row{' '}
+                                                                                                {
+                                                                                                    failure.rowNumber
+                                                                                                }
+                                                                                            </Badge>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
+                                                                                .failed
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-red-600">
+                                                                                    ...and{' '}
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .failed
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="mt-2 text-xs text-red-600">
+                                                                            <strong>
+                                                                                Tip:
+                                                                            </strong>{' '}
+                                                                            Fix
+                                                                            the
+                                                                            errors
+                                                                            above
+                                                                            and
+                                                                            try
+                                                                            uploading
+                                                                            again.
+                                                                            Only
+                                                                            failed
+                                                                            rows
+                                                                            will
+                                                                            be
+                                                                            processed.
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            onClick={() => {
+                                                                setIsCreateUserDialogOpen(
+                                                                    false,
+                                                                );
+                                                                csvBulkUpload.resetBulkUploadState();
+                                                            }}
+                                                            disabled={
+                                                                csvBulkUpload.isUploadingBulk
+                                                            }
+                                                            className="w-full sm:w-auto"
+                                                        >
+                                                            Cancel
+                                                        </Button>
+
+                                                        {/* Retry Failed Rows Button */}
+                                                        {csvBulkUpload.uploadResults &&
+                                                            csvBulkUpload
+                                                                .uploadResults
+                                                                .failed.length >
+                                                                0 && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        // Clear results and errors to allow retry
+                                                                        csvBulkUpload.setUploadResults(
+                                                                            null,
+                                                                        );
+                                                                        csvBulkUpload.setCsvErrors(
+                                                                            [],
+                                                                        );
+                                                                    }}
+                                                                    disabled={
+                                                                        csvBulkUpload.isUploadingBulk
+                                                                    }
+                                                                    className="w-full sm:w-auto"
+                                                                >
+                                                                    Retry Failed
+                                                                    Rows
+                                                                </Button>
                                                             )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <DialogFooter>
-                                                    <Button
-                                                        type="submit"
-                                                        disabled={
-                                                            createUserMutation.isPending
-                                                        }
-                                                    >
-                                                        {createUserMutation.isPending
-                                                            ? 'Creating...'
-                                                            : 'Create User'}
-                                                    </Button>
-                                                </DialogFooter>
-                                            </form>
+
+                                                        <Button
+                                                            onClick={
+                                                                csvBulkUpload.handleBulkUpload
+                                                            }
+                                                            disabled={
+                                                                csvBulkUpload.isUploadingBulk ||
+                                                                csvBulkUpload
+                                                                    .csvData
+                                                                    .length ===
+                                                                    0 ||
+                                                                csvBulkUpload
+                                                                    .csvErrors
+                                                                    .length > 0
+                                                            }
+                                                            className="w-full sm:w-auto"
+                                                        >
+                                                            {csvBulkUpload.isUploadingBulk ? (
+                                                                <>
+                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                                    Creating{' '}
+                                                                    {
+                                                                        csvBulkUpload
+                                                                            .csvData
+                                                                            .length
+                                                                    }{' '}
+                                                                    users...
+                                                                </>
+                                                            ) : csvBulkUpload.uploadResults &&
+                                                              csvBulkUpload
+                                                                  .uploadResults
+                                                                  .failed
+                                                                  .length >
+                                                                  0 ? (
+                                                                `Retry ${csvBulkUpload.csvData.length} Failed Users`
+                                                            ) : (
+                                                                `Create ${csvBulkUpload.csvData.length} Users`
+                                                            )}
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </TabsContent>
+                                            </Tabs>
                                         </DialogContent>
                                     </Dialog>
                                 </div>
