@@ -892,7 +892,7 @@ export default function PostsPage() {
                 <div className="w-full shrink-0 md:w-80 lg:w-96">
                     <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
                         {/* Your Communities Section */}
-                        {userCommunities.length > 0 ? (
+                        {userCommunities.length > 0 && (
                             <div className="overflow-hidden rounded-md border">
                                 <div className="bg-muted/50 px-4 py-3">
                                     <span className="font-medium">
@@ -977,134 +977,6 @@ export default function PostsPage() {
                                     </div>
                                 )}
                             </div>
-                        ) : (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <Building className="h-5 w-5" />
-                                        Organization
-                                    </CardTitle>
-                                    <CardDescription>
-                                        Your organization information
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    {userProfileQuery.isLoading ? (
-                                        <div className="space-y-3">
-                                            <Skeleton className="h-6 w-40" />
-                                            <Skeleton className="h-5 w-32" />
-                                            <Skeleton className="h-5 w-36" />
-                                        </div>
-                                    ) : userProfileQuery.data ? (
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="h-12 w-12">
-                                                    <AvatarFallback className="bg-primary/10">
-                                                        {getInitials(
-                                                            userProfileQuery
-                                                                .data
-                                                                ?.orgName ||
-                                                                'OR',
-                                                        )}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <h3 className="font-medium">
-                                                        {userProfileQuery.data
-                                                            ?.orgName ||
-                                                            'Organization'}
-                                                    </h3>
-                                                    <p className="text-muted-foreground text-sm">
-                                                        Organization
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="pt-2">
-                                                <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                                                    <Mail className="h-4 w-4" />
-                                                    {
-                                                        userProfileQuery.data
-                                                            ?.email
-                                                    }
-                                                </p>
-                                                <p className="text-muted-foreground mt-1 flex items-center gap-2 text-sm">
-                                                    <CalendarDays className="h-4 w-4" />
-                                                    Joined as member
-                                                </p>
-                                            </div>
-                                            {/* Admin emails section */}
-                                            {admins && admins.length > 0 && (
-                                                <div className="mt-3 border-t pt-2">
-                                                    <h4 className="mb-2 flex items-center text-sm font-medium">
-                                                        <ShieldCheck className="mr-1.5 h-4 w-4" />
-                                                        Admin Contacts
-                                                    </h4>
-                                                    <div className="space-y-1">
-                                                        {admins.map((admin) => (
-                                                            <p
-                                                                key={admin.id}
-                                                                className="text-muted-foreground flex items-center gap-2 text-xs"
-                                                            >
-                                                                <Mail className="h-3 w-3" />
-                                                                {admin.email}
-                                                            </p>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground">
-                                            Unable to load organization details
-                                        </p>
-                                    )}
-                                </CardContent>
-                                <CardHeader className="border-t pt-4">
-                                    <CardTitle className="text-lg">
-                                        Statistics
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {statsQuery.isLoading ? (
-                                        <div className="space-y-2">
-                                            <Skeleton className="h-5 w-28" />
-                                            <Skeleton className="h-5 w-24" />
-                                            <Skeleton className="h-5 w-32" />
-                                        </div>
-                                    ) : stats ? (
-                                        <div className="space-y-2">
-                                            <p className="flex items-center justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Members:
-                                                </span>
-                                                <span className="font-medium">
-                                                    {stats.totalUsers}
-                                                </span>
-                                            </p>
-                                            <p className="flex items-center justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Posts:
-                                                </span>
-                                                <span className="font-medium">
-                                                    {stats.totalPosts}
-                                                </span>
-                                            </p>
-                                            <p className="flex items-center justify-between">
-                                                <span className="text-muted-foreground">
-                                                    Communities:
-                                                </span>
-                                                <span className="font-medium">
-                                                    {stats.totalCommunities}
-                                                </span>
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground">
-                                            Unable to load statistics
-                                        </p>
-                                    )}
-                                </CardContent>
-                            </Card>
                         )}
                     </div>
                 </div>
