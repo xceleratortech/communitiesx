@@ -56,8 +56,6 @@ import {
     CheckCircle,
     UserMinus,
     Search,
-    Users,
-    Building,
     MoreHorizontal,
     ChevronLeft,
     ChevronRight,
@@ -68,7 +66,6 @@ import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import debounce from 'lodash/debounce';
-import Papa from 'papaparse';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -80,6 +77,10 @@ import {
 import { InviteUserDialog } from '@/components/invite-user-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { BadgeManagement } from '@/components/badge-management';
+import {
+    useCsvBulkUpload,
+    CsvValidationRule,
+} from '@/hooks/use-csv-bulk-upload';
 
 type User = {
     id: string;
@@ -109,6 +110,7 @@ interface CsvUserRow {
     password: string;
     role: 'admin' | 'user';
     orgname: string;
+    [key: string]: string; // Index signature to satisfy CsvRow constraint
 }
 
 export default function AdminDashboard() {
@@ -131,17 +133,67 @@ export default function AdminDashboard() {
         orgId: '',
     });
 
-    // State for bulk CSV upload
-    const [csvFile, setCsvFile] = useState<File | null>(null);
-    const [csvData, setCsvData] = useState<CsvUserRow[]>([]);
-    const [isProcessingCsv, setIsProcessingCsv] = useState(false);
-    const [isUploadingBulk, setIsUploadingBulk] = useState(false);
-    const [csvErrors, setCsvErrors] = useState<string[]>([]);
-    const [csvPreview, setCsvPreview] = useState<CsvUserRow[]>([]);
-    const [uploadResults, setUploadResults] = useState<{
-        successful: CsvUserRow[];
-        failed: Array<{ user: CsvUserRow; error: string; row: number }>;
-    } | null>(null);
+    // CSV validation rules for admin users
+    const csvValidationRules: CsvValidationRule[] = [
+        { field: 'name', required: true },
+        { field: 'email', required: true },
+        { field: 'password', required: true, minLength: 8 },
+        {
+            field: 'role',
+            required: true,
+            allowedValues: ['admin', 'user'],
+            defaultValue: 'user',
+        },
+        { field: 'orgname', required: true },
+    ];
+
+    // CSV bulk upload hook
+    const csvBulkUpload = useCsvBulkUpload<CsvUserRow>({
+        requiredHeaders: ['name', 'email', 'password', 'role', 'orgname'],
+        validationRules: csvValidationRules,
+        processRow: async (user) => {
+            if (!orgs) {
+                throw new Error('No organizations available');
+            }
+
+            // Find organization by name (case-insensitive)
+            const org = orgs.find((org) => {
+                const orgName = org.name.trim();
+                const csvOrgName = user.orgname.trim();
+                return orgName.toLowerCase() === csvOrgName.toLowerCase();
+            });
+
+            if (!org) {
+                const availableOrgs = orgs.map((o) => o.name).join(', ');
+                throw new Error(
+                    `Organization "${user.orgname}" not found. ` +
+                        `Available organizations: ${availableOrgs}. ` +
+                        `Please check the organization name spelling.`,
+                );
+            }
+
+            await createUserMutation.mutateAsync({
+                name: user.name,
+                email: user.email,
+                password: user.password,
+                role: user.role,
+                orgId: org.id,
+            });
+        },
+        onSuccess: (successCount) => {
+            toast.success(`Successfully created ${successCount} users`);
+            setIsCreateUserDialogOpen(false);
+            csvBulkUpload.resetBulkUploadState();
+            utils.admin.getUsersPaginated.invalidate();
+        },
+        onComplete: (results) => {
+            // Handle partial success - update CSV data to show only failed rows
+            if (results.successful.length > 0 && results.failed.length > 0) {
+                csvBulkUpload.setCsvData(results.failed.map((f) => f.row));
+                csvBulkUpload.setCsvPreview(results.failed.map((f) => f.row));
+            }
+        },
+    });
 
     // State for create org dialog
     const [isCreateOrgDialogOpen, setIsCreateOrgDialogOpen] = useState(false);
@@ -265,282 +317,6 @@ export default function AdminDashboard() {
             utils.admin.getUsersPaginated.invalidate();
         },
     });
-
-    // CSV processing functions
-    const processCsvFile = (file: File) => {
-        setIsProcessingCsv(true);
-        setCsvErrors([]);
-
-        Papa.parse(file, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-                try {
-                    const { data, errors } = results;
-
-                    // Check for parsing errors
-                    if (errors.length > 0) {
-                        const parsingErrors = errors.map((error) => {
-                            const rowNumber =
-                                error.row !== undefined
-                                    ? error.row + 1
-                                    : 'unknown';
-                            return `Row ${rowNumber}: ${error.message}`;
-                        });
-                        setCsvErrors(parsingErrors);
-                        setIsProcessingCsv(false);
-                        return;
-                    }
-
-                    // Validate required headers
-                    const requiredHeaders = [
-                        'name',
-                        'email',
-                        'password',
-                        'role',
-                        'orgname',
-                    ];
-
-                    const headers = Object.keys(data[0] || {}).map((h) =>
-                        h.trim().toLowerCase(),
-                    );
-                    const missingHeaders = requiredHeaders.filter(
-                        (h) => !headers.includes(h),
-                    );
-
-                    if (missingHeaders.length > 0) {
-                        setCsvErrors([
-                            `Missing required headers: ${missingHeaders.join(', ')}`,
-                        ]);
-                        setIsProcessingCsv(false);
-                        return;
-                    }
-
-                    // Process and validate each row
-                    const processedData = data.map(
-                        (row: any, index: number): CsvUserRow => {
-                            // Normalize headers and values
-                            const name = (row.name || row.Name || '').trim();
-                            const email = (row.email || row.Email || '').trim();
-                            const password = (
-                                row.password ||
-                                row.Password ||
-                                ''
-                            ).trim();
-                            const role = (row.role || row.Role || 'user')
-                                .trim()
-                                .toLowerCase();
-                            const orgname = (
-                                row.orgname ||
-                                row.orgname ||
-                                row.OrgName ||
-                                ''
-                            ).trim();
-
-                            // Validate row data
-                            if (!name || !email || !password || !orgname) {
-                                setCsvErrors((prev) => [
-                                    ...prev,
-                                    `Row ${index + 2}: Missing name, email, password, or orgname`,
-                                ]);
-                            }
-
-                            if (password && password.length < 8) {
-                                setCsvErrors((prev) => [
-                                    ...prev,
-                                    `Row ${index + 2}: Password must be at least 8 characters long`,
-                                ]);
-                            }
-
-                            // Validate and normalize role
-                            const normalizedRole: 'admin' | 'user' = [
-                                'admin',
-                                'user',
-                            ].includes(role)
-                                ? (role as 'admin' | 'user')
-                                : 'user';
-
-                            return {
-                                name,
-                                email,
-                                password,
-                                role: normalizedRole,
-                                orgname,
-                            };
-                        },
-                    );
-
-                    setCsvData(processedData);
-                    setCsvPreview(processedData.slice(0, 5)); // Show first 5 rows as preview
-                    setIsProcessingCsv(false);
-                } catch (error) {
-                    setCsvErrors([
-                        'Failed to process CSV file. Please check the format.',
-                    ]);
-                    setIsProcessingCsv(false);
-                }
-            },
-            error: (error) => {
-                setCsvErrors([`Failed to parse CSV file: ${error.message}`]);
-                setIsProcessingCsv(false);
-            },
-        });
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-                toast.error('Please select a valid CSV file');
-                return;
-            }
-            setCsvFile(file);
-            processCsvFile(file);
-        }
-    };
-
-    const handleBulkUpload = async () => {
-        if (csvData.length === 0 || !orgs) return;
-
-        setIsUploadingBulk(true);
-
-        const results = {
-            successful: [] as CsvUserRow[],
-            failed: [] as Array<{
-                user: CsvUserRow;
-                error: string;
-                row: number;
-            }>,
-        };
-
-        try {
-            // Process all rows and collect results
-            for (let i = 0; i < csvData.length; i++) {
-                const user = csvData[i];
-                const rowNumber = i + 1;
-
-                try {
-                    // Find organization by name (case-insensitive)
-                    const org = orgs.find((org) => {
-                        const orgName = org.name.trim();
-                        const csvOrgName = user.orgname.trim();
-
-                        // Simple case-insensitive match
-                        return (
-                            orgName.toLowerCase() === csvOrgName.toLowerCase()
-                        );
-                    });
-
-                    if (!org) {
-                        // Provide helpful error message with available organization names
-                        const availableOrgs = orgs
-                            .map((o) => o.name)
-                            .join(', ');
-                        throw new Error(
-                            `Organization "${user.orgname}" not found. ` +
-                                `Available organizations: ${availableOrgs}. ` +
-                                `Please check the organization name spelling.`,
-                        );
-                    }
-
-                    await createUserMutation.mutateAsync({
-                        name: user.name,
-                        email: user.email,
-                        password: user.password,
-                        role: user.role,
-                        orgId: org.id,
-                    });
-
-                    // Success - add to successful results
-                    results.successful.push(user);
-                } catch (error: any) {
-                    // Failure - add to failed results with error details
-                    results.failed.push({
-                        user,
-                        error: error.message || 'Unknown error occurred',
-                        row: rowNumber,
-                    });
-                }
-            }
-
-            // Store results for display
-            setUploadResults(results);
-
-            // Process results and show appropriate messages
-            if (results.successful.length > 0 && results.failed.length === 0) {
-                // All successful
-                toast.success(
-                    `Successfully created ${results.successful.length} users`,
-                );
-                setIsCreateUserDialogOpen(false);
-                resetBulkUploadState();
-                setUploadResults(null);
-            } else if (
-                results.successful.length > 0 &&
-                results.failed.length > 0
-            ) {
-                // Partial success
-                toast.success(
-                    `Created ${results.successful.length} users successfully`,
-                    {
-                        description: `${results.failed.length} users failed. Check the error details below.`,
-                    },
-                );
-
-                // Update CSV data to only show failed rows for easy fixing
-                setCsvData(results.failed.map((f) => f.user));
-                setCsvPreview(results.failed.map((f) => f.user));
-
-                // Show detailed error summary
-                const errorMessages = results.failed.map(
-                    (f) => `Row ${f.row}: ${f.error}`,
-                );
-                setCsvErrors(errorMessages);
-            } else {
-                // All failed
-                toast.error('Failed to create any users', {
-                    description:
-                        'All rows had errors. Please fix the issues and try again.',
-                });
-
-                // Show all errors
-                const errorMessages = results.failed.map(
-                    (f) => `Row ${f.row}: ${f.error}`,
-                );
-                setCsvErrors(errorMessages);
-            }
-
-            // Refresh the users list if any users were created
-            if (results.successful.length > 0) {
-                utils.admin.getUsersPaginated.invalidate();
-            }
-        } catch (error: any) {
-            // This catch block handles any unexpected errors in the overall process
-            toast.error('An unexpected error occurred during bulk upload', {
-                description: error.message,
-            });
-        } finally {
-            setIsUploadingBulk(false);
-        }
-    };
-
-    const resetBulkUploadState = () => {
-        setCsvFile(null);
-        setCsvData([]);
-        setCsvPreview([]);
-        setCsvErrors([]);
-        setUploadResults(null);
-    };
-
-    // Helper function to get detailed error context
-    const getErrorContext = (user: CsvUserRow, orgs: Organization[]) => {
-        const availableOrgs = orgs.map((o) => o.name).join(', ');
-        return {
-            availableOrgs,
-            userEmail: user.email,
-            userOrg: user.orgname,
-        };
-    };
 
     const createOrgMutation = trpc.admin.createOrg.useMutation({
         onSuccess: () => {
@@ -749,7 +525,7 @@ export default function AdminDashboard() {
                                                     role: 'user',
                                                     orgId: '',
                                                 });
-                                                resetBulkUploadState();
+                                                csvBulkUpload.resetBulkUploadState();
                                             }
                                         }}
                                     >
@@ -979,7 +755,7 @@ export default function AdminDashboard() {
                                                                 type="file"
                                                                 accept=".csv"
                                                                 onChange={
-                                                                    handleFileChange
+                                                                    csvBulkUpload.handleFileChange
                                                                 }
                                                             />
                                                             <p className="text-muted-foreground text-xs">
@@ -1086,7 +862,8 @@ export default function AdminDashboard() {
                                                         </div>
 
                                                         {/* CSV Preview */}
-                                                        {csvPreview.length >
+                                                        {csvBulkUpload
+                                                            .csvPreview.length >
                                                             0 && (
                                                             <div className="space-y-2">
                                                                 <Label>
@@ -1097,10 +874,10 @@ export default function AdminDashboard() {
                                                                 <div className="max-h-48 overflow-auto rounded-md border p-2 sm:p-3">
                                                                     {/* Mobile: Card Layout */}
                                                                     <div className="block space-y-3 sm:hidden">
-                                                                        {csvPreview.map(
+                                                                        {csvBulkUpload.csvPreview.map(
                                                                             (
-                                                                                row,
-                                                                                index,
+                                                                                row: CsvUserRow,
+                                                                                index: number,
                                                                             ) => (
                                                                                 <div
                                                                                     key={
@@ -1179,10 +956,10 @@ export default function AdminDashboard() {
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
-                                                                            {csvPreview.map(
+                                                                            {csvBulkUpload.csvPreview.map(
                                                                                 (
-                                                                                    row,
-                                                                                    index,
+                                                                                    row: CsvUserRow,
+                                                                                    index: number,
                                                                                 ) => (
                                                                                     <tr
                                                                                         key={
@@ -1225,17 +1002,17 @@ export default function AdminDashboard() {
                                                         )}
 
                                                         {/* Errors */}
-                                                        {csvErrors.length >
-                                                            0 && (
+                                                        {csvBulkUpload.csvErrors
+                                                            .length > 0 && (
                                                             <div className="space-y-2">
                                                                 <Label className="text-destructive">
                                                                     Errors Found
                                                                 </Label>
                                                                 <div className="border-destructive/20 bg-destructive/5 max-h-32 overflow-y-auto rounded-md border p-3">
-                                                                    {csvErrors.map(
+                                                                    {csvBulkUpload.csvErrors.map(
                                                                         (
-                                                                            error,
-                                                                            index,
+                                                                            error: string,
+                                                                            index: number,
                                                                         ) => (
                                                                             <p
                                                                                 key={
@@ -1254,17 +1031,22 @@ export default function AdminDashboard() {
                                                         )}
 
                                                         {/* Summary */}
-                                                        {csvData.length > 0 && (
+                                                        {csvBulkUpload.csvData
+                                                            .length > 0 && (
                                                             <div className="bg-muted/50 rounded-md p-3">
                                                                 <p className="text-sm">
                                                                     <strong>
                                                                         {
-                                                                            csvData.length
+                                                                            csvBulkUpload
+                                                                                .csvData
+                                                                                .length
                                                                         }
                                                                     </strong>{' '}
                                                                     users will
                                                                     be created.
-                                                                    {csvErrors.length >
+                                                                    {csvBulkUpload
+                                                                        .csvErrors
+                                                                        .length >
                                                                         0 && (
                                                                         <span className="text-destructive ml-2">
                                                                             Please
@@ -1279,7 +1061,7 @@ export default function AdminDashboard() {
                                                         )}
 
                                                         {/* Upload Results Summary */}
-                                                        {uploadResults && (
+                                                        {csvBulkUpload.uploadResults && (
                                                             <div className="space-y-3">
                                                                 <Label className="text-base font-semibold">
                                                                     Upload
@@ -1287,7 +1069,8 @@ export default function AdminDashboard() {
                                                                 </Label>
 
                                                                 {/* Success Summary */}
-                                                                {uploadResults
+                                                                {csvBulkUpload
+                                                                    .uploadResults
                                                                     .successful
                                                                     .length >
                                                                     0 && (
@@ -1298,7 +1081,8 @@ export default function AdminDashboard() {
                                                                                 Successfully
                                                                                 Created:{' '}
                                                                                 {
-                                                                                    uploadResults
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
                                                                                         .successful
                                                                                         .length
                                                                                 }{' '}
@@ -1306,15 +1090,15 @@ export default function AdminDashboard() {
                                                                             </span>
                                                                         </div>
                                                                         <div className="space-y-1 text-sm text-green-700">
-                                                                            {uploadResults.successful
+                                                                            {csvBulkUpload.uploadResults.successful
                                                                                 .slice(
                                                                                     0,
                                                                                     3,
                                                                                 )
                                                                                 .map(
                                                                                     (
-                                                                                        user,
-                                                                                        index,
+                                                                                        user: CsvUserRow,
+                                                                                        index: number,
                                                                                     ) => (
                                                                                         <div
                                                                                             key={
@@ -1332,6 +1116,7 @@ export default function AdminDashboard() {
                                                                                                 {
                                                                                                     user.email
                                                                                                 }
+
                                                                                                 )
                                                                                             </span>
                                                                                             <Badge
@@ -1345,13 +1130,15 @@ export default function AdminDashboard() {
                                                                                         </div>
                                                                                     ),
                                                                                 )}
-                                                                            {uploadResults
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
                                                                                 .successful
                                                                                 .length >
                                                                                 3 && (
                                                                                 <p className="text-xs text-green-600">
                                                                                     ...and{' '}
-                                                                                    {uploadResults
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
                                                                                         .successful
                                                                                         .length -
                                                                                         3}{' '}
@@ -1363,7 +1150,8 @@ export default function AdminDashboard() {
                                                                 )}
 
                                                                 {/* Failure Summary */}
-                                                                {uploadResults
+                                                                {csvBulkUpload
+                                                                    .uploadResults
                                                                     .failed
                                                                     .length >
                                                                     0 && (
@@ -1375,7 +1163,8 @@ export default function AdminDashboard() {
                                                                                 to
                                                                                 Create:{' '}
                                                                                 {
-                                                                                    uploadResults
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
                                                                                         .failed
                                                                                         .length
                                                                                 }{' '}
@@ -1383,15 +1172,19 @@ export default function AdminDashboard() {
                                                                             </span>
                                                                         </div>
                                                                         <div className="space-y-1 text-sm text-red-700">
-                                                                            {uploadResults.failed
+                                                                            {csvBulkUpload.uploadResults.failed
                                                                                 .slice(
                                                                                     0,
                                                                                     3,
                                                                                 )
                                                                                 .map(
                                                                                     (
-                                                                                        failure,
-                                                                                        index,
+                                                                                        failure: {
+                                                                                            row: CsvUserRow;
+                                                                                            error: string;
+                                                                                            rowNumber: number;
+                                                                                        },
+                                                                                        index: number,
                                                                                     ) => (
                                                                                         <div
                                                                                             key={
@@ -1402,7 +1195,7 @@ export default function AdminDashboard() {
                                                                                             <span className="font-medium">
                                                                                                 {
                                                                                                     failure
-                                                                                                        .user
+                                                                                                        .row
                                                                                                         .name
                                                                                                 }
                                                                                             </span>
@@ -1410,9 +1203,10 @@ export default function AdminDashboard() {
                                                                                                 (
                                                                                                 {
                                                                                                     failure
-                                                                                                        .user
+                                                                                                        .row
                                                                                                         .email
                                                                                                 }
+
                                                                                                 )
                                                                                             </span>
                                                                                             <Badge
@@ -1421,19 +1215,21 @@ export default function AdminDashboard() {
                                                                                             >
                                                                                                 Row{' '}
                                                                                                 {
-                                                                                                    failure.row
+                                                                                                    failure.rowNumber
                                                                                                 }
                                                                                             </Badge>
                                                                                         </div>
                                                                                     ),
                                                                                 )}
-                                                                            {uploadResults
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
                                                                                 .failed
                                                                                 .length >
                                                                                 3 && (
                                                                                 <p className="text-xs text-red-600">
                                                                                     ...and{' '}
-                                                                                    {uploadResults
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
                                                                                         .failed
                                                                                         .length -
                                                                                         3}{' '}
@@ -1474,10 +1270,10 @@ export default function AdminDashboard() {
                                                                 setIsCreateUserDialogOpen(
                                                                     false,
                                                                 );
-                                                                resetBulkUploadState();
+                                                                csvBulkUpload.resetBulkUploadState();
                                                             }}
                                                             disabled={
-                                                                isUploadingBulk
+                                                                csvBulkUpload.isUploadingBulk
                                                             }
                                                             className="w-full sm:w-auto"
                                                         >
@@ -1485,23 +1281,25 @@ export default function AdminDashboard() {
                                                         </Button>
 
                                                         {/* Retry Failed Rows Button */}
-                                                        {uploadResults &&
-                                                            uploadResults.failed
-                                                                .length > 0 && (
+                                                        {csvBulkUpload.uploadResults &&
+                                                            csvBulkUpload
+                                                                .uploadResults
+                                                                .failed.length >
+                                                                0 && (
                                                                 <Button
                                                                     type="button"
                                                                     variant="outline"
                                                                     onClick={() => {
                                                                         // Clear results and errors to allow retry
-                                                                        setUploadResults(
+                                                                        csvBulkUpload.setUploadResults(
                                                                             null,
                                                                         );
-                                                                        setCsvErrors(
+                                                                        csvBulkUpload.setCsvErrors(
                                                                             [],
                                                                         );
                                                                     }}
                                                                     disabled={
-                                                                        isUploadingBulk
+                                                                        csvBulkUpload.isUploadingBulk
                                                                     }
                                                                     className="w-full sm:w-auto"
                                                                 >
@@ -1512,34 +1310,40 @@ export default function AdminDashboard() {
 
                                                         <Button
                                                             onClick={
-                                                                handleBulkUpload
+                                                                csvBulkUpload.handleBulkUpload
                                                             }
                                                             disabled={
-                                                                isUploadingBulk ||
-                                                                csvData.length ===
+                                                                csvBulkUpload.isUploadingBulk ||
+                                                                csvBulkUpload
+                                                                    .csvData
+                                                                    .length ===
                                                                     0 ||
-                                                                csvErrors.length >
-                                                                    0
+                                                                csvBulkUpload
+                                                                    .csvErrors
+                                                                    .length > 0
                                                             }
                                                             className="w-full sm:w-auto"
                                                         >
-                                                            {isUploadingBulk ? (
+                                                            {csvBulkUpload.isUploadingBulk ? (
                                                                 <>
                                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                                     Creating{' '}
                                                                     {
-                                                                        csvData.length
+                                                                        csvBulkUpload
+                                                                            .csvData
+                                                                            .length
                                                                     }{' '}
                                                                     users...
                                                                 </>
-                                                            ) : uploadResults &&
-                                                              uploadResults
+                                                            ) : csvBulkUpload.uploadResults &&
+                                                              csvBulkUpload
+                                                                  .uploadResults
                                                                   .failed
                                                                   .length >
                                                                   0 ? (
-                                                                `Retry ${csvData.length} Failed Users`
+                                                                `Retry ${csvBulkUpload.csvData.length} Failed Users`
                                                             ) : (
-                                                                `Create ${csvData.length} Users`
+                                                                `Create ${csvBulkUpload.csvData.length} Users`
                                                             )}
                                                         </Button>
                                                     </DialogFooter>

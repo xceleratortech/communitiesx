@@ -30,6 +30,7 @@ import {
     ChevronsLeft,
     ChevronsRight,
     Plus,
+    UserMinus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -48,6 +49,10 @@ import { BadgeManagement } from '@/components/badge-management';
 import { Loading } from '@/components/ui/loading';
 import { Label } from '@/components/ui/label';
 import {
+    useCsvBulkUpload,
+    CsvValidationRule,
+} from '@/hooks/use-csv-bulk-upload';
+import {
     Select,
     SelectContent,
     SelectItem,
@@ -64,6 +69,14 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import debounce from 'lodash/debounce';
+
+interface OrgMemberCsvRow {
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+    [key: string]: string; // Index signature to satisfy CsvRow constraint
+}
 
 export default function OrganizationCommunitiesPage() {
     const params = useParams();
@@ -88,14 +101,53 @@ export default function OrganizationCommunitiesPage() {
     });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
 
-    // State for bulk CSV upload (now handled within the Create Member dialog)
-    const [csvFile, setCsvFile] = useState<File | null>(null);
-    const [csvData, setCsvData] = useState<any[]>([]);
-    const [isProcessingCsv, setIsProcessingCsv] = useState(false);
-    const [isUploadingBulk, setIsUploadingBulk] = useState(false);
-    const [csvErrors, setCsvErrors] = useState<string[]>([]);
-    const [csvPreview, setCsvPreview] = useState<any[]>([]);
-    const fileInputRef = useRef<HTMLInputElement>(null);
+    // CSV validation rules for organization members
+    const csvValidationRules: CsvValidationRule[] = [
+        { field: 'name', required: true },
+        { field: 'email', required: true },
+        { field: 'password', required: true, minLength: 8 },
+        {
+            field: 'role',
+            required: true,
+            allowedValues: ['admin', 'user'],
+            defaultValue: 'user',
+        },
+    ];
+
+    // CSV bulk upload hook
+    const csvBulkUpload = useCsvBulkUpload<OrgMemberCsvRow>({
+        requiredHeaders: ['name', 'email', 'password', 'role'],
+        validationRules: csvValidationRules,
+        processRow: async (row) => {
+            if (!orgData?.id) {
+                throw new Error('Organization ID not found');
+            }
+            await createUserMutation.mutateAsync({
+                name: row.name,
+                email: row.email,
+                password: row.password,
+                role: row.role.toLowerCase() as 'admin' | 'user',
+                orgId: orgData.id,
+            });
+        },
+        onSuccess: (successCount) => {
+            toast.success(`Successfully created ${successCount} members`);
+            setIsCreateUserDialogOpen(false);
+            csvBulkUpload.resetBulkUploadState();
+
+            // Refresh the members list
+            utils.organizations.getOrganizationMembersPaginated.invalidate({
+                orgId: orgData?.id || '',
+            });
+        },
+        onComplete: (results) => {
+            // Handle partial success - update CSV data to show only failed rows
+            if (results.successful.length > 0 && results.failed.length > 0) {
+                csvBulkUpload.setCsvData(results.failed.map((f) => f.row));
+                csvBulkUpload.setCsvPreview(results.failed.map((f) => f.row));
+            }
+        },
+    });
 
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
@@ -268,152 +320,6 @@ export default function OrganizationCommunitiesPage() {
             });
         } finally {
             setIsCreatingUser(false);
-        }
-    };
-
-    // CSV processing functions
-    const processCsvFile = (file: File) => {
-        setIsProcessingCsv(true);
-        setCsvErrors([]);
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const csv = e.target?.result as string;
-                const lines = csv.split('\n');
-                const headers = lines[0]
-                    .split(',')
-                    .map((h) => h.trim().toLowerCase());
-
-                // Validate required headers
-                const requiredHeaders = ['name', 'email', 'password', 'role'];
-                const missingHeaders = requiredHeaders.filter(
-                    (h) => !headers.includes(h),
-                );
-
-                if (missingHeaders.length > 0) {
-                    setCsvErrors([
-                        `Missing required headers: ${missingHeaders.join(', ')}`,
-                    ]);
-                    setIsProcessingCsv(false);
-                    return;
-                }
-
-                const data = lines
-                    .slice(1)
-                    .filter((line) => line.trim())
-                    .map((line, index) => {
-                        const values = line.split(',').map((v) => v.trim());
-                        const row: any = {};
-
-                        headers.forEach((header, i) => {
-                            row[header] = values[i] || '';
-                        });
-
-                        // Validate row data
-                        if (!row.name || !row.email || !row.password) {
-                            setCsvErrors((prev) => [
-                                ...prev,
-                                `Row ${index + 2}: Missing name, email, or password`,
-                            ]);
-                        }
-
-                        // Validate password length
-                        if (row.password && row.password.length < 8) {
-                            setCsvErrors((prev) => [
-                                ...prev,
-                                `Row ${index + 2}: Password must be at least 8 characters long`,
-                            ]);
-                        }
-
-                        if (
-                            row.role &&
-                            !['admin', 'user'].includes(row.role.toLowerCase())
-                        ) {
-                            row.role = 'user'; // Default to user if invalid role
-                        } else if (!row.role) {
-                            row.role = 'user';
-                        }
-
-                        return row;
-                    });
-
-                setCsvData(data);
-                setCsvPreview(data.slice(0, 5)); // Show first 5 rows as preview
-                setIsProcessingCsv(false);
-            } catch (error) {
-                setCsvErrors([
-                    'Failed to process CSV file. Please check the format.',
-                ]);
-                setIsProcessingCsv(false);
-            }
-        };
-
-        reader.readAsText(file);
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
-                toast.error('Please select a valid CSV file');
-                return;
-            }
-            setCsvFile(file);
-            processCsvFile(file);
-        }
-    };
-
-    const handleBulkUpload = async () => {
-        if (!orgData?.id || csvData.length === 0) return;
-
-        setIsUploadingBulk(true);
-        try {
-            // Create users one by one
-            for (const user of csvData) {
-                await createUserMutation.mutateAsync({
-                    name: user.name,
-                    email: user.email,
-                    password: user.password,
-                    role: user.role.toLowerCase() as 'admin' | 'user',
-                    orgId: orgData.id,
-                });
-            }
-
-            toast.success(`Successfully created ${csvData.length} users`);
-            setIsCreateUserDialogOpen(false);
-            resetBulkUploadState();
-
-            // Refresh the members list
-            utils.organizations.getOrganizationMembersPaginated.invalidate({
-                orgId: orgData.id,
-            });
-        } catch (error: any) {
-            toast.error('Failed to create some users', {
-                description: error.message,
-            });
-        } finally {
-            setIsUploadingBulk(false);
-        }
-    };
-
-    const generateRandomPassword = () => {
-        const chars =
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-        let password = '';
-        for (let i = 0; i < 12; i++) {
-            password += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return password;
-    };
-
-    const resetBulkUploadState = () => {
-        setCsvFile(null);
-        setCsvData([]);
-        setCsvPreview([]);
-        setCsvErrors([]);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
         }
     };
 
@@ -632,7 +538,7 @@ export default function OrganizationCommunitiesPage() {
                                                     password: '',
                                                     role: 'user',
                                                 });
-                                                resetBulkUploadState();
+                                                csvBulkUpload.resetBulkUploadState();
                                             }
                                         }}
                                     >
@@ -825,10 +731,10 @@ export default function OrganizationCommunitiesPage() {
                                                                 type="file"
                                                                 accept=".csv"
                                                                 onChange={
-                                                                    handleFileChange
+                                                                    csvBulkUpload.handleFileChange
                                                                 }
                                                                 ref={
-                                                                    fileInputRef
+                                                                    csvBulkUpload.fileInputRef
                                                                 }
                                                             />
                                                             <p className="text-muted-foreground text-xs">
@@ -876,7 +782,8 @@ export default function OrganizationCommunitiesPage() {
                                                         </div>
 
                                                         {/* CSV Preview */}
-                                                        {csvPreview.length >
+                                                        {csvBulkUpload
+                                                            .csvPreview.length >
                                                             0 && (
                                                             <div className="space-y-2">
                                                                 <Label>
@@ -903,10 +810,10 @@ export default function OrganizationCommunitiesPage() {
                                                                             </tr>
                                                                         </thead>
                                                                         <tbody>
-                                                                            {csvPreview.map(
+                                                                            {csvBulkUpload.csvPreview.map(
                                                                                 (
-                                                                                    row,
-                                                                                    index,
+                                                                                    row: OrgMemberCsvRow,
+                                                                                    index: number,
                                                                                 ) => (
                                                                                     <tr
                                                                                         key={
@@ -944,17 +851,17 @@ export default function OrganizationCommunitiesPage() {
                                                         )}
 
                                                         {/* Errors */}
-                                                        {csvErrors.length >
-                                                            0 && (
+                                                        {csvBulkUpload.csvErrors
+                                                            .length > 0 && (
                                                             <div className="space-y-2">
                                                                 <Label className="text-destructive">
                                                                     Errors Found
                                                                 </Label>
                                                                 <div className="border-destructive/20 bg-destructive/5 max-h-32 overflow-y-auto rounded-md border p-3">
-                                                                    {csvErrors.map(
+                                                                    {csvBulkUpload.csvErrors.map(
                                                                         (
-                                                                            error,
-                                                                            index,
+                                                                            error: string,
+                                                                            index: number,
                                                                         ) => (
                                                                             <p
                                                                                 key={
@@ -973,17 +880,22 @@ export default function OrganizationCommunitiesPage() {
                                                         )}
 
                                                         {/* Summary */}
-                                                        {csvData.length > 0 && (
+                                                        {csvBulkUpload.csvData
+                                                            .length > 0 && (
                                                             <div className="bg-muted/50 rounded-md p-3">
                                                                 <p className="text-sm">
                                                                     <strong>
                                                                         {
-                                                                            csvData.length
+                                                                            csvBulkUpload
+                                                                                .csvData
+                                                                                .length
                                                                         }
                                                                     </strong>{' '}
                                                                     members will
                                                                     be created.
-                                                                    {csvErrors.length >
+                                                                    {csvBulkUpload
+                                                                        .csvErrors
+                                                                        .length >
                                                                         0 && (
                                                                         <span className="text-destructive ml-2">
                                                                             Please
@@ -996,6 +908,195 @@ export default function OrganizationCommunitiesPage() {
                                                                 </p>
                                                             </div>
                                                         )}
+
+                                                        {/* Upload Results Summary */}
+                                                        {csvBulkUpload.uploadResults && (
+                                                            <div className="space-y-3">
+                                                                <Label className="text-base font-semibold">
+                                                                    Upload
+                                                                    Results
+                                                                </Label>
+
+                                                                {/* Success Summary */}
+                                                                {csvBulkUpload
+                                                                    .uploadResults
+                                                                    .successful
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <CircleCheckBig className="h-5 w-5 text-green-600" />
+                                                                            <span className="font-medium text-green-800">
+                                                                                Successfully
+                                                                                Created:{' '}
+                                                                                {
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .successful
+                                                                                        .length
+                                                                                }{' '}
+                                                                                members
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-green-700">
+                                                                            {csvBulkUpload.uploadResults.successful
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        user,
+                                                                                        index,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    user.name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-green-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    user.email
+                                                                                                }
+                                                                                                )
+                                                                                            </span>
+                                                                                            <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
+                                                                                                {
+                                                                                                    user.role
+                                                                                                }
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
+                                                                                .successful
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-green-600">
+                                                                                    ...and{' '}
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .successful
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Failure Summary */}
+                                                                {csvBulkUpload
+                                                                    .uploadResults
+                                                                    .failed
+                                                                    .length >
+                                                                    0 && (
+                                                                    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                                                                        <div className="mb-2 flex items-center gap-2">
+                                                                            <UserMinus className="h-5 w-5 text-red-600" />
+                                                                            <span className="font-medium text-red-800">
+                                                                                Failed
+                                                                                to
+                                                                                Create:{' '}
+                                                                                {
+                                                                                    csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .failed
+                                                                                        .length
+                                                                                }{' '}
+                                                                                members
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="space-y-1 text-sm text-red-700">
+                                                                            {csvBulkUpload.uploadResults.failed
+                                                                                .slice(
+                                                                                    0,
+                                                                                    3,
+                                                                                )
+                                                                                .map(
+                                                                                    (
+                                                                                        failure,
+                                                                                        index,
+                                                                                    ) => (
+                                                                                        <div
+                                                                                            key={
+                                                                                                index
+                                                                                            }
+                                                                                            className="flex items-center gap-2"
+                                                                                        >
+                                                                                            <span className="font-medium">
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .row
+                                                                                                        .name
+                                                                                                }
+                                                                                            </span>
+                                                                                            <span className="text-red-600">
+                                                                                                (
+                                                                                                {
+                                                                                                    failure
+                                                                                                        .row
+                                                                                                        .email
+                                                                                                }
+                                                                                                )
+                                                                                            </span>
+                                                                                            <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
+                                                                                                Row{' '}
+                                                                                                {
+                                                                                                    failure.rowNumber
+                                                                                                }
+                                                                                            </span>
+                                                                                        </div>
+                                                                                    ),
+                                                                                )}
+                                                                            {csvBulkUpload
+                                                                                .uploadResults
+                                                                                .failed
+                                                                                .length >
+                                                                                3 && (
+                                                                                <p className="text-xs text-red-600">
+                                                                                    ...and{' '}
+                                                                                    {csvBulkUpload
+                                                                                        .uploadResults
+                                                                                        .failed
+                                                                                        .length -
+                                                                                        3}{' '}
+                                                                                    more
+                                                                                </p>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="mt-2 text-xs text-red-600">
+                                                                            <strong>
+                                                                                Tip:
+                                                                            </strong>{' '}
+                                                                            Fix
+                                                                            the
+                                                                            errors
+                                                                            above
+                                                                            and
+                                                                            try
+                                                                            uploading
+                                                                            again.
+                                                                            Only
+                                                                            failed
+                                                                            rows
+                                                                            will
+                                                                            be
+                                                                            processed.
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     <DialogFooter>
@@ -1006,37 +1107,72 @@ export default function OrganizationCommunitiesPage() {
                                                                 setIsCreateUserDialogOpen(
                                                                     false,
                                                                 );
-                                                                resetBulkUploadState();
+                                                                csvBulkUpload.resetBulkUploadState();
                                                             }}
                                                             disabled={
-                                                                isUploadingBulk
+                                                                csvBulkUpload.isUploadingBulk
                                                             }
                                                         >
                                                             Cancel
                                                         </Button>
+
+                                                        {/* Retry Failed Rows Button */}
+                                                        {csvBulkUpload.uploadResults &&
+                                                            csvBulkUpload
+                                                                .uploadResults
+                                                                .failed.length >
+                                                                0 && (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="outline"
+                                                                    onClick={() => {
+                                                                        // Clear results and errors to allow retry
+                                                                        csvBulkUpload.clearResults();
+                                                                    }}
+                                                                    disabled={
+                                                                        csvBulkUpload.isUploadingBulk
+                                                                    }
+                                                                >
+                                                                    Retry Failed
+                                                                    Rows
+                                                                </Button>
+                                                            )}
+
                                                         <Button
                                                             onClick={
-                                                                handleBulkUpload
+                                                                csvBulkUpload.handleBulkUpload
                                                             }
                                                             disabled={
-                                                                isUploadingBulk ||
-                                                                csvData.length ===
+                                                                csvBulkUpload.isUploadingBulk ||
+                                                                csvBulkUpload
+                                                                    .csvData
+                                                                    .length ===
                                                                     0 ||
-                                                                csvErrors.length >
-                                                                    0
+                                                                csvBulkUpload
+                                                                    .csvErrors
+                                                                    .length > 0
                                                             }
                                                         >
-                                                            {isUploadingBulk ? (
+                                                            {csvBulkUpload.isUploadingBulk ? (
                                                                 <>
                                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                                     Creating{' '}
                                                                     {
-                                                                        csvData.length
+                                                                        csvBulkUpload
+                                                                            .csvData
+                                                                            .length
                                                                     }{' '}
                                                                     members...
                                                                 </>
+                                                            ) : csvBulkUpload.uploadResults &&
+                                                              csvBulkUpload
+                                                                  .uploadResults
+                                                                  .failed
+                                                                  .length >
+                                                                  0 ? (
+                                                                `Retry ${csvBulkUpload.csvData.length} Failed Members`
                                                             ) : (
-                                                                `Create ${csvData.length} Members`
+                                                                `Create ${csvBulkUpload.csvData.length} Members`
                                                             )}
                                                         </Button>
                                                     </DialogFooter>
