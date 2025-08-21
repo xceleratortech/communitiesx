@@ -9,11 +9,23 @@ import { authClient } from '@/server/auth/client';
 
 interface OTPAuthProps {
     email: string;
+    onEmailChange: (email: string) => void;
     onBack: () => void;
     onSuccess: () => void;
 }
 
-export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
+// Email validation function
+const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+
+export function OTPAuth({
+    email,
+    onEmailChange,
+    onBack,
+    onSuccess,
+}: OTPAuthProps) {
     const [otp, setOtp] = useState('');
     const [loading, setLoading] = useState(false);
     const [sendingOTP, setSendingOTP] = useState(false);
@@ -21,6 +33,16 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
     const [otpSent, setOtpSent] = useState(false);
 
     const handleSendOTP = async () => {
+        if (!email) {
+            setError('Please enter your email address first');
+            return;
+        }
+
+        if (!isValidEmail(email)) {
+            setError('Please enter a valid email address');
+            return;
+        }
+
         setSendingOTP(true);
         setError(null);
 
@@ -81,7 +103,7 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
     return (
         <Card className="w-full">
             <CardHeader>
-                <div className="flex items-center space-x-2">
+                {/* <div className="flex items-center space-x-2">
                     <Button
                         variant="ghost"
                         size="sm"
@@ -91,14 +113,48 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <CardTitle className="text-2xl">Sign In with OTP</CardTitle>
-                </div>
+                </div> */}
                 <p className="text-muted-foreground">
-                    We'll send a 6-digit code to {email}
+                    We'll send a 6-digit code to your email
                 </p>
             </CardHeader>
             <CardContent className="space-y-4">
                 {!otpSent ? (
                     <div className="space-y-4">
+                        <div className="space-y-2">
+                            <label
+                                htmlFor="otp-email"
+                                className="text-sm font-medium"
+                            >
+                                Email Address
+                            </label>
+                            <Input
+                                id="otp-email"
+                                type="email"
+                                placeholder="name@example.com"
+                                value={email}
+                                onChange={(e) => onEmailChange(e.target.value)}
+                                required
+                                className={
+                                    email && !isValidEmail(email)
+                                        ? 'border-destructive'
+                                        : ''
+                                }
+                            />
+                            {email && (
+                                <div className="text-xs">
+                                    {isValidEmail(email) ? (
+                                        <span className="text-green-600">
+                                            ✓ Valid email address
+                                        </span>
+                                    ) : (
+                                        <span className="text-destructive">
+                                            ✗ Please enter a valid email address
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <div className="text-center">
                             <Mail className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
                             <p className="text-muted-foreground text-sm">
@@ -107,7 +163,9 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
                         </div>
                         <Button
                             onClick={handleSendOTP}
-                            disabled={sendingOTP}
+                            disabled={
+                                sendingOTP || !email || !isValidEmail(email)
+                            }
                             className="w-full"
                         >
                             {sendingOTP ? (
@@ -148,7 +206,7 @@ export function OTPAuth({ email, onBack, onSuccess }: OTPAuthProps) {
                                 required
                             />
                             <p className="text-muted-foreground text-center text-xs">
-                                Enter the 6-digit code sent to your email
+                                Enter the 6-digit code sent to {email}
                             </p>
                         </div>
 
