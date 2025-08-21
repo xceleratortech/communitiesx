@@ -5,85 +5,9 @@ import { eq } from 'drizzle-orm';
 import { getUserSession } from '../../auth/server';
 import { db } from '../../db';
 import { TRPCError } from '@trpc/server';
+import { ResumeProfileSchema as profileMetadataSchema } from '@/lib/services/resume-parser';
 
-// Schema for profile metadata validation
-const profileMetadataSchema = z.object({
-    phoneNumber: z.string().optional(),
-    location: z.string().optional(),
-    experiences: z
-        .array(
-            z.object({
-                id: z.string(),
-                title: z.string(),
-                company: z.string(),
-                location: z.string().optional(),
-                startDate: z.string(),
-                endDate: z.string().optional(),
-                description: z.string().optional(),
-                isCurrent: z.boolean().optional(),
-            }),
-        )
-        .optional(),
-    educations: z
-        .array(
-            z.object({
-                id: z.string(),
-                degree: z.string(),
-                institution: z.string(),
-                fieldOfStudy: z.string(),
-                startDate: z.string(),
-                endDate: z.string().optional(),
-                gpa: z.number().optional(),
-                description: z.string().optional(),
-            }),
-        )
-        .optional(),
-    certifications: z
-        .array(
-            z.object({
-                id: z.string(),
-                name: z.string(),
-                issuingOrganization: z.string(),
-                issueDate: z.string(),
-                expiryDate: z.string().optional(),
-                credentialId: z.string().optional(),
-                credentialUrl: z.string().optional(),
-                description: z.string().optional(),
-                industries: z.array(z.string()).optional(),
-            }),
-        )
-        .optional(),
-    skills: z
-        .array(
-            z.object({
-                id: z.string(),
-                name: z.string(),
-                level: z.enum([
-                    'beginner',
-                    'intermediate',
-                    'advanced',
-                    'expert',
-                ]),
-                category: z.string().optional(),
-                yearsOfExperience: z.number().optional(),
-            }),
-        )
-        .optional(),
-    achievements: z
-        .array(
-            z.object({
-                id: z.string(),
-                title: z.string(),
-                description: z.string().optional(),
-                date: z.string(),
-                category: z.string().optional(),
-                evidence: z.string().optional(),
-            }),
-        )
-        .optional(),
-    interests: z.array(z.string()).optional(),
-    industries: z.array(z.string()).optional(),
-});
+// Using imported ResumeProfileSchema as profileMetadataSchema for consistency
 
 export const profilesRouter = router({
     // Get current user's profile
