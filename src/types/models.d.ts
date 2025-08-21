@@ -1,4 +1,6 @@
 // Shared model types for the app
+import type { z } from 'zod';
+import type { ResumeProfileSchema } from '../lib/services/resume-parser';
 
 export interface Community {
     id: number;
@@ -48,78 +50,20 @@ export interface CommunityAllowedOrg {
     addedBy: string;
 }
 
-// User Profile Types
-export interface UserProfileMetadata {
-    // Basic contact information
-    phoneNumber?: string;
-    location?: string;
+// User Profile Types - Derived from Zod schema for single source of truth
+export type UserProfileMetadata = z.infer<typeof ResumeProfileSchema>;
 
-    // Professional information
-    experiences?: Experience[];
-    educations?: Education[];
-    certifications?: Certification[];
-    skills?: Skill[];
-    achievements?: Achievement[];
-
-    // Personal information
-    interests?: string[];
-
-    // Professional information
-    industries?: string[];
-
-    // Additional fields for future extensibility
-    [key: string]: any;
-}
-
-export interface Experience {
-    id: string;
-    title: string;
-    company: string;
-    location?: string;
-    startDate: string; // ISO date string
-    endDate?: string; // ISO date string, null for current position
-    description?: string;
-    isCurrent?: boolean;
-}
-
-export interface Education {
-    id: string;
-    degree: string;
-    institution: string;
-    fieldOfStudy: string;
-    startDate: string; // ISO date string
-    endDate?: string; // ISO date string
-    gpa?: number;
-    description?: string;
-}
-
-export interface Certification {
-    id: string;
-    name: string;
-    issuingOrganization: string;
-    issueDate: string; // ISO date string
-    expiryDate?: string; // ISO date string
-    credentialId?: string;
-    credentialUrl?: string;
-    description?: string;
-}
-
-export interface Skill {
-    id: string;
-    name: string;
-    level: 'beginner' | 'intermediate' | 'advanced' | 'expert';
-    category?: string; // e.g., 'programming', 'design', 'management'
-    yearsOfExperience?: number;
-}
-
-export interface Achievement {
-    id: string;
-    title: string;
-    description?: string;
-    date: string; // ISO date string
-    category?: string; // e.g., 'work', 'academic', 'personal'
-    evidence?: string; // URL or reference to proof
-}
+export type Experience = NonNullable<
+    UserProfileMetadata['experiences']
+>[number];
+export type Education = NonNullable<UserProfileMetadata['educations']>[number];
+export type Certification = NonNullable<
+    UserProfileMetadata['certifications']
+>[number];
+export type Skill = NonNullable<UserProfileMetadata['skills']>[number];
+export type Achievement = NonNullable<
+    UserProfileMetadata['achievements']
+>[number];
 
 // Helper types for profile operations
 export type CreateProfileData = Partial<UserProfileMetadata>;
