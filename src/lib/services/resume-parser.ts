@@ -31,7 +31,7 @@ export const ResumeProfileSchema = z.object({
                 fieldOfStudy: z.string(),
                 startDate: z.string(),
                 endDate: z.string().optional(),
-                gpa: z.number().optional().nullable(),
+                gpa: z.number().optional(),
                 description: z.string().optional(),
             }),
         )
@@ -62,7 +62,7 @@ export const ResumeProfileSchema = z.object({
                     'expert',
                 ]),
                 category: z.string().optional(),
-                yearsOfExperience: z.number().optional().nullable(),
+                yearsOfExperience: z.number().optional(),
             }),
         )
         .optional(),
