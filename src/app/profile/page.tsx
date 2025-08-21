@@ -694,7 +694,10 @@ export default function ProfilePage() {
                                                     placeholder="Enter your phone number"
                                                     className="text-sm"
                                                     {...field}
-                                                    value={field.value || ''}
+                                                    value={
+                                                        (field.value as string) ||
+                                                        ''
+                                                    }
                                                 />
                                             </FormControl>
                                             <FormMessage />
@@ -715,7 +718,10 @@ export default function ProfilePage() {
                                                     placeholder="e.g., Bangalore, India"
                                                     className="text-sm"
                                                     {...field}
-                                                    value={field.value || ''}
+                                                    value={
+                                                        (field.value as string) ||
+                                                        ''
+                                                    }
                                                 />
                                             </FormControl>
                                             <FormMessage />
@@ -778,7 +784,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                     />
@@ -802,7 +808,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                     />
@@ -830,7 +836,7 @@ export default function ProfilePage() {
                                                             }) => (
                                                                 <MonthYearPicker
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         null
                                                                     }
                                                                     onChange={
@@ -859,7 +865,7 @@ export default function ProfilePage() {
                                                                 }) => (
                                                                     <MonthYearPicker
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             null
                                                                         }
                                                                         onChange={
@@ -885,7 +891,7 @@ export default function ProfilePage() {
                                                                 <FormControl>
                                                                     <Checkbox
                                                                         checked={
-                                                                            field.value ||
+                                                                            (field.value as boolean) ||
                                                                             false
                                                                         }
                                                                         onCheckedChange={(
@@ -939,7 +945,7 @@ export default function ProfilePage() {
                                                                     className="h-20 resize-none text-sm"
                                                                     {...field}
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         ''
                                                                     }
                                                                 />
@@ -1008,7 +1014,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                     />
@@ -1032,7 +1038,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                     />
@@ -1060,7 +1066,7 @@ export default function ProfilePage() {
                                                             }) => (
                                                                 <MonthYearPicker
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         null
                                                                     }
                                                                     onChange={
@@ -1072,75 +1078,36 @@ export default function ProfilePage() {
                                                         />
                                                     </div>
 
-                                                    {!form.watch(
-                                                        `educations.${index}.current`,
-                                                    ) && (
-                                                        <div className="flex flex-col">
-                                                            <Label className="text-muted-foreground text-xs font-medium">
-                                                                End Date
-                                                            </Label>
-                                                            <Controller
-                                                                control={
-                                                                    form.control
-                                                                }
-                                                                name={`educations.${index}.endDate`}
-                                                                render={({
-                                                                    field,
-                                                                }) => (
-                                                                    <MonthYearPicker
-                                                                        value={
-                                                                            field.value ||
-                                                                            null
-                                                                        }
-                                                                        onChange={
-                                                                            field.onChange
-                                                                        }
-                                                                        placeholder="End"
-                                                                        disabled={
-                                                                            !form.watch(
-                                                                                `educations.${index}.startDate`,
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                )}
-                                                            />
-                                                        </div>
-                                                    )}
-
-                                                    <FormField<UserProfileMetadata>
-                                                        control={form.control}
-                                                        name={`educations.${index}.current`}
-                                                        render={({ field }) => (
-                                                            <FormItem className="flex items-center gap-2 pb-1">
-                                                                <FormControl>
-                                                                    <Checkbox
-                                                                        checked={
-                                                                            field.value ||
-                                                                            false
-                                                                        }
-                                                                        onCheckedChange={(
-                                                                            checked,
-                                                                        ) => {
-                                                                            field.onChange(
-                                                                                checked,
-                                                                            );
-                                                                            if (
-                                                                                checked
-                                                                            ) {
-                                                                                form.setValue(
-                                                                                    `educations.${index}.endDate`,
-                                                                                    undefined,
-                                                                                );
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                </FormControl>
-                                                                <FormLabel className="cursor-pointer text-xs font-medium">
-                                                                    Present
-                                                                </FormLabel>
-                                                            </FormItem>
-                                                        )}
-                                                    />
+                                                    <div className="flex flex-col">
+                                                        <Label className="text-muted-foreground text-xs font-medium">
+                                                            End Date
+                                                        </Label>
+                                                        <Controller
+                                                            control={
+                                                                form.control
+                                                            }
+                                                            name={`educations.${index}.endDate`}
+                                                            render={({
+                                                                field,
+                                                            }) => (
+                                                                <MonthYearPicker
+                                                                    value={
+                                                                        (field.value as string) ||
+                                                                        null
+                                                                    }
+                                                                    onChange={
+                                                                        field.onChange
+                                                                    }
+                                                                    placeholder="End"
+                                                                    disabled={
+                                                                        !form.watch(
+                                                                            `educations.${index}.startDate`,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            )}
+                                                        />
+                                                    </div>
                                                 </div>
 
                                                 {/* <Button
@@ -1169,7 +1136,7 @@ export default function ProfilePage() {
                                                                     className="h-20 resize-none text-sm"
                                                                     {...field}
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         ''
                                                                     }
                                                                 />
@@ -1410,7 +1377,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                     />
@@ -1434,7 +1401,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                         placeholder="e.g., Professional, Academic, Personal"
@@ -1468,7 +1435,7 @@ export default function ProfilePage() {
                                                                         }) => (
                                                                             <MonthYearPicker
                                                                                 value={
-                                                                                    field.value ||
+                                                                                    (field.value as string) ||
                                                                                     null
                                                                                 }
                                                                                 onChange={
@@ -1511,7 +1478,7 @@ export default function ProfilePage() {
                                                                     className="h-20 resize-none text-sm"
                                                                     {...field}
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         ''
                                                                     }
                                                                 />
@@ -1538,7 +1505,7 @@ export default function ProfilePage() {
                                                                     className="h-8 text-sm"
                                                                     {...field}
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         ''
                                                                     }
                                                                 />
@@ -1608,7 +1575,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                         placeholder="e.g., AWS Certified Solutions Architect"
@@ -1634,7 +1601,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                         placeholder="e.g., Amazon Web Services"
@@ -1663,7 +1630,7 @@ export default function ProfilePage() {
                                                             }) => (
                                                                 <MonthYearPicker
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         null
                                                                     }
                                                                     onChange={
@@ -1689,7 +1656,7 @@ export default function ProfilePage() {
                                                             }) => (
                                                                 <MonthYearPicker
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         null
                                                                     }
                                                                     onChange={
@@ -1730,7 +1697,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                         placeholder="e.g., AWS-12345"
@@ -1757,7 +1724,7 @@ export default function ProfilePage() {
                                                                         className="h-8 text-sm"
                                                                         {...field}
                                                                         value={
-                                                                            field.value ||
+                                                                            (field.value as string) ||
                                                                             ''
                                                                         }
                                                                         placeholder="https://verify.certificate.com"
@@ -1786,7 +1753,7 @@ export default function ProfilePage() {
                                                                     className="h-20 resize-none text-sm"
                                                                     {...field}
                                                                     value={
-                                                                        field.value ||
+                                                                        (field.value as string) ||
                                                                         ''
                                                                     }
                                                                 />
