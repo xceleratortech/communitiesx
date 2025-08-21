@@ -7,6 +7,7 @@ import {
     boolean,
     primaryKey,
     varchar,
+    jsonb,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -598,6 +599,18 @@ export const userBadgeAssignments = pgTable(
     },
 );
 
+// User profiles schema
+export const userProfiles = pgTable('user_profiles', {
+    id: serial('id').primaryKey(),
+    userId: text('user_id')
+        .notNull()
+        .unique()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    metadata: jsonb('metadata').notNull().default('{}'), // JSON data containing profile information
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
 // Badge relations
 export const userBadgesRelations = relations(userBadges, ({ one, many }) => ({
     organization: one(orgs, {
@@ -631,3 +644,11 @@ export const userBadgeAssignmentsRelations = relations(
         }),
     }),
 );
+
+// User profiles relations
+export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
+    user: one(users, {
+        fields: [userProfiles.userId],
+        references: [users.id],
+    }),
+}));

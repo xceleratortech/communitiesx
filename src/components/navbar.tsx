@@ -303,6 +303,21 @@ export function Navbar() {
                                                         <NotificationButton variant="popover" />
 
                                                         <Link
+                                                            href="/profile"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            onClick={() =>
+                                                                setPopoverOpen(
+                                                                    false,
+                                                                )
+                                                            }
+                                                        >
+                                                            <User className="h-4 w-4" />
+                                                            <span>
+                                                                My Profile
+                                                            </span>
+                                                        </Link>
+
+                                                        <Link
                                                             href="/organization"
                                                             className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
                                                             onClick={() =>
@@ -486,6 +501,16 @@ export function Navbar() {
                                                             <Building className="h-4 w-4" />
                                                             <span>
                                                                 My Organization
+                                                            </span>
+                                                        </Link>
+
+                                                        <Link
+                                                            href="/profile"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                        >
+                                                            <User className="h-4 w-4" />
+                                                            <span>
+                                                                My Profile
                                                             </span>
                                                         </Link>
 

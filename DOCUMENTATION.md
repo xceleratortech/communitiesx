@@ -441,6 +441,20 @@ The project enforces code quality standards with ESLint and Prettier:
 - Generate migrations with `pnpm db:generate`
 - Apply migrations with `pnpm db:push`
 
+#### Recent Schema Changes
+
+**User Profiles Table (user_profiles)**
+
+- **Table:** `user_profiles`
+- **Purpose:** Stores user profile information in a flexible JSON structure
+- **Key Fields:**
+    - `id`: Primary key (serial)
+    - `userId`: Foreign key to users table (unique)
+    - `metadata`: JSONB column containing profile data (phone, experiences, education, skills, etc.)
+    - `createdAt` & `updatedAt`: Timestamps
+- **Data Type:** Uses `jsonb` for optimal JSON storage and querying in PostgreSQL
+- **Migration:** Migration `0025_famous_redwing.sql` converts metadata from `text` to `jsonb`
+
 ## Deployment Considerations
 
 1. **Database Setup**:
