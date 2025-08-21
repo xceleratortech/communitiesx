@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import { config } from 'dotenv';
+import { z } from 'zod';
 
 // Load environment variables from .env file
 config();
@@ -25,6 +25,19 @@ const clientSchema = z.object({
 });
 
 function getServerEnv() {
+    // Skip validation during build time or when explicitly disabled
+    const isBuildTime =
+        process.env.SKIP_ENV_VALIDATION === 'true' ||
+        process.argv.includes('build') ||
+        process.env.CI === 'true';
+
+    if (isBuildTime) {
+        // Return mock values during build time to avoid type errors
+        return {
+            NODE_ENV: 'production' as const,
+            DATABASE_URL: 'postgresql://mock:mock@localhost:5432/mock',
+        };
+    }
     const parsed = serverSchema.safeParse(process.env);
     if (!parsed.success) {
         console.error(
@@ -52,7 +65,7 @@ function getClientEnv() {
 }
 
 export const env = {
-    ...getServerEnv(),
+    ...(typeof window === 'undefined' ? getServerEnv() : {}),
     ...(typeof window !== 'undefined' ? getClientEnv() : {}),
 };
 
