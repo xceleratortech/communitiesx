@@ -66,14 +66,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Info } from 'lucide-react';
 import Link from 'next/link';
-import type {
-    UserProfileMetadata,
-    Experience,
-    Education,
-    Certification,
-    Skill,
-    Achievement,
-} from '@/types/models';
+import type { UserProfileMetadata } from '@/types/models';
 
 import { cn } from '@/lib/utils';
 
@@ -918,16 +911,6 @@ export default function ProfilePage() {
                                                         )}
                                                     />
                                                 </div>
-
-                                                {/* <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveExperience(index)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2"
-                        >
-                          Remove
-                        </Button> */}
                                             </div>
 
                                             <div>
@@ -1451,16 +1434,6 @@ export default function ProfilePage() {
                                                         )}
                                                     />
                                                 </div>
-
-                                                {/* <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveAchievement(index)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2"
-                        >
-                          Remove
-                        </Button> */}
                                             </div>
 
                                             <div>
@@ -1668,16 +1641,6 @@ export default function ProfilePage() {
                                                         />
                                                     </div>
                                                 </div>
-
-                                                {/* <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleRemoveCertification(index)}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 px-2"
-                        >
-                          Remove
-                        </Button> */}
                                             </div>
 
                                             <div className="flex flex-col gap-3 sm:flex-row">
