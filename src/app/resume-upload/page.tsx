@@ -29,6 +29,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
+import { type ResumeProfile } from '@/lib/services/resume-parser';
 
 export default function ResumeUploadPage() {
     const router = useRouter();
@@ -37,7 +38,7 @@ export default function ResumeUploadPage() {
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [step, setStep] = useState<'upload' | 'preview'>('upload');
-    const [parsedData, setParsedData] = useState<any>(null);
+    const [parsedData, setParsedData] = useState<ResumeProfile | null>(null);
     const [selectedFields, setSelectedFields] = useState({
         phoneNumber: true,
         location: true,
@@ -222,7 +223,7 @@ export default function ResumeUploadPage() {
                         </div>
 
                         {selectedFields.phoneNumber &&
-                            parsedData.phoneNumber && (
+                            parsedData?.phoneNumber && (
                                 <div className="bg-muted rounded-md p-3">
                                     <span className="text-sm">
                                         {parsedData.phoneNumber}
@@ -244,7 +245,7 @@ export default function ResumeUploadPage() {
                             </h2>
                         </div>
 
-                        {selectedFields.location && parsedData.location && (
+                        {selectedFields.location && parsedData?.location && (
                             <div className="bg-muted rounded-md p-3">
                                 <span className="text-sm">
                                     {parsedData.location}
@@ -269,10 +270,15 @@ export default function ResumeUploadPage() {
                         </div>
 
                         {selectedFields.experiences &&
-                            parsedData.experiences && (
+                            parsedData?.experiences && (
                                 <div className="space-y-3">
                                     {parsedData.experiences.map(
-                                        (exp: any, index: number) => (
+                                        (
+                                            exp: NonNullable<
+                                                ResumeProfile['experiences']
+                                            >[0],
+                                            index: number,
+                                        ) => (
                                             <Card
                                                 key={exp.id || index}
                                                 className="border p-4"
@@ -333,49 +339,59 @@ export default function ResumeUploadPage() {
                             </h2>
                         </div>
 
-                        {selectedFields.educations && parsedData.educations && (
-                            <div className="space-y-3">
-                                {parsedData.educations.map(
-                                    (edu: any, index: number) => (
-                                        <Card
-                                            key={edu.id || index}
-                                            className="border p-4"
-                                        >
-                                            <CardContent className="p-0">
-                                                <div className="space-y-2">
-                                                    <h4 className="font-medium">
-                                                        {edu.degree}
-                                                    </h4>
-                                                    <p className="text-muted-foreground text-sm">
-                                                        {edu.institution}
-                                                    </p>
-                                                    {edu.fieldOfStudy && (
-                                                        <p className="text-muted-foreground text-xs">
-                                                            {edu.fieldOfStudy}
+                        {selectedFields.educations &&
+                            parsedData?.educations && (
+                                <div className="space-y-3">
+                                    {parsedData.educations.map(
+                                        (
+                                            edu: NonNullable<
+                                                ResumeProfile['educations']
+                                            >[0],
+                                            index: number,
+                                        ) => (
+                                            <Card
+                                                key={edu.id || index}
+                                                className="border p-4"
+                                            >
+                                                <CardContent className="p-0">
+                                                    <div className="space-y-2">
+                                                        <h4 className="font-medium">
+                                                            {edu.degree}
+                                                        </h4>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            {edu.institution}
                                                         </p>
-                                                    )}
-                                                    <div className="text-muted-foreground text-xs">
-                                                        {edu.startDate} -{' '}
-                                                        {edu.endDate ||
-                                                            'Ongoing'}
+                                                        {edu.fieldOfStudy && (
+                                                            <p className="text-muted-foreground text-xs">
+                                                                {
+                                                                    edu.fieldOfStudy
+                                                                }
+                                                            </p>
+                                                        )}
+                                                        <div className="text-muted-foreground text-xs">
+                                                            {edu.startDate} -{' '}
+                                                            {edu.endDate ||
+                                                                'Ongoing'}
+                                                        </div>
+                                                        {edu.gpa && (
+                                                            <p className="text-muted-foreground text-xs">
+                                                                GPA: {edu.gpa}
+                                                            </p>
+                                                        )}
+                                                        {edu.description && (
+                                                            <p className="text-sm">
+                                                                {
+                                                                    edu.description
+                                                                }
+                                                            </p>
+                                                        )}
                                                     </div>
-                                                    {edu.gpa && (
-                                                        <p className="text-muted-foreground text-xs">
-                                                            GPA: {edu.gpa}
-                                                        </p>
-                                                    )}
-                                                    {edu.description && (
-                                                        <p className="text-sm">
-                                                            {edu.description}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    ),
-                                )}
-                            </div>
-                        )}
+                                                </CardContent>
+                                            </Card>
+                                        ),
+                                    )}
+                                </div>
+                            )}
                     </section>
 
                     {/* Skills Section */}
@@ -391,9 +407,9 @@ export default function ResumeUploadPage() {
                             </h2>
                         </div>
 
-                        {selectedFields.skills && parsedData.skills && (
+                        {selectedFields.skills && parsedData?.skills && (
                             <div className="flex flex-wrap gap-2">
-                                {parsedData.skills.map(
+                                {parsedData?.skills.map(
                                     (skill: any, index: number) => (
                                         <Badge
                                             key={skill.id || index}
@@ -429,7 +445,7 @@ export default function ResumeUploadPage() {
                         </div>
 
                         {selectedFields.certifications &&
-                            parsedData.certifications && (
+                            parsedData?.certifications && (
                                 <div className="space-y-3">
                                     {parsedData.certifications.map(
                                         (cert: any, index: number) => (
@@ -485,7 +501,7 @@ export default function ResumeUploadPage() {
                         </div>
 
                         {selectedFields.achievements &&
-                            parsedData.achievements && (
+                            parsedData?.achievements && (
                                 <div className="space-y-3">
                                     {parsedData.achievements.map(
                                         (achievement: any, index: number) => (
@@ -530,7 +546,7 @@ export default function ResumeUploadPage() {
                             </h2>
                         </div>
 
-                        {selectedFields.interests && parsedData.interests && (
+                        {selectedFields.interests && parsedData?.interests && (
                             <div className="flex flex-wrap gap-2">
                                 {parsedData.interests.map(
                                     (interest: string, index: number) => (
@@ -558,17 +574,21 @@ export default function ResumeUploadPage() {
                             </h2>
                         </div>
 
-                        {selectedFields.industries && parsedData.industries && (
-                            <div className="flex flex-wrap gap-2">
-                                {parsedData.industries.map(
-                                    (industry: string, index: number) => (
-                                        <Badge key={index} variant="outline">
-                                            {industry}
-                                        </Badge>
-                                    ),
-                                )}
-                            </div>
-                        )}
+                        {selectedFields.industries &&
+                            parsedData?.industries && (
+                                <div className="flex flex-wrap gap-2">
+                                    {parsedData.industries.map(
+                                        (industry: string, index: number) => (
+                                            <Badge
+                                                key={index}
+                                                variant="outline"
+                                            >
+                                                {industry}
+                                            </Badge>
+                                        ),
+                                    )}
+                                </div>
+                            )}
                     </section>
                 </div>
 
