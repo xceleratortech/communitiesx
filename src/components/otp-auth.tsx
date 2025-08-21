@@ -14,6 +14,12 @@ interface OTPAuthProps {
     onSuccess: () => void;
 }
 
+// Email validation function
+const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+
 export function OTPAuth({
     email,
     onEmailChange,
@@ -25,12 +31,6 @@ export function OTPAuth({
     const [sendingOTP, setSendingOTP] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [otpSent, setOtpSent] = useState(false);
-
-    // Email validation function
-    const isValidEmail = (email: string): boolean => {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        return emailRegex.test(email);
-    };
 
     const handleSendOTP = async () => {
         if (!email) {
