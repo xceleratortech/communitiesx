@@ -400,6 +400,7 @@ export default function ProfilePage() {
         defaultValues: {
             phoneNumber: '',
             location: '',
+            linkedinUsername: '',
             experiences: [],
             educations: [],
             certifications: [],
@@ -673,7 +674,19 @@ export default function ProfilePage() {
                             <h2 className="text-lg font-medium">
                                 Basic Information
                             </h2>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">
+                                        Name
+                                    </Label>
+                                    <Input
+                                        placeholder="Your name"
+                                        className="text-sm"
+                                        value={userProfile?.userName || ''}
+                                        disabled
+                                    />
+                                </div>
+
                                 <FormField<UserProfileMetadata>
                                     control={form.control}
                                     name="phoneNumber"
@@ -709,6 +722,43 @@ export default function ProfilePage() {
                                             <FormControl>
                                                 <Input
                                                     placeholder="e.g., Bangalore, India"
+                                                    className="text-sm"
+                                                    {...field}
+                                                    value={
+                                                        (field.value as string) ||
+                                                        ''
+                                                    }
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">
+                                        Email
+                                    </Label>
+                                    <Input
+                                        placeholder="Your email"
+                                        className="text-sm"
+                                        value={userProfile?.userEmail || ''}
+                                        disabled
+                                    />
+                                </div>
+                                <FormField<UserProfileMetadata>
+                                    control={form.control}
+                                    name="linkedinUsername"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-sm font-medium">
+                                                LinkedIn Username
+                                            </FormLabel>
+                                            <FormControl>
+                                                <Input
+                                                    placeholder="e.g., johndoe or linkedin.com/in/johndoe"
                                                     className="text-sm"
                                                     {...field}
                                                     value={
