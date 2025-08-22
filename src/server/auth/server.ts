@@ -1,16 +1,22 @@
+import { sendEmail } from '@/lib/email';
+import {
+    createOTPEmail,
+    createResetPasswordEmail,
+} from '@/lib/email-templates';
+import { env } from '@/lib/env';
+import { db, getUser } from '@/server/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { admin, customSession, emailOTP } from 'better-auth/plugins';
-import { sendEmail } from '@/lib/email';
-import {
-    createVerificationEmail,
-    createResetPasswordEmail,
-    createOTPEmail,
-} from '@/lib/email-templates';
-import { db, getUser } from '@/server/db';
 
-if (!process.env.DATABASE_URL) {
+// Skip validation during build time
+const isBuildTime =
+    process.env.SKIP_ENV_VALIDATION === 'true' ||
+    process.argv.includes('build') ||
+    process.env.CI === 'true';
+
+if (!isBuildTime && !env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
 }
 
