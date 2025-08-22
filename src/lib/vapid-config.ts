@@ -24,7 +24,7 @@ export function ensureVapidConfigured(): boolean {
 
     try {
         webpush.setVapidDetails(
-            'mailto:reachmrniranjan@gmail.com',
+            'mailto:it@xcelerator.co.in',
             vapidPublic,
             vapidPrivate,
         );
