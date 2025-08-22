@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, publicProcedure } from '../trpc';
 import { userProfiles } from '../../db/schema';
+import { users } from '../../db/auth-schema';
 import { eq } from 'drizzle-orm';
 import { getUserSession } from '../../auth/server';
 import { db } from '../../db';
@@ -20,8 +21,17 @@ export const profilesRouter = router({
         }
 
         const [profile] = await db
-            .select()
+            .select({
+                id: userProfiles.id,
+                userId: userProfiles.userId,
+                metadata: userProfiles.metadata,
+                createdAt: userProfiles.createdAt,
+                updatedAt: userProfiles.updatedAt,
+                userName: users.name,
+                userEmail: users.email,
+            })
             .from(userProfiles)
+            .leftJoin(users, eq(userProfiles.userId, users.id))
             .where(eq(userProfiles.userId, ctx.session.user.id));
 
         if (!profile) {
