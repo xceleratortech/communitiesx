@@ -8,6 +8,7 @@ import { pdfToText } from 'pdf-ts';
 export const ResumeProfileSchema = z.object({
     phoneNumber: z.string().optional(),
     location: z.string().optional(),
+    linkedinUsername: z.string().optional(),
     experiences: z
         .array(
             z.object({
