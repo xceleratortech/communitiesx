@@ -1,4 +1,5 @@
 import webpush from 'web-push';
+import { ensureVapidConfigured } from './vapid-config';
 import { db } from '@/server/db';
 import {
     pushSubscriptions,
@@ -19,12 +20,6 @@ import { eq, and, inArray } from 'drizzle-orm';
  * Users can opt-out per community via notification preferences
  */
 
-webpush.setVapidDetails(
-    'mailto:reachmrniranjan@gmail.com',
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
-);
-
 export interface PushSubscriptionData {
     endpoint: string;
     p256dh: string;
@@ -39,11 +34,8 @@ export async function sendCommunityPostNotification(
     postId: number,
     authorId: string, // Add authorId parameter to exclude post creator
 ): Promise<void> {
-    // Validate environment
-    const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-    if (!vapidPublic || !vapidPrivate) {
-        console.error('VAPID keys missing!');
+    // Ensure VAPID is configured
+    if (!ensureVapidConfigured()) {
         return;
     }
 

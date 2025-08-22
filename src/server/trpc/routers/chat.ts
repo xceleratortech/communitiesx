@@ -22,14 +22,7 @@ import {
     inArray,
 } from 'drizzle-orm';
 
-import webpush from 'web-push';
 import { sendChatNotification } from '@/lib/push-notifications';
-
-webpush.setVapidDetails(
-    'mailto:reachmrniranjan@gmail.com',
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
-);
 
 export const chatRouter = router({
     // Get all chat threads for the current user

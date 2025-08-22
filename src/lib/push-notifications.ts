@@ -1,10 +1,5 @@
 import webpush from 'web-push';
-
-webpush.setVapidDetails(
-    'mailto:reachmrniranjan@gmail.com',
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!,
-);
+import { ensureVapidConfigured } from './vapid-config';
 
 export interface PushSubscriptionData {
     endpoint: string;
@@ -18,11 +13,8 @@ export async function sendChatNotification(
     messageContent: string,
     threadId?: string,
 ): Promise<void> {
-    // Validate environment
-    const vapidPublic = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    const vapidPrivate = process.env.VAPID_PRIVATE_KEY;
-    if (!vapidPublic || !vapidPrivate) {
-        console.error('VAPID keys missing!');
+    // Ensure VAPID is configured
+    if (!ensureVapidConfigured()) {
         return;
     }
 
