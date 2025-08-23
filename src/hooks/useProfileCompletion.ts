@@ -14,7 +14,7 @@ export function useProfileCompletion() {
 
     // Only fetch profile data if user is from the specific organization and not a super admin or org admin
     const shouldCheckProfile =
-        session?.user?.orgId === 'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+        session?.user?.orgId === process.env.NEXT_PUBLIC_ORG_ID &&
         session?.user?.appRole !== 'admin' &&
         session?.user?.role !== 'admin';
 

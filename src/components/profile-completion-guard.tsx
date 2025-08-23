@@ -19,9 +19,7 @@ export function ProfileCompletionGuard({
 
     // Memoize the organization and role check to avoid unnecessary recalculations
     const isTargetOrg = useMemo(() => {
-        return (
-            session?.user?.orgId === 'org-935fb015-1621-4514-afcf-8cf8c759ec27'
-        );
+        return session?.user?.orgId === process.env.NEXT_PUBLIC_ORG_ID;
     }, [session?.user?.orgId]);
 
     const isSuperAdmin = useMemo(() => {
