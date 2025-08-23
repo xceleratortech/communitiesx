@@ -4,6 +4,8 @@ import { users, accounts, verifications, orgs } from '@/server/db/auth-schema';
 import { nanoid } from 'nanoid';
 import { hashPassword } from 'better-auth/crypto';
 import { eq } from 'drizzle-orm';
+import { sendEmail } from '@/lib/email';
+import { createWelcomeEmail } from '@/lib/email-templates';
 
 export async function POST(request: Request) {
     try {
@@ -115,6 +117,22 @@ export async function POST(request: Request) {
             createdAt: now,
             updatedAt: now,
         });
+
+        // Send welcome email
+        try {
+            const welcomeEmail = createWelcomeEmail(
+                `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/login`,
+            );
+            await sendEmail({
+                to: newUser.email,
+                subject: welcomeEmail.subject,
+                html: welcomeEmail.html,
+            });
+            console.log(`Welcome email sent to ${newUser.email}`);
+        } catch (emailError) {
+            console.error('Failed to send welcome email:', emailError);
+            // Don't fail the registration if email fails
+        }
 
         // Return success
         return NextResponse.json({
