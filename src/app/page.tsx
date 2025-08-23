@@ -4,12 +4,14 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
-import { useSession } from '@/server/auth/client';
+import { useTypedSession } from '@/server/auth/client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useProfileCompletion } from '@/hooks/useProfileCompletion';
 
 export default function Home() {
-    const { data: session } = useSession();
+    const { data: session } = useTypedSession();
+    const { isProfileIncomplete } = useProfileCompletion();
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
 
@@ -20,9 +22,20 @@ export default function Home() {
     // Redirect logged-in users away from the landing page
     useEffect(() => {
         if (session) {
-            router.replace('/posts');
+            // Check if user needs to complete profile
+            if (
+                session.user.orgId ===
+                    'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                session.user.appRole !== 'admin' &&
+                session?.user?.role !== 'admin' &&
+                isProfileIncomplete
+            ) {
+                router.replace('/profile');
+            } else {
+                router.replace('/posts');
+            }
         }
-    }, [session, router]);
+    }, [session, router, isProfileIncomplete]);
 
     return (
         <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden pt-14 text-center">

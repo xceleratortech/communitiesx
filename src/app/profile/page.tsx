@@ -69,6 +69,8 @@ import Link from 'next/link';
 import type { UserProfileMetadata } from '@/types/models';
 
 import { cn } from '@/lib/utils';
+import { ProfileCompletionBanner } from '@/components/ui/profile-completion-banner';
+import { useTypedSession } from '@/server/auth/client';
 
 // Industries list
 const industries = [
@@ -372,6 +374,7 @@ const MonthYearPicker = ({
 
 export default function ProfilePage() {
     const router = useRouter();
+    const { data: session } = useTypedSession();
     const [skillInput, setSkillInput] = useState('');
     const [interestInput, setInterestInput] = useState('');
     const [displaySkills, setDisplaySkills] = useState<string[]>([]);
@@ -499,6 +502,7 @@ export default function ProfilePage() {
             title: '',
             company: '',
             location: '',
+            website: '',
             startDate: '',
             endDate: '',
             description: '',
@@ -574,6 +578,41 @@ export default function ProfilePage() {
     const onSubmit = async (data: UserProfileMetadata) => {
         setHasAttemptedSave(true);
 
+        // Check if user is from the specific organization and validate requirements (exclude super admins)
+        if (
+            session?.user?.orgId ===
+                'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+            session?.user?.appRole !== 'admin' &&
+            session?.user?.role !== 'admin'
+        ) {
+            const hasPhoneNumber = !!data.phoneNumber?.trim();
+            const hasLocation = !!data.location?.trim();
+            const hasLinkedIn = !!data.linkedinUsername?.trim();
+            const hasIndustries = !!(
+                data.industries &&
+                Array.isArray(data.industries) &&
+                data.industries.length > 0
+            );
+            const hasPresentExperience = !!(
+                data.experiences &&
+                Array.isArray(data.experiences) &&
+                data.experiences.some((exp) => exp.isCurrent === true)
+            );
+
+            if (
+                !hasPhoneNumber ||
+                !hasLocation ||
+                !hasLinkedIn ||
+                !hasIndustries ||
+                !hasPresentExperience
+            ) {
+                toast.error(
+                    'Please complete all required fields before saving',
+                );
+                return;
+            }
+        }
+
         try {
             await upsertProfile.mutateAsync(data);
         } catch (error) {
@@ -634,6 +673,9 @@ export default function ProfilePage() {
 
     return (
         <div className="mx-auto max-w-4xl space-y-4 p-4">
+            {/* Profile Completion Banner */}
+            <ProfileCompletionBanner />
+
             {/* Resume Upload Banner */}
             <div className="border-muted-foreground/15 bg-muted/5 mb-2 flex items-center justify-between rounded-lg border border-dashed px-3 py-2">
                 <div className="flex items-center gap-2">
@@ -682,7 +724,11 @@ export default function ProfilePage() {
                                     <Input
                                         placeholder="Your name"
                                         className="text-sm"
-                                        value={userProfile?.userName || ''}
+                                        value={
+                                            userProfile?.userName ||
+                                            session?.user?.name ||
+                                            ''
+                                        }
                                         disabled
                                     />
                                 </div>
@@ -694,6 +740,16 @@ export default function ProfilePage() {
                                         <FormItem>
                                             <FormLabel className="text-sm font-medium">
                                                 Phone Number
+                                                {session?.user?.orgId ===
+                                                    'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                                                    session?.user?.appRole !==
+                                                        'admin' &&
+                                                    session?.user?.role !==
+                                                        'admin' && (
+                                                        <span className="ml-1 text-red-500">
+                                                            *
+                                                        </span>
+                                                    )}
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
@@ -718,6 +774,16 @@ export default function ProfilePage() {
                                         <FormItem>
                                             <FormLabel className="text-sm font-medium">
                                                 Location
+                                                {session?.user?.orgId ===
+                                                    'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                                                    session?.user?.appRole !==
+                                                        'admin' &&
+                                                    session?.user?.role !==
+                                                        'admin' && (
+                                                        <span className="ml-1 text-red-500">
+                                                            *
+                                                        </span>
+                                                    )}
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
@@ -744,7 +810,11 @@ export default function ProfilePage() {
                                     <Input
                                         placeholder="Your email"
                                         className="text-sm"
-                                        value={userProfile?.userEmail || ''}
+                                        value={
+                                            userProfile?.userEmail ||
+                                            session?.user?.email ||
+                                            ''
+                                        }
                                         disabled
                                     />
                                 </div>
@@ -755,6 +825,16 @@ export default function ProfilePage() {
                                         <FormItem>
                                             <FormLabel className="text-sm font-medium">
                                                 LinkedIn Username
+                                                {session?.user?.orgId ===
+                                                    'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                                                    session?.user?.appRole !==
+                                                        'admin' &&
+                                                    session?.user?.role !==
+                                                        'admin' && (
+                                                        <span className="ml-1 text-red-500">
+                                                            *
+                                                        </span>
+                                                    )}
                                             </FormLabel>
                                             <FormControl>
                                                 <Input
@@ -779,6 +859,14 @@ export default function ProfilePage() {
                             <div className="flex items-center justify-between">
                                 <h2 className="text-lg font-medium">
                                     Work Experience
+                                    {session?.user?.orgId ===
+                                        'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                                        session?.user?.appRole !== 'admin' &&
+                                        session?.user?.role !== 'admin' && (
+                                            <span className="ml-1 text-red-500">
+                                                *
+                                            </span>
+                                        )}
                                 </h2>
                                 <Button
                                     type="button"
@@ -849,6 +937,59 @@ export default function ProfilePage() {
                                                                 <FormControl>
                                                                     <Input
                                                                         className="h-8 text-sm"
+                                                                        {...field}
+                                                                        value={
+                                                                            (field.value as string) ||
+                                                                            ''
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col gap-3 sm:flex-row">
+                                                <div className="flex-1">
+                                                    <FormField<UserProfileMetadata>
+                                                        control={form.control}
+                                                        name={`experiences.${index}.location`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-muted-foreground text-xs font-medium">
+                                                                    Location
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        className="h-8 text-sm"
+                                                                        placeholder="e.g., New York, NY"
+                                                                        {...field}
+                                                                        value={
+                                                                            (field.value as string) ||
+                                                                            ''
+                                                                        }
+                                                                    />
+                                                                </FormControl>
+                                                                <FormMessage />
+                                                            </FormItem>
+                                                        )}
+                                                    />
+                                                </div>
+                                                <div className="flex-1">
+                                                    <FormField<UserProfileMetadata>
+                                                        control={form.control}
+                                                        name={`experiences.${index}.website`}
+                                                        render={({ field }) => (
+                                                            <FormItem>
+                                                                <FormLabel className="text-muted-foreground text-xs font-medium">
+                                                                    Website
+                                                                </FormLabel>
+                                                                <FormControl>
+                                                                    <Input
+                                                                        className="h-8 text-sm"
+                                                                        placeholder="e.g., company.com"
                                                                         {...field}
                                                                         value={
                                                                             (field.value as string) ||
@@ -1338,7 +1479,17 @@ export default function ProfilePage() {
 
                         {/* Industries Section */}
                         <section className="space-y-3">
-                            <h2 className="text-lg font-medium">Industries</h2>
+                            <h2 className="text-sm font-medium">
+                                Industries
+                                {session?.user?.orgId ===
+                                    'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+                                    session?.user?.appRole !== 'admin' &&
+                                    session?.user?.role !== 'admin' && (
+                                        <span className="ml-1 text-red-500">
+                                            *
+                                        </span>
+                                    )}
+                            </h2>
                             <FormField<UserProfileMetadata>
                                 control={form.control}
                                 name="industries"

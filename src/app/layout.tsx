@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
 import { Navbar } from '@/components/navbar';
 import { Toaster } from '@/components/ui/sonner';
+import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import Script from 'next/script';
 
 const geistSans = Geist({
@@ -57,11 +58,13 @@ export default function RootLayout({
                     <TRPCProvider>
                         {/* <ChatProvider> */}
                         <Navbar />
-                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                            <NextTopLoader />
-                            <main>{children}</main>
-                            <Toaster />
-                        </div>
+                        <ProfileCompletionGuard>
+                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                <NextTopLoader />
+                                <main>{children}</main>
+                                <Toaster />
+                            </div>
+                        </ProfileCompletionGuard>
                         {/* <ChatContainer />
                         </ChatProvider> */}
                     </TRPCProvider>

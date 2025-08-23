@@ -59,6 +59,22 @@ export function ResumePreviewStep({
                             {exp.location}
                         </p>
                     )}
+                    {exp.website && (
+                        <p className="text-muted-foreground text-xs">
+                            <a
+                                href={
+                                    exp.website.startsWith('http')
+                                        ? exp.website
+                                        : `https://${exp.website}`
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-blue-600 hover:underline"
+                            >
+                                {exp.website}
+                            </a>
+                        </p>
+                    )}
                     <div className="text-muted-foreground text-xs">
                         {exp.startDate} - {exp.endDate || 'Present'}
                     </div>

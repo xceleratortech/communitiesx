@@ -16,6 +16,7 @@ export const ResumeProfileSchema = z.object({
                 title: z.string(),
                 company: z.string(),
                 location: z.string().optional(),
+                website: z.string().optional(),
                 startDate: z.string(),
                 endDate: z.string().optional(),
                 description: z.string().optional(),
@@ -156,7 +157,7 @@ export class ResumeParserService {
 Please extract the following information:
 - Phone number (if available)
 - Location (city, state, country, or general location)
-- Work experience (title, company, location, start/end dates, description, current status)
+- Work experience (title, company, location, website, start/end dates, description, current status)
 - Education (degree, institution, field of study, start/end dates, GPA, description)
 - Skills (name, level: beginner/intermediate/advanced/expert, category, years of experience)
 - Certifications (name, issuing organization, issue date, expiry date, credential ID, URL, description)
@@ -184,6 +185,7 @@ Return the data in this exact JSON structure:
       "title": "string",
       "company": "string",
       "location": "string or empty string",
+      "website": "string or empty string",
       "startDate": "string",
       "endDate": "string or empty string",
       "description": "string or empty string",
@@ -276,6 +278,7 @@ Return only the JSON object, no additional text or formatting. Use empty strings
                         ...exp,
                         id: exp.id || `${index + 1}`,
                         location: exp.location || '',
+                        website: exp.website || '',
                         startDate: exp.startDate || '',
                         endDate: exp.endDate || '',
                         description: exp.description || '',
