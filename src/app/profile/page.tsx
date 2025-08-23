@@ -113,8 +113,7 @@ export default function ProfilePage() {
 
         // Check if user is from the specific organization and validate requirements (exclude super admins)
         if (
-            session?.user?.orgId ===
-                'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+            session?.user?.orgId === process.env.NEXT_PUBLIC_ORG_ID &&
             session?.user?.appRole !== 'admin' &&
             session?.user?.role !== 'admin'
         ) {
@@ -156,7 +155,7 @@ export default function ProfilePage() {
     if (profileLoading) return <ProfileSkeleton />;
 
     const isRequired =
-        session?.user?.orgId === 'org-935fb015-1621-4514-afcf-8cf8c759ec27' &&
+        session?.user?.orgId === process.env.NEXT_PUBLIC_ORG_ID &&
         session?.user?.appRole !== 'admin' &&
         session?.user?.role !== 'admin';
 

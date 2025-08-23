@@ -37,7 +37,7 @@ export function ProfileCompletionBanner({
         isDismissed ||
         pathname.includes('/auth/') ||
         pathname.includes('/reset-password') ||
-        session.user.orgId !== 'org-935fb015-1621-4514-afcf-8cf8c759ec27' ||
+        session.user.orgId !== process.env.NEXT_PUBLIC_ORG_ID ||
         session.user.appRole === 'admin' ||
         session.user.role === 'admin' ||
         isLoading
@@ -49,9 +49,9 @@ export function ProfileCompletionBanner({
         router.push('/profile');
     };
 
-    const handleDismiss = () => {
-        setIsDismissed(true);
-    };
+    // const handleDismiss = () => {
+    //     setIsDismissed(true);
+    // };
 
     // Get missing fields for detailed display
     const missingFields = profileCompletionStatus?.missingFields || [];
@@ -213,14 +213,14 @@ export function ProfileCompletionBanner({
                                 {isOnResumePage ? 'Profile' : 'Complete'}
                             </span>
                         </Button>
-                        <Button
+                        {/* <Button
                             variant="ghost"
                             size="sm"
                             onClick={handleDismiss}
                             className="text-primary/70 hover:bg-primary/10 hover:text-primary h-7 w-7 p-0 md:h-8 md:w-8"
                         >
                             <X className="h-3 w-3 md:h-4 md:w-4" />
-                        </Button>
+                        </Button> */}
                     </div>
                 </div>
             </AlertDescription>
