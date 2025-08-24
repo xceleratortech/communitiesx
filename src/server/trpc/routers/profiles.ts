@@ -178,6 +178,38 @@ export const profilesRouter = router({
             return updatedProfile;
         }),
 
+    // Update profile picture
+    updateProfilePicture: publicProcedure
+        .input(
+            z.object({
+                imageUrl: z.string().nullable(),
+            }),
+        )
+        .mutation(async ({ ctx, input }) => {
+            if (!ctx.session?.user?.id) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to update your profile picture',
+                });
+            }
+
+            // Update user's image field
+            const [updatedUser] = await db
+                .update(users)
+                .set({
+                    image: input.imageUrl,
+                    updatedAt: new Date(),
+                })
+                .where(eq(users.id, ctx.session.user.id))
+                .returning();
+
+            return {
+                success: true,
+                imageUrl: updatedUser.image,
+            };
+        }),
+
     // Delete current user's profile
     deleteProfile: publicProcedure.mutation(async ({ ctx }) => {
         if (!ctx.session?.user?.id) {
