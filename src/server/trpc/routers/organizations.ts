@@ -1,4 +1,4 @@
-import { eq, count, and, like, ilike, or, desc, asc } from 'drizzle-orm';
+import { eq, count, and, like, ilike, or, desc, asc, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { router, publicProcedure, authProcedure } from '../trpc';
 import { db } from '@/server/db';
@@ -19,6 +19,7 @@ import {
     attachments,
     userBadgeAssignments,
     userBadges,
+    userProfiles,
     pushSubscriptions,
     loginEvents,
     sessions,
@@ -487,6 +488,9 @@ export const organizationsRouter = router({
     removeOrgMember: publicProcedure
         .input(z.object({ orgId: z.string(), userId: z.string() }))
         .mutation(async ({ input, ctx }) => {
+            // This function removes a user from an organization by deleting their content
+            // and transferring ownership of communities to organization admins.
+
             if (!ctx.session?.user) {
                 throw new TRPCError({
                     code: 'UNAUTHORIZED',
@@ -540,111 +544,144 @@ export const organizationsRouter = router({
             // Delete all related data first, then delete the user
             // This handles foreign key constraints by deleting in the correct order
 
-            // Delete user badge assignments
-            await db
-                .delete(userBadgeAssignments)
-                .where(eq(userBadgeAssignments.userId, input.userId));
-
-            // Delete push subscriptions
-            await db
-                .delete(pushSubscriptions)
-                .where(eq(pushSubscriptions.userId, input.userId));
-
-            // Delete login events
-            await db
-                .delete(loginEvents)
-                .where(eq(loginEvents.userId, input.userId));
-
-            // Delete sessions
-            await db.delete(sessions).where(eq(sessions.userId, input.userId));
-
-            // Delete accounts
-            await db.delete(accounts).where(eq(accounts.userId, input.userId));
-
-            // Delete reactions
-            await db
-                .delete(reactions)
-                .where(eq(reactions.userId, input.userId));
-
-            // Delete notifications
-            await db
-                .delete(notifications)
-                .where(eq(notifications.recipientId, input.userId));
-
-            // Delete direct messages
-            await db
-                .delete(directMessages)
-                .where(
-                    or(
-                        eq(directMessages.senderId, input.userId),
-                        eq(directMessages.recipientId, input.userId),
+            try {
+                // Find an organization admin to transfer ownership of user's content
+                const orgAdmin = await db.query.users.findFirst({
+                    where: and(
+                        eq(users.orgId, input.orgId),
+                        eq(users.role, 'admin'),
+                        ne(users.id, input.userId),
                     ),
-                );
+                    columns: { id: true },
+                });
 
-            // Delete chat threads
-            await db
-                .delete(chatThreads)
-                .where(
-                    or(
-                        eq(chatThreads.user1Id, input.userId),
-                        eq(chatThreads.user2Id, input.userId),
-                    ),
-                );
+                // Use a transaction for critical operations
+                const result = await db.transaction(async (tx) => {
+                    try {
+                        // Delete user's content to resolve foreign key constraints
+                        await tx
+                            .delete(comments)
+                            .where(eq(comments.authorId, input.userId));
+                        await tx
+                            .delete(posts)
+                            .where(eq(posts.authorId, input.userId));
+                        await tx
+                            .delete(reactions)
+                            .where(eq(reactions.userId, input.userId));
+                        await tx
+                            .delete(notifications)
+                            .where(eq(notifications.recipientId, input.userId));
+                        await tx
+                            .delete(communityMembers)
+                            .where(eq(communityMembers.userId, input.userId));
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.userId,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.reviewedBy,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityInvites)
+                            .where(
+                                or(
+                                    eq(
+                                        communityInvites.createdBy,
+                                        input.userId,
+                                    ),
+                                    eq(communityInvites.usedBy, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(communityAllowedOrgs)
+                            .where(
+                                eq(communityAllowedOrgs.addedBy, input.userId),
+                            );
+                        await tx
+                            .delete(userBadges)
+                            .where(eq(userBadges.createdBy, input.userId));
+                        await tx
+                            .delete(userBadgeAssignments)
+                            .where(
+                                eq(userBadgeAssignments.userId, input.userId),
+                            );
+                        await tx
+                            .delete(userProfiles)
+                            .where(eq(userProfiles.userId, input.userId));
+                        await tx
+                            .delete(attachments)
+                            .where(eq(attachments.uploadedBy, input.userId));
+                        await tx
+                            .delete(directMessages)
+                            .where(
+                                or(
+                                    eq(directMessages.senderId, input.userId),
+                                    eq(
+                                        directMessages.recipientId,
+                                        input.userId,
+                                    ),
+                                ),
+                            );
+                        await tx
+                            .delete(chatThreads)
+                            .where(
+                                or(
+                                    eq(chatThreads.user1Id, input.userId),
+                                    eq(chatThreads.user2Id, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(accounts)
+                            .where(eq(accounts.userId, input.userId));
+                        await tx
+                            .delete(sessions)
+                            .where(eq(sessions.userId, input.userId));
+                        await tx
+                            .delete(pushSubscriptions)
+                            .where(eq(pushSubscriptions.userId, input.userId));
+                        await tx
+                            .delete(loginEvents)
+                            .where(eq(loginEvents.userId, input.userId));
 
-            // Delete community member requests
-            await db
-                .delete(communityMemberRequests)
-                .where(eq(communityMemberRequests.userId, input.userId));
+                        // Transfer community ownership if user created any
+                        if (orgAdmin) {
+                            await tx
+                                .update(communities)
+                                .set({ createdBy: orgAdmin.id })
+                                .where(eq(communities.createdBy, input.userId));
+                        }
 
-            // Delete community members
-            await db
-                .delete(communityMembers)
-                .where(eq(communityMembers.userId, input.userId));
+                        // Delete the user
+                        await tx
+                            .delete(users)
+                            .where(eq(users.id, input.userId));
 
-            // Delete comments
-            await db
-                .delete(comments)
-                .where(eq(comments.authorId, input.userId));
+                        return {
+                            success: true,
+                            message:
+                                'User has been permanently removed from the organization',
+                        };
+                    } catch (txError) {
+                        throw txError;
+                    }
+                });
 
-            // Delete posts
-            await db.delete(posts).where(eq(posts.authorId, input.userId));
-
-            // Delete attachments
-            await db
-                .delete(attachments)
-                .where(eq(attachments.uploadedBy, input.userId));
-
-            // Delete community invites (where user is the creator or user)
-            await db
-                .delete(communityInvites)
-                .where(
-                    or(
-                        eq(communityInvites.createdBy, input.userId),
-                        eq(communityInvites.usedBy, input.userId),
-                    ),
-                );
-
-            // Delete community allowed orgs (where user is the adder)
-            await db
-                .delete(communityAllowedOrgs)
-                .where(eq(communityAllowedOrgs.addedBy, input.userId));
-
-            // Delete user badges (where user is the creator)
-            await db
-                .delete(userBadges)
-                .where(eq(userBadges.createdBy, input.userId));
-
-            // Finally delete the user
-            const result = await db
-                .delete(users)
-                .where(eq(users.id, input.userId))
-                .returning();
-
-            return {
-                success: true,
-                message:
-                    'User has been permanently removed from the organization',
-            };
+                return result;
+            } catch (error) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete user data. Please try again.',
+                });
+            }
         }),
 
     // Create a new user within the organization (for org admins)
