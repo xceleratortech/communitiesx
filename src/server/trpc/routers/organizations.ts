@@ -26,6 +26,8 @@ import {
 import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
 import { SQL } from 'drizzle-orm';
+import { sendEmail } from '@/lib/email';
+import { createWelcomeEmail } from '@/lib/email-templates';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -760,6 +762,22 @@ export const organizationsRouter = router({
                     createdAt: now,
                     updatedAt: now,
                 });
+
+                // Send welcome email
+                try {
+                    const welcomeEmail = createWelcomeEmail(
+                        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/login`,
+                    );
+                    await sendEmail({
+                        to: user.email,
+                        subject: welcomeEmail.subject,
+                        html: welcomeEmail.html,
+                    });
+                    console.log(`Welcome email sent to ${user.email}`);
+                } catch (emailError) {
+                    console.error('Failed to send welcome email:', emailError);
+                    // Don't fail the user creation if email fails
+                }
 
                 return user;
             } catch (error) {

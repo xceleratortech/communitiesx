@@ -9,6 +9,7 @@ import { sendEmail } from '@/lib/email';
 import { hashPassword } from 'better-auth/crypto';
 import { communityMembers } from '@/server/db/schema';
 import { Context } from '../context';
+import { createWelcomeEmail } from '@/lib/email-templates';
 
 export const adminRouter = router({
     // Get paginated users with search and filtering
@@ -349,6 +350,23 @@ export const adminRouter = router({
                     createdAt: now,
                     updatedAt: now,
                 });
+
+                // Send welcome email
+                try {
+                    const welcomeEmail = createWelcomeEmail(
+                        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/login`,
+                    );
+                    await sendEmail({
+                        to: user.email,
+                        subject: welcomeEmail.subject,
+                        html: welcomeEmail.html,
+                    });
+                    console.log(`Welcome email sent to ${user.email}`);
+                } catch (emailError) {
+                    console.error('Failed to send welcome email:', emailError);
+                    // Don't fail the user creation if email fails
+                }
+
                 return user;
             } catch (error) {
                 if (error instanceof TRPCError) throw error;

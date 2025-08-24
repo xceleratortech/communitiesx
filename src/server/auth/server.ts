@@ -29,6 +29,7 @@ export const auth = betterAuth({
         'id',
         'name',
         'email',
+        'image',
         ['org_id', 'orgId'],
         'role',
         'appRole',
@@ -64,6 +65,7 @@ export const auth = betterAuth({
                     ...user,
                     orgId: userData?.orgId, // Ensure orgId is always set from userData
                     appRole: userData?.appRole || 'user',
+                    image: userData?.image, // Include image from userData
                 },
                 session,
             };

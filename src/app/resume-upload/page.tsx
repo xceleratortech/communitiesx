@@ -14,6 +14,7 @@ import {
     ResumePreviewStep,
     InformationCards,
 } from '@/components/resume-upload';
+import { ProfileCompletionBanner } from '@/components/ui/profile-completion-banner';
 
 export default function ResumeUploadPage() {
     const router = useRouter();
@@ -173,6 +174,9 @@ export default function ResumeUploadPage() {
 
     return (
         <div className="mx-auto max-w-4xl space-y-4 p-4">
+            {/* Profile Completion Banner */}
+            <ProfileCompletionBanner />
+
             <div className="mb-6">
                 <Button variant="ghost" onClick={handleBack} className="mb-4">
                     <ArrowLeft className="mr-2 h-4 w-4" />
