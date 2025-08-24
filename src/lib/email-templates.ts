@@ -108,58 +108,77 @@ export function createOTPEmail(
     };
 }
 
-export function createWelcomeEmail(url: string) {
+export function createWelcomeEmail(url: string, orgLogo?: string) {
     return {
         subject: 'Welcome to CommunityX',
         html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #ffffff;">
-                <!-- Header with dual logos -->
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
-                    <!-- Xcelerator Logo -->
-                    <div style="flex: 1;">
-                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
-                        alt="Xcelerator Logo" 
-                        style="max-width: 150px; height: auto; border: 0; outline: none; text-decoration: none;"
-                        width="150"
-                        height="auto">
-                    </div>
-                </div>
-
-                <!-- Welcome Banner -->
-                <div style="background-color: #686AA8; padding: 30px; text-align: center; margin-bottom: 30px; border-radius: 8px;">
-                    <h1 style="color: white; margin: 0 0 10px 0; font-size: 28px; font-weight: bold;">Welcome aboard!</h1>
-                    <p style="color: white; margin: 0; font-size: 16px;">You're now part of our community platform!</p>
-                </div>
-
-                <!-- Main Content -->
-                <div style="background-color: #ffffff; padding: 0;">
-                    <p style="color: #374151; font-size: 16px; margin-bottom: 20px;">Here's your access link:</p>
-                    
-                    <div style="text-align: left; margin-bottom: 30px;">
-                        <a href="${url}" style="color: #2563eb; text-decoration: underline; font-size: 18px; font-weight: 500;">${url}</a>
-                    </div>
-
-                    <div style="margin-bottom: 30px;">
-                        <h3 style="color: #111827; font-size: 18px; margin-bottom: 15px;">To log in:</h3>
-                        <ol style="color: #374151; font-size: 16px; line-height: 1.6; padding-left: 20px;">
-                            <li style="margin-bottom: 8px;">Click on "OTP" tab in the login page.</li>
-                            <li style="margin-bottom: 8px;">Enter the registered email ID and click on "Send OTP."</li>
-                            <li style="margin-bottom: 8px;">An OTP will be sent to the same email ID.</li>
-                            <li style="margin-bottom: 8px;">Enter the OTP that you received in your email and click on "Verify OTP."</li>
-                            <li style="margin-bottom: 8px;">You will be redirected to the dashboard.</li>
-                            <li style="margin-bottom: 8px;">You can now start using the platform.</li>
-                        </ol>
-                    </div>
-
-                    <p style="color: #374151; font-size: 16px; line-height: 1.6; margin-bottom: 30px;">We look forward to connecting with you and building a vibrant community together.</p>
-                </div>
-
-                <!-- Footer -->
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
-                    <p style="color: #111827; font-weight: bold; margin: 0 0 5px 0;">Best regards,</p>
-                    <p style="color: #111827; font-weight: bold; margin: 0;">Xcelerator</p>
-                </div>
-            </div>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Welcome Email</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Two Logos and Spacing -->
+                                <tr>
+                                    <td style="padding: 0;">
+                                        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
+                                            <tr>
+                                                <td align="left" style="padding: 10px 0 10px 20px;">
+                                                    <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" alt="Xcelerator Logo" style="display:block; max-width:120px;">    
+                                                </td>
+                                                <td align="right" style="padding: 10px 20px 10px 0;">
+                                                    ${
+                                                        orgLogo
+                                                            ? `<img src="${orgLogo}" alt="Organization Logo" style="display:block; max-width:120px;">`
+                                                            : ''
+                                                    }
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Welcome Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Welcome aboard!</h1>
+                                        <p style="margin: 15px 0 0; font-size: 20px;">You're now part of our community platform!</p>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Body Content -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <p style="margin-bottom: 25px;">Here's your access link: <a href="${url}" style="color: #3366cc; text-decoration: none;">${url}</a></p>
+                                        
+                                        <p style="margin-bottom: 15px;"><strong>To log in:</strong></p>
+                                        <ol style="padding-left: 20px; margin: 0 0 25px 0;">
+                                            <li style="margin-bottom: 10px;">Enter the email ID where you received this mail,</li>
+                                            <li style="margin-bottom: 10px;">Click on "Login using OTP.",</li>
+                                            <li style="margin-bottom: 10px;">An OTP will be sent to the same email ID,</li>
+                                            <li style="margin-bottom: 10px;">Enter the OTP to complete your login.</li>
+                                        </ol>
+                                        
+                                        <p style="margin: 30px 0;">We look forward to connecting with you and building a vibrant community together.</p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Best regards,<br>Xcelerator</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
         `,
     };
 }
