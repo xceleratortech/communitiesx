@@ -1,4 +1,5 @@
 export { BasicInformation } from './BasicInformation';
+export { ProfilePictureUpload } from './ProfilePictureUpload';
 export { MonthYearPicker } from './MonthYearPicker';
 export { IndustriesCombobox } from './IndustriesCombobox';
 export { ExperienceSection } from './ExperienceSection';

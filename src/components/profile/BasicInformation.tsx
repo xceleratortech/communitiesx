@@ -11,24 +11,44 @@ import {
     FormControl,
     FormMessage,
 } from '@/components/ui/form';
+import { ProfilePictureUpload } from './ProfilePictureUpload';
 import type { UserProfileMetadata } from '@/types/models';
 
 interface BasicInformationProps {
     userName?: string;
     userEmail?: string;
+    currentImageUrl?: string | null;
     isRequired?: boolean;
+    onProfilePictureUpdate?: (imageUrl: string) => void;
 }
 
 export function BasicInformation({
     userName,
     userEmail,
+    currentImageUrl,
     isRequired,
+    onProfilePictureUpdate,
 }: BasicInformationProps) {
     const form = useFormContext<UserProfileMetadata>();
 
     return (
         <section className="space-y-3">
             <h2 className="text-lg font-medium">Basic Information</h2>
+
+            {/* Profile Picture Upload */}
+            <div className="mb-6 flex justify-center">
+                <ProfilePictureUpload
+                    currentImageUrl={currentImageUrl}
+                    userName={userName}
+                    onImageUpdate={(imageUrl) => {
+                        // Handle image update if needed
+                        if (onProfilePictureUpdate) {
+                            onProfilePictureUpdate(imageUrl);
+                        }
+                    }}
+                />
+            </div>
+
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                     <Label className="text-sm font-medium">Name</Label>

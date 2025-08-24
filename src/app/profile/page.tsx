@@ -24,10 +24,12 @@ import {
 
 export default function ProfilePage() {
     const { data: session } = useTypedSession();
-    const [displaySkills, setDisplaySkills] = useState<string[]>([]);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
     const [hasSavedSuccessfully, setHasSavedSuccessfully] = useState(false);
+    const [currentProfilePicture, setCurrentProfilePicture] = useState<
+        string | null
+    >(session?.user?.image || null);
 
     const {
         data: userProfile,
@@ -94,19 +96,32 @@ export default function ProfilePage() {
                 );
             }
 
-            form.reset(cleanMetadata);
-
-            // Update display skills
+            // Ensure skills are in the proper format for useFieldArray
             if (cleanMetadata.skills && Array.isArray(cleanMetadata.skills)) {
-                const skillNames = cleanMetadata.skills
-                    .map((skill: any) =>
-                        typeof skill === 'string' ? skill : skill.name || '',
-                    )
-                    .filter(Boolean);
-                setDisplaySkills(skillNames);
+                cleanMetadata.skills = cleanMetadata.skills.map(
+                    (skill: any, index: number) => {
+                        if (typeof skill === 'string') {
+                            return {
+                                id: `skill_${index}`,
+                                name: skill,
+                                level: 'intermediate' as const,
+                                category: '',
+                                yearsOfExperience: undefined,
+                            };
+                        }
+                        return skill;
+                    },
+                );
             }
+
+            form.reset(cleanMetadata);
         }
     }, [userProfile, form]);
+
+    // Update currentProfilePicture when session changes
+    useEffect(() => {
+        setCurrentProfilePicture(session?.user?.image || null);
+    }, [session?.user?.image]);
 
     const onSubmit = async (data: UserProfileMetadata) => {
         setHasAttemptedSave(true);
@@ -182,7 +197,11 @@ export default function ProfilePage() {
                             userEmail={
                                 userProfile?.userEmail || session?.user?.email
                             }
+                            currentImageUrl={currentProfilePicture}
                             isRequired={isRequired}
+                            onProfilePictureUpdate={(imageUrl: string) => {
+                                setCurrentProfilePicture(imageUrl);
+                            }}
                         />
 
                         {/* Experience Section */}
@@ -193,8 +212,6 @@ export default function ProfilePage() {
 
                         {/* Skills Section */}
                         <SkillsSection
-                            displaySkills={displaySkills}
-                            setDisplaySkills={setDisplaySkills}
                             setHasUnsavedChanges={setHasUnsavedChanges}
                         />
 
