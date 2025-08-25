@@ -2,14 +2,38 @@ import { z } from 'zod';
 import { router, adminProcedure, authProcedure } from '../trpc';
 import { users, orgs, accounts, verifications } from '@/server/db/auth-schema';
 import { initTRPC, TRPCError } from '@trpc/server';
-import { eq, count, or, ilike, and, desc, asc } from 'drizzle-orm';
+import { eq, count, or, ilike, and, desc, asc, inArray } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
 import { hashPassword } from 'better-auth/crypto';
 import { communityMembers } from '@/server/db/schema';
 import { Context } from '../context';
-import { createWelcomeEmail } from '@/lib/email-templates';
+import {
+    createWelcomeEmail,
+    createInvitationEmail,
+} from '@/lib/email-templates';
+import {
+    comments,
+    posts,
+    reactions,
+    notifications,
+    communityMemberRequests,
+    communityInvites,
+    communityAllowedOrgs,
+    userBadges,
+    userBadgeAssignments,
+    userProfiles,
+    attachments,
+    directMessages,
+    chatThreads,
+    notificationPreferences,
+    orgMembers,
+    pushSubscriptions,
+    loginEvents,
+    sessions,
+    postTags,
+} from '@/server/db/schema';
 
 export const adminRouter = router({
     // Get paginated users with search and filtering
@@ -451,15 +475,29 @@ export const adminRouter = router({
                 });
                 // Send the invite email
                 const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${input.email}`;
+
+                // Get organization name for the email template
+                let organizationName = 'Platform';
+                if (input.orgId) {
+                    const org = await db.query.orgs.findFirst({
+                        where: eq(orgs.id, input.orgId),
+                    });
+                    if (org) {
+                        organizationName = org.name;
+                    }
+                }
+
+                const invitationEmail = createInvitationEmail(
+                    organizationName,
+                    inviteUrl,
+                    input.role,
+                    input.appRole === 'admin' && !input.orgId,
+                );
+
                 await sendEmail({
                     to: input.email,
-                    subject: `Invitation to join${input.orgId ? '' : ' as super-admin'}`,
-                    html: `
-                        <h1>You've been invited to join${input.orgId ? '' : ' as super-admin'}</h1>
-                        <p>Click the link below to create your account:</p>
-                        <a href="${inviteUrl}">Accept Invitation</a>
-                        <p>This link will expire in 7 days.</p>
-                    `,
+                    subject: invitationEmail.subject,
+                    html: invitationEmail.html,
                 });
                 return { success: true, email: input.email };
             } catch (error) {
@@ -500,23 +538,184 @@ export const adminRouter = router({
                     });
                 }
 
-                // Remove user's community memberships
-                await db
-                    .delete(communityMembers)
-                    .where(eq(communityMembers.userId, input.userId));
+                // Use a transaction for critical operations to ensure data consistency
+                const result = await db.transaction(async (tx) => {
+                    try {
+                        // Delete user's content to resolve foreign key constraints
+                        // IMPORTANT: Delete in correct order to avoid foreign key violations
 
-                // Remove user's accounts
-                await db
-                    .delete(accounts)
-                    .where(eq(accounts.userId, input.userId));
+                        // 1. First delete comments (they reference posts)
+                        await tx
+                            .delete(comments)
+                            .where(eq(comments.authorId, input.userId));
 
-                // Finally remove the user
-                await db.delete(users).where(eq(users.id, input.userId));
+                        // 1.5. Delete ALL comments that reference posts by this user
+                        // This is critical - comments by other users on posts by this user must be deleted first
+                        await tx
+                            .delete(comments)
+                            .where(
+                                inArray(
+                                    comments.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
 
-                return { success: true };
+                        // 2. Now safe to delete posts
+                        await tx
+                            .delete(posts)
+                            .where(eq(posts.authorId, input.userId));
+
+                        // 3. Delete other user-related data
+                        await tx
+                            .delete(reactions)
+                            .where(eq(reactions.userId, input.userId));
+                        await tx
+                            .delete(notifications)
+                            .where(eq(notifications.recipientId, input.userId));
+                        await tx
+                            .delete(communityMembers)
+                            .where(eq(communityMembers.userId, input.userId));
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.userId,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.reviewedBy,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityInvites)
+                            .where(
+                                or(
+                                    eq(
+                                        communityInvites.createdBy,
+                                        input.userId,
+                                    ),
+                                    eq(communityInvites.usedBy, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(communityAllowedOrgs)
+                            .where(
+                                eq(communityAllowedOrgs.addedBy, input.userId),
+                            );
+                        await tx
+                            .delete(userBadges)
+                            .where(eq(userBadges.createdBy, input.userId));
+                        await tx
+                            .delete(userBadgeAssignments)
+                            .where(
+                                eq(userBadgeAssignments.userId, input.userId),
+                            );
+                        await tx
+                            .delete(userProfiles)
+                            .where(eq(userProfiles.userId, input.userId));
+                        await tx
+                            .delete(attachments)
+                            .where(eq(attachments.uploadedBy, input.userId));
+                        await tx
+                            .delete(directMessages)
+                            .where(
+                                or(
+                                    eq(directMessages.senderId, input.userId),
+                                    eq(
+                                        directMessages.recipientId,
+                                        input.userId,
+                                    ),
+                                ),
+                            );
+                        await tx
+                            .delete(chatThreads)
+                            .where(
+                                or(
+                                    eq(chatThreads.user1Id, input.userId),
+                                    eq(chatThreads.user2Id, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(notificationPreferences)
+                            .where(
+                                eq(
+                                    notificationPreferences.userId,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(orgMembers)
+                            .where(eq(orgMembers.userId, input.userId));
+                        await tx
+                            .delete(pushSubscriptions)
+                            .where(eq(pushSubscriptions.userId, input.userId));
+                        await tx
+                            .delete(loginEvents)
+                            .where(eq(loginEvents.userId, input.userId));
+                        await tx
+                            .delete(accounts)
+                            .where(eq(accounts.userId, input.userId));
+                        await tx
+                            .delete(sessions)
+                            .where(eq(sessions.userId, input.userId));
+
+                        // Delete post tags for posts by this user
+                        await tx
+                            .delete(postTags)
+                            .where(
+                                inArray(
+                                    postTags.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
+
+                        // Finally remove the user
+                        await tx
+                            .delete(users)
+                            .where(eq(users.id, input.userId));
+
+                        return { success: true };
+                    } catch (txError) {
+                        throw txError;
+                    }
+                });
+
+                return result;
             } catch (error) {
                 if (error instanceof TRPCError) throw error;
-                console.error('Error removing user:', error);
+                console.error('Detailed error in admin.removeUser:', error);
+                console.error(
+                    'Error stack:',
+                    error instanceof Error ? error.stack : 'No stack trace',
+                );
+
+                // If it's a database constraint error, provide more specific information
+                if (
+                    error instanceof Error &&
+                    error.message.includes('foreign key constraint')
+                ) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message:
+                            'Cannot remove user due to remaining data dependencies. Please contact support.',
+                    });
+                }
+
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to remove user',

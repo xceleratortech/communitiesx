@@ -35,6 +35,7 @@ import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+import { createCommunityInvitationEmail } from '@/lib/email-templates';
 
 // Helper function to check if user is SuperAdmin
 function isSuperAdmin(session: any): boolean {
@@ -2151,22 +2152,19 @@ export const communityRouter = router({
                         'noreply@communities.app';
 
                     // Send the email directly to the recipient
+                    const invitationEmail = createCommunityInvitationEmail(
+                        community.name,
+                        fullInviteLink,
+                        input.role,
+                    );
+
                     const emailResult = await sendEmail({
                         to: email,
-                        subject: `You're invited to join ${community.name}`,
+                        subject: invitationEmail.subject,
                         from: senderName
                             ? `${senderName} <${defaultFrom}>`
                             : defaultFrom,
-                        html: `
-                            <h1>You've been invited to join ${community.name}</h1>
-                            <p>${ctx.session.user.name || 'Someone'} has invited you to join the ${community.name} community as a ${input.role}.</p>
-                            <p>Click the link below to accept the invitation:</p>
-                            <p><a href="${fullInviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
-                            <p>Or copy and paste this link into your browser:</p>
-                            <p>${fullInviteLink}</p>
-                            <p><strong>If you don't have an account yet, you'll be able to create one when you accept the invitation.</strong></p>
-                            <p>This invitation will expire in 7 days.</p>
-                        `,
+                        html: invitationEmail.html,
                     });
 
                     results.push({

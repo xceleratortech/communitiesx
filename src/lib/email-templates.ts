@@ -182,3 +182,190 @@ export function createWelcomeEmail(url: string, orgLogo?: string) {
         `,
     };
 }
+
+export function createInvitationEmail(
+    organizationName: string,
+    inviteUrl: string,
+    role: string = 'user',
+    isSuperAdmin: boolean = false,
+) {
+    const roleDisplay = role === 'admin' ? 'Administrator' : 'Member';
+    const orgText = isSuperAdmin
+        ? 'as a Super Administrator'
+        : `to join ${organizationName}`;
+
+    return {
+        subject: `Invitation to join ${isSuperAdmin ? 'as Super Administrator' : organizationName}`,
+        html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Organization Invitation</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Invitation Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: center; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">You're Invited!</h1>
+                                        <p style="margin: 15px 0 0; font-size: 18px;">Join our community platform as a ${roleDisplay}</p>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Body Content -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <p style="margin-bottom: 25px;">
+                                            You've been invited <strong>${orgText}</strong> organization on <strong>CommunityX</strong>.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 25px;">
+                                            <strong>Role:</strong> ${roleDisplay}<br>
+                                            <strong>Organization:</strong> ${isSuperAdmin ? 'Platform Super Administrator' : organizationName}
+                                        </p>
+                                        
+                                        <div style="text-align: center; margin: 30px 0;">
+                                            <a href="${inviteUrl}" 
+                                               style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                                Accept Invitation
+                                            </a>
+                                        </div>
+                                        
+                                        <p style="margin-bottom: 15px;"><strong>What happens next?</strong></p>
+                                        <ol style="padding-left: 20px; margin: 0 0 25px 0;">
+                                            <li style="margin-bottom: 10px;">Click the "Accept Invitation" button above</li>
+                                            <li style="margin-bottom: 10px;">Create your account with a secure password</li>
+                                            <li style="margin-bottom: 10px;">Start collaborating with your team</li>
+                                        </ol>
+                                        
+                                        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                                            <p style="color: #92400e; margin: 0; font-size: 14px;">
+                                                <strong>Important:</strong> This invitation link will expire in 7 days. Please accept it promptly.
+                                            </p>
+                                        </div>
+                                        
+                                        <p style="margin: 30px 0;">We're excited to have you join our community!</p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Best regards,<br>The CommunityX Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `,
+    };
+}
+
+export function createCommunityInvitationEmail(
+    communityName: string,
+    inviteUrl: string,
+    role: string = 'member',
+) {
+    const roleDisplay =
+        role === 'admin'
+            ? 'Administrator'
+            : role === 'moderator'
+              ? 'Moderator'
+              : 'Member';
+
+    return {
+        subject: `You're invited to join ${communityName}`,
+        html: `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Community Invitation</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Invitation Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: center; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Community Invitation!</h1>
+                                        <p style="margin: 15px 0 0; font-size: 18px;">Join ${communityName} as a ${roleDisplay}</p>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Body Content -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <p style="margin-bottom: 25px;">
+                                            You've been invited to join the <strong>${communityName}</strong> community on <strong>CommunityX</strong>.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 25px;">
+                                            <strong>Community:</strong> ${communityName}<br>
+                                            <strong>Role:</strong> ${roleDisplay}<br>
+                                        </p>
+                                        
+                                        <div style="text-align: center; margin: 30px 0;">
+                                            <a href="${inviteUrl}" 
+                                               style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                                Accept Invitation
+                                            </a>
+                                        </div>
+                                        
+                                        <p style="margin-bottom: 15px;"><strong>What happens next?</strong></p>
+                                        <ol style="padding-left: 20px; margin: 0 0 25px 0;">
+                                            <li style="margin-bottom: 10px;">Click the "Accept Invitation" button above</li>
+                                            <li style="margin-bottom: 10px;">If you don't have an account, you'll be able to create one</li>
+                                            <li style="margin-bottom: 10px;">Start participating in the community discussions</li>
+                                        </ol>
+                                        
+                                        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                                            <p style="color: #92400e; margin: 0; font-size: 14px;">
+                                                <strong>Important:</strong> This invitation will expire in 7 days. Please accept it promptly.
+                                            </p>
+                                        </div>
+                                        
+                                        <p style="margin: 30px 0;">We're excited to have you join the ${communityName} community!</p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Best regards,<br>The CommunityX Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `,
+    };
+}
