@@ -1,4 +1,15 @@
-import { eq, count, and, like, ilike, or, desc, asc, ne } from 'drizzle-orm';
+import {
+    eq,
+    count,
+    and,
+    like,
+    ilike,
+    or,
+    desc,
+    asc,
+    ne,
+    inArray,
+} from 'drizzle-orm';
 import { z } from 'zod';
 import { router, publicProcedure, authProcedure } from '../trpc';
 import { db } from '@/server/db';
@@ -23,6 +34,9 @@ import {
     pushSubscriptions,
     loginEvents,
     sessions,
+    orgMembers,
+    notificationPreferences,
+    postTags,
 } from '@/server/db/schema';
 import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
@@ -559,18 +573,52 @@ export const organizationsRouter = router({
                 const result = await db.transaction(async (tx) => {
                     try {
                         // Delete user's content to resolve foreign key constraints
+                        // IMPORTANT: Delete in correct order to avoid foreign key violations
+
+                        // 1. First delete comments (they reference posts)
                         await tx
                             .delete(comments)
                             .where(eq(comments.authorId, input.userId));
+
+                        // 1.5. Delete ALL comments that reference posts by this user
+                        // This is critical - comments by other users on posts by this user must be deleted first
+                        await tx
+                            .delete(comments)
+                            .where(
+                                inArray(
+                                    comments.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
+
+                        // 2. Now safe to delete posts
                         await tx
                             .delete(posts)
                             .where(eq(posts.authorId, input.userId));
+
+                        // 3. Delete other user-related data
                         await tx
                             .delete(reactions)
                             .where(eq(reactions.userId, input.userId));
                         await tx
                             .delete(notifications)
                             .where(eq(notifications.recipientId, input.userId));
+
+                        // Delete notification preferences
+                        await tx
+                            .delete(notificationPreferences)
+                            .where(
+                                eq(
+                                    notificationPreferences.userId,
+                                    input.userId,
+                                ),
+                            );
+
                         await tx
                             .delete(communityMembers)
                             .where(eq(communityMembers.userId, input.userId));
@@ -640,17 +688,29 @@ export const organizationsRouter = router({
                                 ),
                             );
                         await tx
-                            .delete(accounts)
-                            .where(eq(accounts.userId, input.userId));
-                        await tx
-                            .delete(sessions)
-                            .where(eq(sessions.userId, input.userId));
+                            .delete(orgMembers)
+                            .where(eq(orgMembers.userId, input.userId));
                         await tx
                             .delete(pushSubscriptions)
                             .where(eq(pushSubscriptions.userId, input.userId));
                         await tx
                             .delete(loginEvents)
                             .where(eq(loginEvents.userId, input.userId));
+
+                        // Delete post tags for posts by this user
+                        await tx
+                            .delete(postTags)
+                            .where(
+                                inArray(
+                                    postTags.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
 
                         // Transfer community ownership if user created any
                         if (orgAdmin) {
@@ -677,6 +737,24 @@ export const organizationsRouter = router({
 
                 return result;
             } catch (error) {
+                console.error('Detailed error in removeOrgMember:', error);
+                console.error(
+                    'Error stack:',
+                    error instanceof Error ? error.stack : 'No stack trace',
+                );
+
+                // If it's a database constraint error, provide more specific information
+                if (
+                    error instanceof Error &&
+                    error.message.includes('foreign key constraint')
+                ) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message:
+                            'Cannot remove user due to remaining data dependencies. Please contact support.',
+                    });
+                }
+
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to delete user data. Please try again.',
