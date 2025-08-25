@@ -575,12 +575,27 @@ export const organizationsRouter = router({
                         // Delete user's content to resolve foreign key constraints
                         // IMPORTANT: Delete in correct order to avoid foreign key violations
 
-                        // 1. First delete comments (they reference posts)
+                        // 1. First delete post tags for posts by this user
+                        await tx
+                            .delete(postTags)
+                            .where(
+                                inArray(
+                                    postTags.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
+
+                        // 2. Delete comments by this user
                         await tx
                             .delete(comments)
                             .where(eq(comments.authorId, input.userId));
 
-                        // 1.5. Delete ALL comments that reference posts by this user
+                        // 3. Delete ALL comments that reference posts by this user
                         // This is critical - comments by other users on posts by this user must be deleted first
                         await tx
                             .delete(comments)
@@ -596,7 +611,7 @@ export const organizationsRouter = router({
                                 ),
                             );
 
-                        // 2. Now safe to delete posts
+                        // 4. Now safe to delete posts
                         await tx
                             .delete(posts)
                             .where(eq(posts.authorId, input.userId));
@@ -696,21 +711,6 @@ export const organizationsRouter = router({
                         await tx
                             .delete(loginEvents)
                             .where(eq(loginEvents.userId, input.userId));
-
-                        // Delete post tags for posts by this user
-                        await tx
-                            .delete(postTags)
-                            .where(
-                                inArray(
-                                    postTags.postId,
-                                    tx
-                                        .select({ id: posts.id })
-                                        .from(posts)
-                                        .where(
-                                            eq(posts.authorId, input.userId),
-                                        ),
-                                ),
-                            );
 
                         // Transfer community ownership if user created any
                         if (orgAdmin) {
