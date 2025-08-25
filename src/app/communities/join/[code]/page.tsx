@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
-import { useSession, signUp } from '@/server/auth/client';
+import { useSession, signIn } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -155,16 +155,37 @@ export default function JoinCommunityPage() {
         setError(null);
 
         try {
-            // Register the user
-            await signUp.email({
+            // Use the custom registration endpoint to properly handle orgId
+            const registerResponse = await fetch(
+                '/api/auth/register-with-org',
+                {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: inviteInfo.email,
+                        password: registrationForm.password,
+                        name: registrationForm.fullName,
+                        orgId: inviteInfo.orgId,
+                        role: 'user', // Default role for community members
+                    }),
+                },
+            );
+
+            const registerData = await registerResponse.json();
+
+            if (!registerResponse.ok) {
+                console.error('Registration failed:', registerData);
+                throw new Error(registerData.error || 'Registration failed');
+            }
+
+            // After successful registration, sign in the user
+            await signIn.email({
                 email: inviteInfo.email,
                 password: registrationForm.password,
-                name: registrationForm.fullName,
-                // If the invite includes an organization ID, include it in registration
-                ...(inviteInfo.orgId ? { orgId: inviteInfo.orgId } : {}),
             });
 
-            // After registration, the user will be automatically logged in
             // Now join the community
             joinCommunityMutation.mutate({
                 inviteCode,

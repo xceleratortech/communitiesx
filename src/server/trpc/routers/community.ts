@@ -35,6 +35,7 @@ import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import type { Community, CommunityAllowedOrg } from '@/types/models';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+import { createCommunityInvitationEmail } from '@/lib/email-templates';
 
 // Helper function to check if user is SuperAdmin
 function isSuperAdmin(session: any): boolean {
@@ -2015,6 +2016,9 @@ export const communityRouter = router({
                 });
             }
 
+            // Check if user is super admin (appRole='admin')
+            const isSuperAdmin = ctx.session.user.appRole === 'admin';
+
             // Check if the current user is an admin or moderator of the community
             const membership = await db.query.communityMembers.findFirst({
                 where: and(
@@ -2027,43 +2031,7 @@ export const communityRouter = router({
                 ),
             });
 
-            if (!membership) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message:
-                        'Only community admins and moderators can send invites',
-                });
-            }
-
-            // Only admins can create moderator invites
-            if (input.role === 'moderator' && membership.role !== 'admin') {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'Only community admins can invite moderators',
-                });
-            }
-
-            // Only users with admin management permissions can create admin invites
-            if (input.role === 'admin') {
-                const permission = await ServerPermissions.fromUserId(
-                    ctx.session.user.id,
-                );
-                const canAssignAdmin =
-                    await permission.checkCommunityPermission(
-                        input.communityId.toString(),
-                        PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
-                    );
-
-                if (!canAssignAdmin) {
-                    throw new TRPCError({
-                        code: 'FORBIDDEN',
-                        message:
-                            'You do not have permission to invite admin users',
-                    });
-                }
-            }
-
-            // Get community details
+            // Get community details to check org admin override
             const community = await db.query.communities.findFirst({
                 where: eq(communities.id, input.communityId),
             });
@@ -2075,12 +2043,66 @@ export const communityRouter = router({
                 });
             }
 
+            // Check if user is org admin for this community
+            const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+                ctx.session.user,
+                community.orgId,
+            );
+
+            if (!membership && !isOrgAdminForCommunityCheck && !isSuperAdmin) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins, moderators, organization admins, or super admins can send invites',
+                });
+            }
+
+            // Only admins can create moderator invites
+            if (
+                input.role === 'moderator' &&
+                membership?.role !== 'admin' &&
+                !isOrgAdminForCommunityCheck &&
+                !isSuperAdmin
+            ) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message:
+                        'Only community admins, organization admins, or super admins can invite moderators',
+                });
+            }
+
+            // Only users with admin management permissions can create admin invites
+            if (input.role === 'admin') {
+                // Super admins and org admins can always invite admin users
+                if (!isOrgAdminForCommunityCheck && !isSuperAdmin) {
+                    const permission = await ServerPermissions.fromUserId(
+                        ctx.session.user.id,
+                    );
+                    const canAssignAdmin =
+                        await permission.checkCommunityPermission(
+                            input.communityId.toString(),
+                            PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
+                        );
+
+                    if (!canAssignAdmin) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'You do not have permission to invite admin users',
+                        });
+                    }
+                }
+            }
+
+            // Community details are already fetched above for org admin check
+
             // Get the current user's organization
             const currentUser = await db.query.users.findFirst({
                 where: eq(users.id, ctx.session.user.id),
             });
 
-            if (!currentUser?.orgId) {
+            // Super admins can send invites without orgId, but regular users need an organization
+            if (!isSuperAdmin && !currentUser?.orgId) {
                 throw new TRPCError({
                     code: 'BAD_REQUEST',
                     message: 'User does not have an organization',
@@ -2110,7 +2132,7 @@ export const communityRouter = router({
                             email,
                             code,
                             role: input.role,
-                            orgId: currentUser.orgId, // Include the organization ID
+                            orgId: currentUser?.orgId || community.orgId, // Use user's orgId or community's orgId for super admins
                             createdBy: ctx.session.user.id,
                             createdAt: new Date(),
                             expiresAt,
@@ -2130,22 +2152,19 @@ export const communityRouter = router({
                         'noreply@communities.app';
 
                     // Send the email directly to the recipient
+                    const invitationEmail = createCommunityInvitationEmail(
+                        community.name,
+                        fullInviteLink,
+                        input.role,
+                    );
+
                     const emailResult = await sendEmail({
                         to: email,
-                        subject: `You're invited to join ${community.name}`,
+                        subject: invitationEmail.subject,
                         from: senderName
                             ? `${senderName} <${defaultFrom}>`
                             : defaultFrom,
-                        html: `
-                            <h1>You've been invited to join ${community.name}</h1>
-                            <p>${ctx.session.user.name || 'Someone'} has invited you to join the ${community.name} community as a ${input.role}.</p>
-                            <p>Click the link below to accept the invitation:</p>
-                            <p><a href="${fullInviteLink}" style="display: inline-block; padding: 10px 20px; background-color: #0070f3; color: white; text-decoration: none; border-radius: 5px;">Accept Invitation</a></p>
-                            <p>Or copy and paste this link into your browser:</p>
-                            <p>${fullInviteLink}</p>
-                            <p><strong>If you don't have an account yet, you'll be able to create one when you accept the invitation.</strong></p>
-                            <p>This invitation will expire in 7 days.</p>
-                        `,
+                        html: invitationEmail.html,
                     });
 
                     results.push({
