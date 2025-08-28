@@ -64,6 +64,8 @@ export default function EditCommunityPage() {
         setIsClient(true);
     }, []);
 
+    const { checkCommunityPermission, isAppAdmin } = usePermission();
+
     // Fetch community data
     const { data: community, isLoading } = trpc.communities.getBySlug.useQuery(
         { slug: slug || '' },
@@ -192,8 +194,6 @@ export default function EditCommunityPage() {
             </div>
         );
     }
-
-    const { checkCommunityPermission, isAppAdmin } = usePermission();
 
     // Check if user has permission to edit this community
     const canEditCommunity =
