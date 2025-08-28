@@ -169,7 +169,10 @@ export const communityRouter = router({
                                 community.orgId,
                             );
 
-                        if (!userMembership && !isOrgAdminForCommunityCheck) {
+                        // Super admins and org admins can always create posts in their org's communities
+                        if (isOrgAdminForCommunityCheck) {
+                            // Org admin can create posts - skip membership check
+                        } else if (!userMembership) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
                                 message:
@@ -178,39 +181,39 @@ export const communityRouter = router({
                         }
 
                         // Check if user's role meets the minimum requirement for post creation
-                        const userRole = userMembership?.role || 'admin'; // Default to admin for org admins
-                        const minRole = community.postCreationMinRole;
+                        // Org admins bypass role hierarchy checks
+                        if (!isOrgAdminForCommunityCheck) {
+                            const userRole = userMembership?.role || 'member';
+                            const minRole = community.postCreationMinRole;
 
-                        // Define role hierarchy (higher number = higher privilege)
-                        const roleHierarchy = {
-                            member: 1,
-                            moderator: 2,
-                            admin: 3,
-                        };
-
-                        const userRoleLevel =
-                            roleHierarchy[
-                                userRole as keyof typeof roleHierarchy
-                            ] || 0;
-                        const minRoleLevel =
-                            roleHierarchy[
-                                minRole as keyof typeof roleHierarchy
-                            ] || 1;
-
-                        if (
-                            userRoleLevel < minRoleLevel &&
-                            !isOrgAdminForCommunityCheck
-                        ) {
-                            const roleDisplay = {
-                                member: 'members',
-                                moderator: 'moderators and admins',
-                                admin: 'admins',
+                            // Define role hierarchy (higher number = higher privilege)
+                            const roleHierarchy = {
+                                member: 1,
+                                moderator: 2,
+                                admin: 3,
                             };
 
-                            throw new TRPCError({
-                                code: 'FORBIDDEN',
-                                message: `Only ${roleDisplay[minRole as keyof typeof roleDisplay]} can create posts in this community`,
-                            });
+                            const userRoleLevel =
+                                roleHierarchy[
+                                    userRole as keyof typeof roleHierarchy
+                                ] || 0;
+                            const minRoleLevel =
+                                roleHierarchy[
+                                    minRole as keyof typeof roleHierarchy
+                                ] || 1;
+
+                            if (userRoleLevel < minRoleLevel) {
+                                const roleDisplay = {
+                                    member: 'members',
+                                    moderator: 'moderators and admins',
+                                    admin: 'admins',
+                                };
+
+                                throw new TRPCError({
+                                    code: 'FORBIDDEN',
+                                    message: `Only ${roleDisplay[minRole as keyof typeof roleDisplay]} can create posts in this community`,
+                                });
+                            }
                         }
 
                         // If tagIds are provided, verify they belong to the community
