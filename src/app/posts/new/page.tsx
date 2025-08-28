@@ -30,6 +30,8 @@ import { Loading } from '@/components/ui/loading';
 import { isOrgAdminForCommunity } from '@/lib/utils';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { isHtmlContentEmpty } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 
 interface Tag {
     id: number;
@@ -220,7 +222,7 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || !content.trim()) {
+        if (!title.trim() || isHtmlContentEmpty(content)) {
             return;
         }
 
@@ -323,18 +325,7 @@ function NewPostForm() {
                                                                         : 'opacity-0',
                                                                 )}
                                                             />
-                                                            <div>
-                                                                <div className="font-medium">
-                                                                    {tag.name}
-                                                                </div>
-                                                                {tag.description && (
-                                                                    <div className="text-muted-foreground text-sm">
-                                                                        {
-                                                                            tag.description
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                            {tag.name}
                                                         </CommandItem>
                                                     ),
                                                 )}
@@ -343,8 +334,6 @@ function NewPostForm() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-
-                            {/* Selected Tags Display */}
                             {selectedTags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {selectedTags.map((tag) => (
@@ -354,12 +343,15 @@ function NewPostForm() {
                                             className="flex items-center gap-1"
                                         >
                                             {tag.name}
-                                            <X
-                                                className="h-3 w-3 cursor-pointer"
+                                            <button
+                                                type="button"
                                                 onClick={() =>
                                                     handleTagRemove(tag.id)
                                                 }
-                                            />
+                                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
                                         </Badge>
                                     ))}
                                 </div>
@@ -368,22 +360,24 @@ function NewPostForm() {
                     </div>
                 )}
 
-                <div className="flex space-x-4">
-                    {communitySlug && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                                router.push(`/communities/${communitySlug}`)
-                            }
-                        >
-                            Cancel
-                        </Button>
+                <Button
+                    type="submit"
+                    disabled={
+                        createPost.isPending ||
+                        !title.trim() ||
+                        isHtmlContentEmpty(content)
+                    }
+                    className="w-full"
+                >
+                    {createPost.isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating Post...
+                        </>
+                    ) : (
+                        'Create Post'
                     )}
-                    <Button type="submit" disabled={createPost.isPending}>
-                        {createPost.isPending ? 'Creating...' : 'Create Post'}
-                    </Button>
-                </div>
+                </Button>
             </form>
         </div>
     );

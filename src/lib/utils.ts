@@ -22,3 +22,28 @@ export function isOrgAdminForCommunity(
         user.orgId === communityOrgId
     );
 }
+
+/**
+ * Checks if HTML content is empty or contains only whitespace/empty elements
+ * @param html - HTML string to check
+ * @returns true if the content is empty or contains only empty elements
+ */
+export function isHtmlContentEmpty(html: string): boolean {
+    if (!html || html.trim() === '') return true;
+
+    // Remove HTML tags and check if the remaining text is empty
+    const textContent = html.replace(/<[^>]*>/g, '').trim();
+    if (textContent === '') return true;
+
+    // Check for common empty HTML patterns
+    const emptyPatterns = [
+        /^<p><\/p>$/,
+        /^<p>\s*<\/p>$/,
+        /^<div><\/div>$/,
+        /^<div>\s*<\/div>$/,
+        /^<br\s*\/?>$/,
+        /^<br\s*\/?>\s*<br\s*\/?>$/,
+    ];
+
+    return emptyPatterns.some((pattern) => pattern.test(html.trim()));
+}
