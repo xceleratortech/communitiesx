@@ -101,12 +101,16 @@ export function usePermission() {
             // If communityOrgId is provided, check if it matches user's orgId
             if (communityOrgId !== undefined) {
                 if (communityOrgId === data.userDetails.orgId) {
-                    // Community belongs to org admin's organization - grant community admin permissions
+                    // Community belongs to org admin's organization - grant both org admin and community admin permissions
+                    const orgAdminPerms = getAllPermissions('org', ['admin']);
                     const communityAdminPerms = getAllPermissions('community', [
                         'admin',
                     ]);
+
                     return (
+                        orgAdminPerms.includes(action) ||
                         communityAdminPerms.includes(action) ||
+                        orgAdminPerms.includes('*') ||
                         communityAdminPerms.includes('*')
                     );
                 }
@@ -114,14 +118,17 @@ export function usePermission() {
             } else {
                 // No communityOrgId provided - assume org admin has access to their org's communities
                 // This maintains backward compatibility but server will validate properly
+                const orgAdminPerms = getAllPermissions('org', ['admin']);
                 const communityAdminPerms = getAllPermissions('community', [
                     'admin',
                 ]);
-                const hasAdminPermission =
-                    communityAdminPerms.includes(action) ||
-                    communityAdminPerms.includes('*');
 
-                if (hasAdminPermission) return true;
+                return (
+                    orgAdminPerms.includes(action) ||
+                    communityAdminPerms.includes(action) ||
+                    orgAdminPerms.includes('*') ||
+                    communityAdminPerms.includes('*')
+                );
             }
         }
 

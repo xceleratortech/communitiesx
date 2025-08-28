@@ -1397,7 +1397,7 @@ export const communitiesRouter = router({
             }
         }),
 
-    // Remove admin role from a community member (super admin, org admin, or community admin only)
+    // Remove admin role from a community member (super admin, org admin, or community admin only - requires REMOVE_COMMUNITY_ADMIN permission)
     removeAdmin: authProcedure
         .input(
             z.object({
@@ -1410,13 +1410,13 @@ export const communitiesRouter = router({
                 const permission = await ServerPermissions.fromUserId(
                     ctx.session.user.id,
                 );
-                const canAssignAdmin =
+                const canRemoveAdmin =
                     await permission.checkCommunityPermission(
                         input.communityId.toString(),
-                        PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
+                        PERMISSIONS.REMOVE_COMMUNITY_ADMIN,
                     );
 
-                if (!canAssignAdmin) {
+                if (!canRemoveAdmin) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message: 'You dont have access to remove admin role',
@@ -1539,7 +1539,7 @@ export const communitiesRouter = router({
         }
     }),
 
-    // Add a new procedure to remove a user from a community
+    // Remove a user from a community (with role-based security checks)
     removeUserFromCommunity: authProcedure
         .input(
             z.object({
@@ -1609,6 +1609,41 @@ export const communitiesRouter = router({
                             code: 'FORBIDDEN',
                             message:
                                 'Cannot remove the community creator. Only super admins, organization admins, or community admins can perform this action.',
+                        });
+                    }
+                }
+
+                // Check if user is trying to remove an admin (role-based protection)
+                if (targetUserMembership.role === 'admin') {
+                    // Only super admins, org admins, and community admins can remove other admins
+                    const canRemoveAdmin =
+                        await permission.checkCommunityPermission(
+                            input.communityId.toString(),
+                            PERMISSIONS.REMOVE_COMMUNITY_ADMIN,
+                        );
+
+                    if (!canRemoveAdmin) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'Cannot remove admin users. Only super admins, organization admins, or community admins can perform this action.',
+                        });
+                    }
+                }
+
+                // Check if user is trying to remove a moderator (role-based protection)
+                if (targetUserMembership.role === 'moderator') {
+                    // Get current user's membership to check their role
+                    const currentUserMembership = community.members.find(
+                        (m) => m.userId === ctx.session.user.id,
+                    );
+
+                    // Only admins can remove moderators
+                    if (currentUserMembership?.role !== 'admin') {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'Cannot remove moderator users. Only community admins can perform this action.',
                         });
                     }
                 }
