@@ -619,6 +619,25 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 </button>
             </div>
             <EditorContent editor={editor} className={contentClasses} />
+
+            {/* Content validation indicator */}
+            <div className="text-muted-foreground mt-2 text-xs">
+                {editor && (
+                    <>
+                        {editor.getHTML() === '<p></p>' ||
+                        editor.getHTML() === '' ? (
+                            <span className="text-orange-500">
+                                Content cannot be empty
+                            </span>
+                        ) : (
+                            <span>
+                                Content length: {editor.getText().length}{' '}
+                                characters
+                            </span>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 };

@@ -44,9 +44,20 @@ const formSchema = z.object({
         .regex(/^[a-z0-9-]+$/),
     description: z.string().max(500).optional(),
     type: z.enum(['public', 'private']),
+    postCreationMinRole: z.enum(['member', 'moderator', 'admin']),
     rules: z.string().max(2000).optional(),
-    avatar: z.string().url().optional().nullable(),
-    banner: z.string().url().optional().nullable(),
+    avatar: z
+        .string()
+        .url({ message: 'Please enter a valid URL' })
+        .or(z.literal(''))
+        .optional()
+        .nullable(),
+    banner: z
+        .string()
+        .url({ message: 'Please enter a valid URL' })
+        .or(z.literal(''))
+        .optional()
+        .nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -95,6 +106,11 @@ export default function EditCommunityPage() {
                 community?.type === 'public' || community?.type === 'private'
                     ? community.type
                     : 'public',
+            postCreationMinRole:
+                (community?.postCreationMinRole as
+                    | 'member'
+                    | 'moderator'
+                    | 'admin') || 'member',
             rules: community?.rules || '',
             avatar: community?.avatar || '',
             banner: community?.banner || '',
@@ -109,6 +125,11 @@ export default function EditCommunityPage() {
                       community.type === 'private'
                           ? community.type
                           : 'public',
+                  postCreationMinRole:
+                      (community.postCreationMinRole as
+                          | 'member'
+                          | 'moderator'
+                          | 'admin') || 'member',
                   rules: community.rules || '',
                   avatar: community.avatar || '',
                   banner: community.banner || '',
@@ -124,6 +145,8 @@ export default function EditCommunityPage() {
             communityId: community.id,
             name: values.name,
             description: values.description || null,
+            type: values.type,
+            postCreationMinRole: values.postCreationMinRole,
             rules: values.rules || null,
             avatar: values.avatar || null,
             banner: values.banner || null,
@@ -348,6 +371,83 @@ export default function EditCommunityPage() {
                                                             post
                                                         </p>
                                                     </div>
+                                                </Label>
+                                            </div>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="postCreationMinRole"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>
+                                        Post Creation Permissions
+                                    </FormLabel>
+                                    <FormControl>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-3"
+                                        >
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="member"
+                                                    id="member"
+                                                />
+                                                <Label
+                                                    htmlFor="member"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        All members
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Any community member can
+                                                        create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="moderator"
+                                                    id="moderator"
+                                                />
+                                                <Label
+                                                    htmlFor="moderator"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Moderators and admins
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only moderators and
+                                                        admins can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="admin"
+                                                    id="admin"
+                                                />
+                                                <Label
+                                                    htmlFor="admin"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Admins only
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only community admins
+                                                        can create posts
+                                                    </span>
                                                 </Label>
                                             </div>
                                         </RadioGroup>

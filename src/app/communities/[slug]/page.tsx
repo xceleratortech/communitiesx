@@ -5,132 +5,23 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { trpc } from '@/providers/trpc-provider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-    Globe,
-    Lock,
-    Users,
-    MessageSquare,
-    Calendar,
-    ArrowLeft,
-    CheckCircle,
-    XCircle,
-    Shield,
-    UserMinus,
-    Plus,
-    MoreHorizontal,
-    Trash2,
-    Edit,
-    Tag,
-    Building,
-    X,
-    Crown,
-    UserPlus,
-    Search,
-    Loader2,
-} from 'lucide-react';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTypedSession } from '@/server/auth/client';
 import { toast } from 'sonner';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import { InviteEmailDialog } from '@/components/invite-email-dialog';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
-import { CreateTagDialog } from '@/components/create-tag-dialog';
-import { EditTagDialog } from '@/components/edit-tag-dialog';
-import { DeleteTagDialog } from '@/components/delete-tag-dialog';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Badge } from '@/components/ui/badge';
-import { UserBadgeDisplay } from '@/components/ui/user-badge-display';
-import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
-import { SafeHtml } from '@/lib/sanitize';
 import { isOrgAdminForCommunity } from '@/lib/utils';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-
-// Function to calculate relative time
-function getRelativeTime(date: Date): string {
-    const now = new Date();
-    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (diffInSeconds < 60) {
-        return 'just now';
-    }
-
-    const diffInMinutes = Math.floor(diffInSeconds / 60);
-    if (diffInMinutes < 60) {
-        return `${diffInMinutes} minute${diffInMinutes > 1 ? 's' : ''} ago`;
-    }
-
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) {
-        return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
-    }
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 30) {
-        return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
-    }
-
-    const diffInMonths = Math.floor(diffInDays / 30);
-    if (diffInMonths < 12) {
-        return `${diffInMonths} month${diffInMonths > 1 ? 's' : ''} ago`;
-    }
-
-    const diffInYears = Math.floor(diffInMonths / 12);
-    return `${diffInYears} year${diffInYears > 1 ? 's' : ''} ago`;
-}
+    CommunityBanner,
+    CommunityTabs,
+    CommunityOverview,
+    CommunityTags,
+    CommunityPosts,
+    CommunityMembers,
+    CommunityManage,
+    CommunityDialogs,
+    CommunitySkeleton,
+} from '@/components/community';
 
 export default function CommunityDetailPage() {
     const params = useParams();
@@ -147,10 +38,6 @@ export default function CommunityDetailPage() {
 
     const [activeTab, setActiveTab] = useState('posts');
     const [isActionInProgress, setIsActionInProgress] = useState(false);
-    const [isManageModeratorDialogOpen, setIsManageModeratorDialogOpen] =
-        useState(false);
-    const [isInviteEmailDialogOpen, setIsInviteEmailDialogOpen] =
-        useState(false);
 
     // Alert dialog states
     const [isLeaveCommunityDialogOpen, setIsLeaveCommunityDialogOpen] =
@@ -163,45 +50,37 @@ export default function CommunityDetailPage() {
         null,
     );
 
-    const [createTagDialogOpen, setCreateTagDialogOpen] = useState(false);
-    const [editTagDialogOpen, setEditTagDialogOpen] = useState(false);
-    const [deleteTagDialogOpen, setDeleteTagDialogOpen] = useState(false);
-    const [selectedTag, setSelectedTag] = useState<any>(null);
-
-    // Add Members dialog state
-    const [isAddMembersDialogOpen, setIsAddMembersDialogOpen] = useState(false);
-    const [selectedUsersToAdd, setSelectedUsersToAdd] = useState<string[]>([]);
-    const [selectedRoleToAdd, setSelectedRoleToAdd] = useState<
-        'member' | 'moderator'
-    >('member');
-    const [isAddingMembers, setIsAddingMembers] = useState(false);
-    const [memberSearchTerm, setMemberSearchTerm] = useState('');
-
     // Tag filtering state
     const [selectedTagFilters, setSelectedTagFilters] = useState<number[]>([]);
 
     // Post filtering state
     const [showMyPosts, setShowMyPosts] = useState(false);
 
+    // Pagination for members
+    const [currentMembersPage, setCurrentMembersPage] = useState(1);
+    const membersPerPage = 10;
+
+    // Add Members dialog state
+    const [isAddingMembers, setIsAddingMembers] = useState(false);
+    const [memberSearchTerm, setMemberSearchTerm] = useState('');
+
+    const [isClient, setIsClient] = useState(false);
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
     const { checkCommunityPermission } = usePermission();
 
-    // Check if user is org admin for this community
     const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
         session?.user,
         community?.orgId,
     );
 
-    // Check if user is SuperAdmin
     const isSuperAdmin = session?.user?.appRole === 'admin';
 
-    // Check if user can create posts based on role hierarchy
     const canCreatePost = useMemo(() => {
         if (!session?.user?.id || !community) return false;
-
-        // SuperAdmin can always create posts
         if (isSuperAdmin) return true;
-
-        // If org admin, allow post creation
         if (isOrgAdminForCommunityCheck) return true;
 
         const userMembership = community.members?.find(
@@ -234,6 +113,7 @@ export default function CommunityDetailPage() {
         isSuperAdmin,
         isOrgAdminForCommunityCheck,
     ]);
+
     const canEditPost = (post: any) => {
         if (!session) return false;
 
@@ -244,7 +124,7 @@ export default function CommunityDetailPage() {
         return checkCommunityPermission(
             community?.id?.toString() ?? '',
             PERMISSIONS.EDIT_POST,
-            community?.orgId, // Pass community's orgId for org admin validation
+            community?.orgId,
         );
     };
 
@@ -258,7 +138,7 @@ export default function CommunityDetailPage() {
         return checkCommunityPermission(
             community?.id?.toString() ?? '',
             PERMISSIONS.DELETE_POST,
-            community?.orgId, // Pass community's orgId for org admin validation
+            community?.orgId,
         );
     };
 
@@ -288,31 +168,74 @@ export default function CommunityDetailPage() {
         PERMISSIONS.ASSIGN_COMMUNITY_ADMIN,
         community?.orgId,
     );
+    const canRemoveCommunityAdmins = checkCommunityPermission(
+        community?.id?.toString() ?? '',
+        PERMISSIONS.REMOVE_COMMUNITY_ADMIN,
+        community?.orgId,
+    );
     const canInviteCommunityMembers = checkCommunityPermission(
         community?.id?.toString() ?? '',
         PERMISSIONS.INVITE_COMMUNITY_MEMBERS,
         community?.orgId,
     );
 
-    const handleEditTag = (tag: any) => {
-        setSelectedTag(tag);
-        setEditTagDialogOpen(true);
+    const canKickMember = (memberRole: string, memberUserId: string) => {
+        if (memberUserId === session?.user?.id) return false;
+        if (community?.createdBy === memberUserId) return false;
+        if (session?.user?.appRole === 'admin') return true;
+        if (isOrgAdminForCommunityCheck) return true;
+
+        if (
+            checkCommunityPermission(
+                community?.id?.toString() ?? '',
+                PERMISSIONS.MANAGE_COMMUNITY_MEMBERS,
+                community?.orgId,
+            )
+        ) {
+            const currentUserMembership = community?.members?.find(
+                (m) => m.userId === session?.user?.id,
+            );
+
+            if (currentUserMembership?.role === 'admin') {
+                return memberRole !== 'admin';
+            } else if (currentUserMembership?.role === 'moderator') {
+                return (
+                    memberRole === 'member' &&
+                    session?.user?.appRole !== 'admin' &&
+                    community?.createdBy !== memberUserId
+                );
+            }
+        }
+
+        return false;
     };
 
-    const handleDeleteTag = (tag: any) => {
-        setSelectedTag(tag);
-        setDeleteTagDialogOpen(true);
+    const shouldDisableActionButton = (
+        memberRole: string,
+        memberUserId: string,
+    ) => {
+        if (memberUserId === session?.user?.id) return false;
+        if (community?.createdBy === memberUserId) return false;
+        if (session?.user?.appRole === 'admin') return false;
+        if (isOrgAdminForCommunityCheck) return false;
+
+        const currentUserMembership = community?.members?.find(
+            (m) => m.userId === session?.user?.id,
+        );
+
+        if (currentUserMembership?.role === 'admin') {
+            return false;
+        } else if (currentUserMembership?.role === 'moderator') {
+            return (
+                memberRole === 'admin' ||
+                memberRole === 'moderator' ||
+                session?.user?.appRole === 'admin' ||
+                community?.createdBy === memberUserId
+            );
+        }
+
+        return true;
     };
-
-    // Pagination for members
-    const [currentMembersPage, setCurrentMembersPage] = useState(1);
-    const membersPerPage = 10;
-
-    // Use client-side flag to avoid hydration mismatch
-    const [isClient, setIsClient] = useState(false);
-    useEffect(() => {
-        setIsClient(true);
-    }, []);
 
     // Fetch pending requests if user is admin or moderator
     const { data: pendingRequests, refetch: refetchPendingRequests } =
@@ -327,9 +250,7 @@ export default function CommunityDetailPage() {
                             m.userId === session?.user.id &&
                             (m.role === 'admin' || m.role === 'moderator'),
                     ) ||
-                        // Allow org admins to see pending requests
                         isOrgAdminForCommunityCheck ||
-                        // Allow Super Admins to see pending requests for any community
                         session?.user?.appRole === 'admin'),
             },
         );
@@ -347,28 +268,6 @@ export default function CommunityDetailPage() {
             },
         );
 
-    // Add member to community mutation
-    const addMemberMutation =
-        trpc.communities.addOrgMembersToCommunity.useMutation({
-            onSuccess: () => {
-                refetch();
-                refetchAvailableMembers();
-                setIsAddMembersDialogOpen(false);
-                setSelectedUsersToAdd([]);
-                setSelectedRoleToAdd('member');
-                setMemberSearchTerm('');
-                toast.success('Members added to community successfully');
-            },
-            onError: (error: any) => {
-                toast.error('Failed to add members to community', {
-                    description: error.message,
-                });
-            },
-            onSettled: () => {
-                setIsAddingMembers(false);
-            },
-        });
-
     // Check if user has pending requests
     const { data: userPendingRequests } =
         trpc.communities.getUserPendingRequests.useQuery(
@@ -376,15 +275,17 @@ export default function CommunityDetailPage() {
             { enabled: !!session && !!community?.id && !!session?.user },
         );
 
-    const hasPendingJoinRequest = userPendingRequests?.some(
-        (req: { requestType: string; status: string }) =>
-            req.requestType === 'join' && req.status === 'pending',
-    );
+    const hasPendingJoinRequest =
+        userPendingRequests?.some(
+            (req: { requestType: string; status: string }) =>
+                req.requestType === 'join' && req.status === 'pending',
+        ) || false;
 
-    const hasPendingFollowRequest = userPendingRequests?.some(
-        (req: { requestType: string; status: string }) =>
-            req.requestType === 'follow' && req.status === 'pending',
-    );
+    const hasPendingFollowRequest =
+        userPendingRequests?.some(
+            (req: { requestType: string; status: string }) =>
+                req.requestType === 'follow' && req.status === 'pending',
+        ) || false;
 
     // Join, follow, leave, unfollow mutations
     const joinCommunityMutation = trpc.communities.joinCommunity.useMutation({
@@ -539,6 +440,25 @@ export default function CommunityDetailPage() {
             },
         });
 
+    // Add member to community mutation
+    const addMemberMutation =
+        trpc.communities.addOrgMembersToCommunity.useMutation({
+            onSuccess: () => {
+                refetch();
+                refetchAvailableMembers();
+                setIsAddingMembers(false);
+                toast.success('Members added to community successfully');
+            },
+            onError: (error: any) => {
+                toast.error('Failed to add members to community', {
+                    description: error.message,
+                });
+            },
+            onSettled: () => {
+                setIsAddingMembers(false);
+            },
+        });
+
     // Handle membership actions
     const handleJoinCommunity = () => {
         if (!community || isActionInProgress) return;
@@ -627,6 +547,23 @@ export default function CommunityDetailPage() {
         setIsRemoveUserDialogOpen(true);
     };
 
+    // Handle adding member to community
+    const handleAddMember = async (
+        users: { userId: string; role: 'member' | 'moderator' }[],
+    ) => {
+        if (!community || !users.length) return;
+
+        setIsAddingMembers(true);
+        try {
+            await addMemberMutation.mutateAsync({
+                communityId: community.id,
+                users,
+            });
+        } catch (error) {
+            // Error is already handled in the mutation
+        }
+    };
+
     const confirmRemoveUserFromCommunity = () => {
         if (!community || !userToRemove) return;
         removeUserFromCommunityMutation.mutate({
@@ -637,29 +574,8 @@ export default function CommunityDetailPage() {
         setUserToRemove(null);
     };
 
-    // Handle adding member to community
-    const handleAddMember = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!community || !selectedUsersToAdd.length) return;
-
-        setIsAddingMembers(true);
-        try {
-            await addMemberMutation.mutateAsync({
-                communityId: community.id,
-                users: selectedUsersToAdd.map((userId) => ({
-                    userId,
-                    role: selectedRoleToAdd,
-                })),
-            });
-        } catch (error) {
-            // Error is already handled in the mutation
-        }
-    };
-
-    // Handle tab change and reset pagination
     const handleTabChange = (value: string) => {
         setActiveTab(value);
-        // Reset pagination when switching tabs
         setCurrentMembersPage(1);
     };
 
@@ -689,20 +605,17 @@ export default function CommunityDetailPage() {
         }
     };
 
-    // Filter posts by selected tags and post filter
     const filteredPosts = useMemo(() => {
         if (!community?.posts) return [];
 
         let filtered = community.posts;
 
-        // Filter by My Posts (posts by the current user)
         if (showMyPosts) {
             filtered = filtered.filter(
                 (post: any) => post.author?.id === session?.user?.id,
             );
         }
 
-        // Filter by selected tags
         if (selectedTagFilters.length > 0) {
             filtered = filtered.filter(
                 (post: any) =>
@@ -716,7 +629,6 @@ export default function CommunityDetailPage() {
         return filtered;
     }, [community?.posts, selectedTagFilters, showMyPosts, session?.user?.id]);
 
-    // Handle tag filter toggle
     const handleTagFilterToggle = (tagId: number) => {
         setSelectedTagFilters((prev) =>
             prev.includes(tagId)
@@ -725,18 +637,16 @@ export default function CommunityDetailPage() {
         );
     };
 
-    // Handle post filter toggle
     const handlePostFilterToggle = () => {
         setShowMyPosts((prev) => !prev);
     };
 
-    // Don't render anything meaningful during SSR to avoid hydration mismatches
     if (!isClient) {
-        return <CommunityDetailSkeleton />;
+        return <CommunitySkeleton />;
     }
 
     if (session === undefined) {
-        return <CommunityDetailSkeleton />;
+        return <CommunitySkeleton />;
     }
 
     if (!session) {
@@ -755,7 +665,6 @@ export default function CommunityDetailPage() {
         );
     }
 
-    // Only show loading state on client after hydration
     if (isClient && isLoading) {
         return <Loading message="Loading community..." />;
     }
@@ -769,16 +678,12 @@ export default function CommunityDetailPage() {
                     removed.
                 </p>
                 <Button asChild>
-                    <Link href="/communities">
-                        <ArrowLeft className="mr-2 h-4 w-4" />
-                        Back to Communities
-                    </Link>
+                    <Link href="/communities">Back to Communities</Link>
                 </Button>
             </div>
         );
     }
 
-    // Check if user is a member or follower
     const userMembership = community.members?.find(
         (m) => m.userId === session.user.id,
     );
@@ -786,7 +691,7 @@ export default function CommunityDetailPage() {
     const isMember =
         (!!userMembership && userMembership.membershipType === 'member') ||
         isOrgAdminForCommunityCheck ||
-        isSuperAdmin; // SuperAdmin is always considered a member
+        isSuperAdmin;
     const isFollower =
         !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
@@ -794,2040 +699,94 @@ export default function CommunityDetailPage() {
 
     return (
         <div className="container mx-auto py-6">
-            {/* Responsive Banner and Community Info */}
-            {/* Professional Banner with Overlapping Avatar */}
-            <div className="mb-8">
-                {/* Banner Image */}
-                <div className="relative h-32 w-full overflow-hidden rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 sm:h-40 md:h-48 lg:h-56">
-                    {community.banner && (
-                        <img
-                            src={community.banner || '/placeholder.svg'}
-                            alt={`${community.name} banner`}
-                            className="h-full w-full object-cover"
-                        />
-                    )}
-                    {/* Overlay for better text readability */}
-                    <div className="absolute inset-0 bg-black/20" />
-                </div>
+            <CommunityBanner
+                community={community}
+                isMember={isMember}
+                isFollower={isFollower}
+                isAdmin={isAdmin}
+                hasPendingJoinRequest={hasPendingJoinRequest}
+                hasPendingFollowRequest={hasPendingFollowRequest}
+                isActionInProgress={isActionInProgress}
+                onJoinCommunity={handleJoinCommunity}
+                onFollowCommunity={handleFollowCommunity}
+                onLeaveCommunity={handleLeaveCommunity}
+                onUnfollowCommunity={handleUnfollowCommunity}
+            />
 
-                {/* Overlapping Content Container */}
-                <div className="relative -mt-8 px-4 sm:-mt-10 sm:px-6 md:-mt-12 md:px-8 lg:-mt-10">
-                    {/* Mobile Layout */}
-                    <div className="block lg:hidden">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                            {/* Avatar */}
-                            <div className="flex-shrink-0">
-                                <Avatar className="border-background h-16 w-16 border-4 shadow-lg sm:h-20 sm:w-20">
-                                    <AvatarImage
-                                        src={community.avatar || undefined}
-                                        alt={community.name}
-                                    />
-                                    <AvatarFallback className="bg-primary text-lg font-semibold sm:text-xl">
-                                        {community.name
-                                            .substring(0, 2)
-                                            .toUpperCase()}
-                                    </AvatarFallback>
-                                </Avatar>
-                            </div>
-
-                            {/* Community Info */}
-                            <div className="min-w-0 flex-1 sm:pb-2">
-                                <div className="mb-2 flex items-center gap-2">
-                                    <h1 className="text-foreground truncate text-xl font-bold sm:text-2xl">
-                                        {community.name}
-                                    </h1>
-                                    {community.type === 'private' ? (
-                                        <Lock className="text-muted-foreground h-4 w-4 flex-shrink-0 sm:h-5 sm:w-5" />
-                                    ) : (
-                                        <Globe className="text-muted-foreground h-4 w-4 flex-shrink-0 sm:h-5 sm:w-5" />
-                                    )}
-                                </div>
-                                <div className="text-muted-foreground space-y-1 text-sm">
-                                    <div className="flex items-center gap-1">
-                                        <Users className="h-3 w-3" />
-                                        <span>
-                                            {community.members?.length || 0}{' '}
-                                            members
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <Calendar className="h-3 w-3" />
-                                        <span>
-                                            Created{' '}
-                                            {new Date(
-                                                community.createdAt,
-                                            ).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Action Buttons - Mobile */}
-                        <div className="mt-4 flex flex-col gap-2">
-                            {isMember ? (
-                                <Button
-                                    variant="outline"
-                                    onClick={handleLeaveCommunity}
-                                    disabled={isActionInProgress || isAdmin}
-                                    className="w-full bg-transparent"
-                                >
-                                    {isAdmin ? 'Admin' : 'Leave Community'}
-                                </Button>
-                            ) : isFollower ? (
-                                <div className="flex flex-col gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleUnfollowCommunity}
-                                        disabled={isActionInProgress}
-                                        className="w-full bg-transparent"
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Unfollow'}
-                                    </Button>
-                                    {hasPendingJoinRequest ? (
-                                        <Button
-                                            disabled
-                                            variant="secondary"
-                                            className="w-full"
-                                        >
-                                            Join Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            onClick={handleJoinCommunity}
-                                            disabled={isActionInProgress}
-                                            className="w-full"
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Join Community'}
-                                        </Button>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-2">
-                                    {hasPendingFollowRequest ? (
-                                        <Button
-                                            disabled
-                                            variant="secondary"
-                                            className="w-full"
-                                        >
-                                            Follow Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleFollowCommunity}
-                                            disabled={isActionInProgress}
-                                            className="w-full bg-transparent"
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Follow'}
-                                        </Button>
-                                    )}
-                                    {hasPendingJoinRequest ? (
-                                        <Button
-                                            disabled
-                                            variant="secondary"
-                                            className="w-full"
-                                        >
-                                            Join Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            onClick={handleJoinCommunity}
-                                            disabled={isActionInProgress}
-                                            className="w-full"
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Join Community'}
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Desktop Layout */}
-                    <div className="hidden lg:flex lg:items-end lg:justify-between">
-                        {/* Left side - Avatar and Info */}
-                        <div className="flex items-end gap-6">
-                            <Avatar className="border-background h-24 w-24 border-4 shadow-lg xl:h-28 xl:w-28">
-                                <AvatarImage
-                                    src={community.avatar || undefined}
-                                    alt={community.name}
-                                />
-                                <AvatarFallback className="bg-primary text-2xl font-semibold xl:text-3xl">
-                                    {community.name
-                                        .substring(0, 2)
-                                        .toUpperCase()}
-                                </AvatarFallback>
-                            </Avatar>
-                            <div className="pb-2">
-                                <div className="mb-1 flex items-center gap-3">
-                                    <h1 className="text-foreground text-3xl font-bold xl:text-4xl">
-                                        {community.name}
-                                    </h1>
-                                    {community.type === 'private' ? (
-                                        <Lock className="text-muted-foreground h-6 w-6" />
-                                    ) : (
-                                        <Globe className="text-muted-foreground h-6 w-6" />
-                                    )}
-                                </div>
-                                <div className="text-muted-foreground flex items-center gap-6 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <Users className="h-4 w-4" />
-                                        <span>
-                                            {community.members?.length || 0}{' '}
-                                            members
-                                        </span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Calendar className="h-4 w-4" />
-                                        <span>
-                                            Created{' '}
-                                            {new Date(
-                                                community.createdAt,
-                                            ).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right side - Action Buttons */}
-                        <div className="pb-3">
-                            {isMember ? (
-                                <Button
-                                    variant="outline"
-                                    onClick={handleLeaveCommunity}
-                                    disabled={isActionInProgress || isAdmin}
-                                >
-                                    {isAdmin ? 'Admin' : 'Leave Community'}
-                                </Button>
-                            ) : isFollower ? (
-                                <div className="flex gap-3">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleUnfollowCommunity}
-                                        disabled={isActionInProgress}
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Unfollow'}
-                                    </Button>
-                                    {hasPendingJoinRequest ? (
-                                        <Button disabled variant="secondary">
-                                            Join Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            onClick={handleJoinCommunity}
-                                            disabled={isActionInProgress}
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Join Community'}
-                                        </Button>
-                                    )}
-                                </div>
-                            ) : (
-                                <div className="flex gap-3">
-                                    {hasPendingFollowRequest ? (
-                                        <Button disabled variant="secondary">
-                                            Follow Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleFollowCommunity}
-                                            disabled={isActionInProgress}
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Follow'}
-                                        </Button>
-                                    )}
-                                    {hasPendingJoinRequest ? (
-                                        <Button disabled variant="secondary">
-                                            Join Request Pending
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            onClick={handleJoinCommunity}
-                                            disabled={isActionInProgress}
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Join Community'}
-                                        </Button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Enhanced Tabs with Icons and Proper Borders */}
-            <Tabs
-                defaultValue="posts"
-                className="w-full"
-                onValueChange={handleTabChange}
+            <CommunityTabs
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                canManageCommunityMembers={canManageCommunityMembers}
+                pendingRequestsCount={pendingRequests?.length || 0}
             >
-                <div className="border-border border-b">
-                    <TabsList className="h-auto w-auto justify-start border-0 bg-transparent p-0">
-                        <TabsTrigger
-                            value="about"
-                            className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                        >
-                            <Globe className="h-4 w-4 sm:hidden" />
-                            <span className="hidden sm:inline">Overview</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="posts"
-                            className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                        >
-                            <MessageSquare className="h-4 w-4 sm:hidden" />
-                            <span className="hidden sm:inline">Posts</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="tags"
-                            className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                        >
-                            <Tag className="h-4 w-4 sm:hidden" />
-                            <span className="hidden sm:inline">Tags</span>
-                        </TabsTrigger>
-                        <TabsTrigger
-                            value="members"
-                            className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                        >
-                            <Users className="h-4 w-4 sm:hidden" />
-                            <span className="hidden sm:inline">Members</span>
-                        </TabsTrigger>
-                        {canManageCommunityMembers && (
-                            <TabsTrigger
-                                value="manage"
-                                className="data-[state=active]:border-primary relative flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                            >
-                                <Shield className="h-4 w-4 sm:hidden" />
-                                <span className="hidden sm:inline">Manage</span>
-                                {pendingRequests &&
-                                    pendingRequests.length > 0 && (
-                                        <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-                                            {pendingRequests.length}
-                                        </span>
-                                    )}
-                            </TabsTrigger>
-                        )}
-                    </TabsList>
-                </div>
+                <CommunityOverview community={community} />
 
-                <div className="mt-6">
-                    <TabsContent value="tags" className="mt-0 space-y-6">
-                        {community.tags && community.tags.length > 0 ? (
-                            <div>
-                                <div className="mb-4 flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <h2 className="text-xl font-semibold">
-                                            Tags
-                                        </h2>
-                                        <p className="text-muted-foreground text-sm">
-                                            Manage tags for this community
-                                        </p>
-                                    </div>
-                                    {canCreateTag && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={() =>
-                                                setCreateTagDialogOpen(true)
-                                            }
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Create Tag
-                                        </Button>
-                                    )}
-                                </div>
+                <CommunityPosts
+                    community={community}
+                    isLoading={isLoading}
+                    isMember={isMember}
+                    canCreatePost={canCreatePost}
+                    filteredPosts={filteredPosts}
+                    showMyPosts={showMyPosts}
+                    selectedTagFilters={selectedTagFilters}
+                    onPostFilterToggle={handlePostFilterToggle}
+                    onTagFilterToggle={handleTagFilterToggle}
+                    onClearTagFilters={() => setSelectedTagFilters([])}
+                    onClearPostFilter={() => setShowMyPosts(false)}
+                    onDeletePost={handleDeletePost}
+                    canEditPost={canEditPost}
+                    canDeletePost={canDeletePost}
+                    router={router}
+                />
 
-                                <div className="overflow-hidden rounded-md border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Title</TableHead>
-                                                <TableHead>
-                                                    Description
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Actions
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {community.tags.map((tag: any) => (
-                                                <TableRow key={tag.id}>
-                                                    <TableCell>
-                                                        {tag.name}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {tag.description}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {(canEditTag ||
-                                                            canDeleteTag) && (
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger
-                                                                    asChild
-                                                                >
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                    >
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    {canEditTag && (
-                                                                        <DropdownMenuItem
-                                                                            onClick={() =>
-                                                                                handleEditTag(
-                                                                                    tag,
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <Edit className="mr-2 h-4 w-4" />
-                                                                            Edit
-                                                                            Tag
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                    <DropdownMenuSeparator />
-                                                                    {canDeleteTag && (
-                                                                        <DropdownMenuItem
-                                                                            onClick={() =>
-                                                                                handleDeleteTag(
-                                                                                    tag,
-                                                                                )
-                                                                            }
-                                                                            className="text-destructive"
-                                                                        >
-                                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                                            Delete
-                                                                            Tag
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="py-12 text-center">
-                                <Calendar className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
-                                <p className="text-muted-foreground">
-                                    No tags yet.
-                                </p>
-                                {canCreateTag && (
-                                    <Button
-                                        onClick={() =>
-                                            setCreateTagDialogOpen(true)
-                                        }
-                                        className="mt-4"
-                                    >
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Create Tag
-                                    </Button>
-                                )}
-                            </div>
-                        )}
+                <CommunityTags
+                    community={community}
+                    canCreateTag={canCreateTag}
+                    canEditTag={canEditTag}
+                    canDeleteTag={canDeleteTag}
+                />
 
-                        <CreateTagDialog
-                            open={createTagDialogOpen}
-                            onOpenChange={setCreateTagDialogOpen}
-                            communityId={community.id}
-                        />
+                <CommunityMembers
+                    community={community}
+                    canManageCommunityMembers={canManageCommunityMembers}
+                    canManageCommunityAdmins={canManageCommunityAdmins}
+                    canRemoveCommunityAdmins={canRemoveCommunityAdmins}
+                    canInviteCommunityMembers={canInviteCommunityMembers}
+                    currentMembersPage={currentMembersPage}
+                    membersPerPage={membersPerPage}
+                    onPageChange={setCurrentMembersPage}
+                    onAssignModerator={handleAssignModerator}
+                    onAssignAdmin={handleAssignAdmin}
+                    onRemoveAdmin={handleRemoveAdmin}
+                    onRemoveModerator={handleRemoveModerator}
+                    onRemoveUserFromCommunity={handleRemoveUserFromCommunity}
+                    canKickMember={canKickMember}
+                    shouldDisableActionButton={shouldDisableActionButton}
+                    availableOrgMembers={availableOrgMembers || []}
+                    onAddMembers={handleAddMember}
+                    isAddingMembers={isAddingMembers}
+                />
 
-                        <EditTagDialog
-                            open={editTagDialogOpen}
-                            onOpenChange={setEditTagDialogOpen}
-                            tag={selectedTag}
-                        />
+                {canManageCommunityMembers && (
+                    <CommunityManage
+                        pendingRequests={pendingRequests || []}
+                        onApproveRequest={handleApproveRequest}
+                        onRejectRequest={handleRejectRequest}
+                    />
+                )}
+            </CommunityTabs>
 
-                        <DeleteTagDialog
-                            open={deleteTagDialogOpen}
-                            onOpenChange={setDeleteTagDialogOpen}
-                            tag={selectedTag}
-                        />
-                    </TabsContent>
-
-                    <TabsContent value="posts" className="mt-0 space-y-6">
-                        {/* Show loading skeleton while data is being fetched */}
-                        {isLoading ? (
-                            <div className="space-y-4">
-                                {[...Array(3)].map((_, index) => (
-                                    <Card
-                                        key={index}
-                                        className="relative gap-2 py-2"
-                                    >
-                                        <div className="px-4 py-0">
-                                            <Skeleton className="mb-2 h-6 w-3/4" />
-                                            <Skeleton className="mb-2 h-4 w-full" />
-                                            <Skeleton className="mb-2 h-4 w-full" />
-                                            <Skeleton className="mb-2 h-4 w-2/3" />
-                                            <div className="mt-3 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Skeleton className="h-4 w-32" />
-                                                    <div className="ml-4">
-                                                        <Skeleton className="h-4 w-8" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                ))}
-                            </div>
-                        ) : (
-                            <>
-                                {/* Posts header and tag filters */}
-                                <div className="mb-6 flex items-center justify-between">
-                                    <div className="flex flex-col">
-                                        <h2 className="text-xl font-semibold">
-                                            Posts
-                                        </h2>
-                                        <p className="text-muted-foreground text-sm">
-                                            All the posts in this community
-                                        </p>
-                                    </div>
-                                    {canCreatePost && (
-                                        <Button asChild>
-                                            <Link
-                                                href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
-                                            >
-                                                Create Post
-                                            </Link>
-                                        </Button>
-                                    )}
-                                </div>
-
-                                {/* Post Filter */}
-                                <div className="mb-4 flex flex-wrap items-center gap-2">
-                                    <button
-                                        onClick={handlePostFilterToggle}
-                                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                            !showMyPosts
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                        }`}
-                                    >
-                                        <Building className="h-4 w-4" />
-                                        All Posts
-                                    </button>
-                                    <button
-                                        onClick={handlePostFilterToggle}
-                                        className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                            showMyPosts
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                        }`}
-                                    >
-                                        <Users className="h-4 w-4" />
-                                        My Posts
-                                    </button>
-                                </div>
-
-                                {/* Tag Filter */}
-                                {community.tags &&
-                                    community.tags.length > 0 && (
-                                        <div className="mt-4 mb-6">
-                                            <div className="flex flex-wrap gap-2">
-                                                {community.tags.map(
-                                                    (tag: any) => (
-                                                        <button
-                                                            key={tag.id}
-                                                            onClick={() =>
-                                                                handleTagFilterToggle(
-                                                                    tag.id,
-                                                                )
-                                                            }
-                                                            className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                                                selectedTagFilters.includes(
-                                                                    tag.id,
-                                                                )
-                                                                    ? 'bg-primary text-primary-foreground'
-                                                                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                                            }`}
-                                                        >
-                                                            {tag.name}
-                                                        </button>
-                                                    ),
-                                                )}
-                                                {selectedTagFilters.length >
-                                                    0 && (
-                                                    <button
-                                                        onClick={() =>
-                                                            setSelectedTagFilters(
-                                                                [],
-                                                            )
-                                                        }
-                                                        className="bg-muted text-muted-foreground hover:bg-muted/80 inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
-                                                    >
-                                                        Clear Filters
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                {/* Render posts for members */}
-                                {isMember &&
-                                    filteredPosts &&
-                                    filteredPosts.length > 0 && (
-                                        <div className="space-y-4">
-                                            {filteredPosts.map((post: any) => (
-                                                <Link
-                                                    key={post.id}
-                                                    href={`/communities/${community.slug}/posts/${post.id}`}
-                                                    className="block"
-                                                    style={{
-                                                        textDecoration: 'none',
-                                                    }}
-                                                >
-                                                    <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md">
-                                                        {/* Post content */}
-                                                        <div className="px-4 py-0">
-                                                            {/* Post title */}
-                                                            <h3 className="mt-0 mb-2 text-base font-medium">
-                                                                {post.isDeleted
-                                                                    ? '[Deleted]'
-                                                                    : post.title}
-                                                            </h3>
-
-                                                            {/* Post content */}
-                                                            {post.isDeleted ? (
-                                                                <div className="space-y-1">
-                                                                    <span className="text-muted-foreground text-sm italic">
-                                                                        [Content
-                                                                        deleted]
-                                                                    </span>
-                                                                    <span className="text-muted-foreground block text-xs">
-                                                                        Removed
-                                                                        on{' '}
-                                                                        {new Date(
-                                                                            post.updatedAt,
-                                                                        ).toLocaleString()}
-                                                                    </span>
-                                                                </div>
-                                                            ) : (
-                                                                <div className="text-muted-foreground text-sm">
-                                                                    <SafeHtml
-                                                                        html={
-                                                                            post.content
-                                                                        }
-                                                                        className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                                                    />
-                                                                </div>
-                                                            )}
-
-                                                            {/* Tags display */}
-                                                            {post.tags &&
-                                                                post.tags
-                                                                    .length >
-                                                                    0 && (
-                                                                    <div className="mt-2 flex flex-wrap gap-1">
-                                                                        {post.tags
-                                                                            .slice(
-                                                                                0,
-                                                                                3,
-                                                                            )
-                                                                            .map(
-                                                                                (
-                                                                                    tag: any,
-                                                                                ) => (
-                                                                                    <span
-                                                                                        key={
-                                                                                            tag.id
-                                                                                        }
-                                                                                        className="bg-secondary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                                                                        style={{
-                                                                                            backgroundColor:
-                                                                                                tag.color
-                                                                                                    ? `${tag.color}20`
-                                                                                                    : undefined,
-                                                                                            color:
-                                                                                                tag.color ||
-                                                                                                undefined,
-                                                                                        }}
-                                                                                    >
-                                                                                        {
-                                                                                            tag.name
-                                                                                        }
-                                                                                    </span>
-                                                                                ),
-                                                                            )}
-                                                                        {post
-                                                                            .tags
-                                                                            .length >
-                                                                            3 && (
-                                                                            <span className="bg-secondary text-muted-foreground inline-flex items-center rounded-full px-2 py-1 text-xs font-medium">
-                                                                                +
-                                                                                {post
-                                                                                    .tags
-                                                                                    .length -
-                                                                                    3}{' '}
-                                                                                more
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-
-                                                            {/* Post metadata */}
-                                                            <div className="mt-3 flex items-center justify-between">
-                                                                <div className="flex items-center">
-                                                                    <span className="text-muted-foreground text-xs">
-                                                                        Posted
-                                                                        by{' '}
-                                                                        {post
-                                                                            .author
-                                                                            ?.id ? (
-                                                                            <UserProfilePopover
-                                                                                userId={
-                                                                                    post
-                                                                                        .author
-                                                                                        .id
-                                                                                }
-                                                                            >
-                                                                                <span className="cursor-pointer hover:underline">
-                                                                                    {post
-                                                                                        .author
-                                                                                        .name ||
-                                                                                        'Unknown'}
-                                                                                </span>
-                                                                            </UserProfilePopover>
-                                                                        ) : (
-                                                                            'Unknown'
-                                                                        )}{' '}
-                                                                        •{' '}
-                                                                        {new Date(
-                                                                            post.createdAt,
-                                                                        ).toLocaleDateString()}
-                                                                    </span>
-                                                                    <div className="ml-4 items-center space-x-4">
-                                                                        <button
-                                                                            className="text-muted-foreground flex items-center text-xs"
-                                                                            onClick={(
-                                                                                e,
-                                                                            ) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                router.push(
-                                                                                    `/posts/${post.id}`,
-                                                                                );
-                                                                            }}
-                                                                        >
-                                                                            <MessageSquare className="mr-1 h-3 w-3" />
-                                                                            {Array.isArray(
-                                                                                post.comments,
-                                                                            )
-                                                                                ? post
-                                                                                      .comments
-                                                                                      .length
-                                                                                : 0}
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Action buttons */}
-                                                                <div className="flex space-x-1">
-                                                                    {canEditPost(
-                                                                        post,
-                                                                    ) && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(
-                                                                                e: React.MouseEvent,
-                                                                            ) => {
-                                                                                e.preventDefault();
-                                                                                e.stopPropagation();
-                                                                                router.push(
-                                                                                    `/communities/${community.slug}/posts/${post.id}/edit`,
-                                                                                );
-                                                                            }}
-                                                                            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"
-                                                                        >
-                                                                            <Edit className="h-4 w-4" />
-                                                                        </button>
-                                                                    )}
-                                                                    {canDeletePost(
-                                                                        post,
-                                                                    ) && (
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={(
-                                                                                e,
-                                                                            ) =>
-                                                                                handleDeletePost(
-                                                                                    post.id,
-                                                                                    e,
-                                                                                )
-                                                                            }
-                                                                            className="text-muted-foreground hover:bg-accent hover:text-destructive rounded-full p-1.5"
-                                                                        >
-                                                                            <Trash2 className="h-4 w-4" />
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </Card>
-                                                </Link>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                {/* Empty state for members */}
-                                {isMember &&
-                                    (!filteredPosts ||
-                                        filteredPosts.length === 0) && (
-                                        <div className="py-12 text-center">
-                                            <Calendar className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
-                                            <p className="text-muted-foreground">
-                                                {selectedTagFilters.length > 0
-                                                    ? 'No posts match the selected tags.'
-                                                    : showMyPosts
-                                                      ? "You haven't created any posts in this community yet."
-                                                      : 'No posts yet.'}
-                                            </p>
-                                            {selectedTagFilters.length > 0 ? (
-                                                <Button
-                                                    onClick={() =>
-                                                        setSelectedTagFilters(
-                                                            [],
-                                                        )
-                                                    }
-                                                    className="mt-4"
-                                                >
-                                                    Clear Filters
-                                                </Button>
-                                            ) : showMyPosts ? (
-                                                <Button
-                                                    onClick={() =>
-                                                        setShowMyPosts(false)
-                                                    }
-                                                    className="mt-4"
-                                                >
-                                                    Show All Posts
-                                                </Button>
-                                            ) : canCreatePost ? (
-                                                <Button
-                                                    asChild
-                                                    className="mt-4"
-                                                >
-                                                    <Link
-                                                        href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
-                                                    >
-                                                        <Plus className="mr-2 h-4 w-4" />
-                                                        Create First Post
-                                                    </Link>
-                                                </Button>
-                                            ) : null}
-                                        </div>
-                                    )}
-                            </>
-                        )}
-
-                        {/* Show create post hint for users who can't create posts */}
-                        {session && community && !canCreatePost && (
-                            <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
-                                {(() => {
-                                    const userMembership =
-                                        community.members?.find(
-                                            (m) =>
-                                                m.userId === session.user.id &&
-                                                m.membershipType === 'member' &&
-                                                m.status === 'active',
-                                        );
-
-                                    if (!userMembership) {
-                                        return (
-                                            <>
-                                                <p className="text-muted-foreground mb-2">
-                                                    You need to be a member to
-                                                    create posts
-                                                </p>
-                                                <Button
-                                                    onClick={
-                                                        handleJoinCommunity
-                                                    }
-                                                    disabled={
-                                                        isActionInProgress
-                                                    }
-                                                >
-                                                    {isActionInProgress
-                                                        ? 'Processing...'
-                                                        : 'Join Community'}
-                                                </Button>
-                                            </>
-                                        );
-                                    }
-
-                                    const roleDisplay = {
-                                        member: 'All members',
-                                        moderator: 'Moderators and admins',
-                                        admin: 'Admins only',
-                                    };
-
-                                    const currentRequirement =
-                                        community.postCreationMinRole ||
-                                        'member';
-
-                                    return (
-                                        <p className="text-muted-foreground">
-                                            Post creation is restricted to:{' '}
-                                            <span className="font-medium">
-                                                {
-                                                    roleDisplay[
-                                                        currentRequirement as keyof typeof roleDisplay
-                                                    ]
-                                                }
-                                            </span>
-                                        </p>
-                                    );
-                                })()}
-                            </div>
-                        )}
-
-                        {!isMember &&
-                            !isFollower &&
-                            community.type === 'private' && (
-                                <div className="bg-muted/50 mb-6 rounded-md p-4 text-center">
-                                    <p className="text-muted-foreground mb-2">
-                                        You need to follow or join this
-                                        community to view posts
-                                    </p>
-                                    <div className="mt-4 flex justify-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            onClick={handleFollowCommunity}
-                                            disabled={isActionInProgress}
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Follow Community'}
-                                        </Button>
-                                        <Button
-                                            onClick={handleJoinCommunity}
-                                            disabled={isActionInProgress}
-                                        >
-                                            {isActionInProgress
-                                                ? 'Processing...'
-                                                : 'Join Community'}
-                                        </Button>
-                                    </div>
-                                </div>
-                            )}
-                    </TabsContent>
-
-                    <TabsContent value="about" className="mt-0">
-                        <div className="space-y-6">
-                            <div>
-                                <h2 className="mb-2 text-xl font-semibold">
-                                    Overview
-                                </h2>
-                                <p className="text-muted-foreground">
-                                    {community.description ||
-                                        'No description provided.'}
-                                </p>
-                            </div>
-
-                            <div>
-                                <h3 className="mb-3 font-semibold">Rules</h3>
-                                {community.rules ? (
-                                    <div className="text-sm leading-relaxed whitespace-pre-line">
-                                        {community.rules}
-                                    </div>
-                                ) : (
-                                    <p className="text-muted-foreground text-sm">
-                                        No rules have been set for this
-                                        community.
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </TabsContent>
-
-                    <TabsContent value="members" className="mt-0">
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between">
-                                <div className="flex flex-col">
-                                    <h2 className="text-xl font-semibold">
-                                        Members
-                                    </h2>
-                                    <p className="text-muted-foreground text-sm">
-                                        People who are part of this community
-                                    </p>
-                                </div>
-                                <div className="flex gap-2">
-                                    {canInviteCommunityMembers && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={() =>
-                                                setIsInviteEmailDialogOpen(true)
-                                            }
-                                        >
-                                            Invite Members
-                                        </Button>
-                                    )}
-                                    {canManageCommunityMembers && (
-                                        <Dialog
-                                            open={isAddMembersDialogOpen}
-                                            onOpenChange={(open) => {
-                                                setIsAddMembersDialogOpen(open);
-                                                if (!open) {
-                                                    setMemberSearchTerm('');
-                                                    setSelectedUsersToAdd([]);
-                                                }
-                                            }}
-                                        >
-                                            <DialogTrigger asChild>
-                                                <Button variant="outline">
-                                                    <UserPlus className="mr-2 h-4 w-4" />
-                                                    Add Members
-                                                </Button>
-                                            </DialogTrigger>
-                                            <DialogContent>
-                                                <DialogHeader>
-                                                    <DialogTitle>
-                                                        Add Organization Members
-                                                    </DialogTitle>
-                                                    <DialogDescription>
-                                                        Add existing
-                                                        organization members to
-                                                        this community.
-                                                    </DialogDescription>
-                                                </DialogHeader>
-                                                <form
-                                                    onSubmit={handleAddMember}
-                                                    className="space-y-4"
-                                                >
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="member-search">
-                                                            Search Members
-                                                        </Label>
-                                                        <div className="relative">
-                                                            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                                                            <Input
-                                                                id="member-search"
-                                                                placeholder="Search by name or email..."
-                                                                value={
-                                                                    memberSearchTerm
-                                                                }
-                                                                onChange={(e) =>
-                                                                    setMemberSearchTerm(
-                                                                        e.target
-                                                                            .value,
-                                                                    )
-                                                                }
-                                                                className="pl-10"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="user-select">
-                                                            Select Members
-                                                        </Label>
-                                                        {availableOrgMembers &&
-                                                            availableOrgMembers.length >
-                                                                0 && (
-                                                                <div className="mb-2 flex gap-2">
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={() =>
-                                                                            setSelectedUsersToAdd(
-                                                                                availableOrgMembers.map(
-                                                                                    (
-                                                                                        m,
-                                                                                    ) =>
-                                                                                        m.id,
-                                                                                ),
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        Select
-                                                                        All
-                                                                    </Button>
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="outline"
-                                                                        size="sm"
-                                                                        onClick={() =>
-                                                                            setSelectedUsersToAdd(
-                                                                                [],
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        Clear
-                                                                        All
-                                                                    </Button>
-                                                                </div>
-                                                            )}
-                                                        <div className="max-h-60 space-y-2 overflow-y-auto rounded-md border p-3">
-                                                            {availableOrgMembers?.length ===
-                                                            0 ? (
-                                                                <div className="text-muted-foreground py-4 text-center">
-                                                                    {memberSearchTerm
-                                                                        ? `No members found matching "${memberSearchTerm}"`
-                                                                        : 'No available members to add'}
-                                                                </div>
-                                                            ) : (
-                                                                availableOrgMembers?.map(
-                                                                    (
-                                                                        member: (typeof availableOrgMembers)[number],
-                                                                    ) => (
-                                                                        <label
-                                                                            key={
-                                                                                member.id
-                                                                            }
-                                                                            className="hover:bg-muted/50 flex cursor-pointer items-center space-x-3 rounded-md p-2"
-                                                                        >
-                                                                            <Checkbox
-                                                                                checked={selectedUsersToAdd.includes(
-                                                                                    member.id,
-                                                                                )}
-                                                                                onCheckedChange={(
-                                                                                    checked,
-                                                                                ) => {
-                                                                                    if (
-                                                                                        checked
-                                                                                    ) {
-                                                                                        setSelectedUsersToAdd(
-                                                                                            (
-                                                                                                prev,
-                                                                                            ) => [
-                                                                                                ...prev,
-                                                                                                member.id,
-                                                                                            ],
-                                                                                        );
-                                                                                    } else {
-                                                                                        setSelectedUsersToAdd(
-                                                                                            (
-                                                                                                prev,
-                                                                                            ) =>
-                                                                                                prev.filter(
-                                                                                                    (
-                                                                                                        id,
-                                                                                                    ) =>
-                                                                                                        id !==
-                                                                                                        member.id,
-                                                                                                ),
-                                                                                        );
-                                                                                    }
-                                                                                }}
-                                                                            />
-                                                                            <div className="flex items-center gap-2">
-                                                                                <Avatar className="h-6 w-6">
-                                                                                    <AvatarImage
-                                                                                        src={
-                                                                                            member.image ||
-                                                                                            undefined
-                                                                                        }
-                                                                                        alt={
-                                                                                            member.name ||
-                                                                                            'User'
-                                                                                        }
-                                                                                    />
-                                                                                    <AvatarFallback>
-                                                                                        {member.name
-                                                                                            ? member.name
-                                                                                                  .substring(
-                                                                                                      0,
-                                                                                                      2,
-                                                                                                  )
-                                                                                                  .toUpperCase()
-                                                                                            : 'U'}
-                                                                                    </AvatarFallback>
-                                                                                </Avatar>
-                                                                                <span className="text-sm font-medium">
-                                                                                    {member.name ||
-                                                                                        'Unknown User'}
-                                                                                </span>
-                                                                                <span className="text-muted-foreground text-xs">
-                                                                                    (
-                                                                                    {member.email ||
-                                                                                        'No email'}
-
-                                                                                    )
-                                                                                </span>
-                                                                            </div>
-                                                                        </label>
-                                                                    ),
-                                                                )
-                                                            )}
-                                                        </div>
-                                                        {selectedUsersToAdd.length >
-                                                            0 && (
-                                                            <p className="text-muted-foreground text-sm">
-                                                                Selected{' '}
-                                                                {
-                                                                    selectedUsersToAdd.length
-                                                                }{' '}
-                                                                member(s)
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="role-select">
-                                                            Role
-                                                        </Label>
-                                                        <Select
-                                                            value={
-                                                                selectedRoleToAdd
-                                                            }
-                                                            onValueChange={(
-                                                                value: string,
-                                                            ) =>
-                                                                setSelectedRoleToAdd(
-                                                                    value as
-                                                                        | 'member'
-                                                                        | 'moderator',
-                                                                )
-                                                            }
-                                                        >
-                                                            <SelectTrigger>
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="member">
-                                                                    Member
-                                                                </SelectItem>
-                                                                <SelectItem value="moderator">
-                                                                    Moderator
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <DialogFooter>
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            onClick={() =>
-                                                                setIsAddMembersDialogOpen(
-                                                                    false,
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                isAddingMembers
-                                                            }
-                                                        >
-                                                            Cancel
-                                                        </Button>
-                                                        <Button
-                                                            type="submit"
-                                                            disabled={
-                                                                isAddingMembers ||
-                                                                !selectedUsersToAdd.length ||
-                                                                availableOrgMembers?.length ===
-                                                                    0
-                                                            }
-                                                        >
-                                                            {isAddingMembers ? (
-                                                                <>
-                                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                                    Adding...
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <UserPlus className="mr-2 h-4 w-4" />
-                                                                    Add{' '}
-                                                                    {selectedUsersToAdd.length >
-                                                                    1
-                                                                        ? `${selectedUsersToAdd.length} Members`
-                                                                        : 'Member'}
-                                                                </>
-                                                            )}
-                                                        </Button>
-                                                    </DialogFooter>
-                                                </form>
-                                            </DialogContent>
-                                        </Dialog>
-                                    )}
-                                </div>
-                            </div>
-
-                            {community.members &&
-                            community.members.length > 0 ? (
-                                <>
-                                    <div className="overflow-hidden rounded-md border">
-                                        <Table>
-                                            <TableHeader>
-                                                <TableRow>
-                                                    <TableHead className="text-center">
-                                                        User
-                                                    </TableHead>
-                                                    <TableHead className="text-center">
-                                                        Badges
-                                                    </TableHead>
-                                                    <TableHead className="text-center">
-                                                        Role
-                                                    </TableHead>
-                                                    <TableHead className="text-center">
-                                                        Joined
-                                                    </TableHead>
-                                                    <TableHead className="text-center">
-                                                        Actions
-                                                    </TableHead>
-                                                </TableRow>
-                                            </TableHeader>
-                                            <TableBody>
-                                                {community.members
-                                                    .sort((a, b) => {
-                                                        // Sort by role: admins first, then moderators, then members
-                                                        const roleOrder = {
-                                                            admin: 0,
-                                                            moderator: 1,
-                                                            member: 2,
-                                                            follower: 3,
-                                                        };
-                                                        return (
-                                                            roleOrder[
-                                                                a.role as keyof typeof roleOrder
-                                                            ] -
-                                                            roleOrder[
-                                                                b.role as keyof typeof roleOrder
-                                                            ]
-                                                        );
-                                                    })
-                                                    .slice(
-                                                        (currentMembersPage -
-                                                            1) *
-                                                            membersPerPage,
-                                                        currentMembersPage *
-                                                            membersPerPage,
-                                                    )
-                                                    .map((member: any) => (
-                                                        <TableRow
-                                                            key={member.userId}
-                                                        >
-                                                            <TableCell className="text-center">
-                                                                <div className="flex items-center justify-center gap-3">
-                                                                    {member.user
-                                                                        ?.id ? (
-                                                                        <UserProfilePopover
-                                                                            userId={
-                                                                                member
-                                                                                    .user
-                                                                                    .id
-                                                                            }
-                                                                        >
-                                                                            <Avatar className="cursor-pointer">
-                                                                                <AvatarImage
-                                                                                    src={
-                                                                                        member
-                                                                                            .user
-                                                                                            ?.image ||
-                                                                                        '/placeholder.svg'
-                                                                                    }
-                                                                                />
-                                                                                <AvatarFallback>
-                                                                                    {member.user?.name
-                                                                                        ?.substring(
-                                                                                            0,
-                                                                                            2,
-                                                                                        )
-                                                                                        .toUpperCase() ||
-                                                                                        'U'}
-                                                                                </AvatarFallback>
-                                                                            </Avatar>
-                                                                        </UserProfilePopover>
-                                                                    ) : (
-                                                                        <Avatar>
-                                                                            <AvatarImage
-                                                                                src={
-                                                                                    member
-                                                                                        .user
-                                                                                        ?.image ||
-                                                                                    '/placeholder.svg'
-                                                                                }
-                                                                            />
-                                                                            <AvatarFallback>
-                                                                                {member.user?.name
-                                                                                    ?.substring(
-                                                                                        0,
-                                                                                        2,
-                                                                                    )
-                                                                                    .toUpperCase() ||
-                                                                                    'U'}
-                                                                            </AvatarFallback>
-                                                                        </Avatar>
-                                                                    )}
-                                                                    <div>
-                                                                        {member
-                                                                            .user
-                                                                            ?.id ? (
-                                                                            <UserProfilePopover
-                                                                                userId={
-                                                                                    member
-                                                                                        .user
-                                                                                        .id
-                                                                                }
-                                                                            >
-                                                                                <p className="cursor-pointer text-sm font-medium hover:underline">
-                                                                                    {member
-                                                                                        .user
-                                                                                        ?.name ||
-                                                                                        'Unknown User'}
-                                                                                </p>
-                                                                            </UserProfilePopover>
-                                                                        ) : (
-                                                                            <p className="text-sm font-medium">
-                                                                                {member
-                                                                                    .user
-                                                                                    ?.name ||
-                                                                                    'Unknown User'}
-                                                                            </p>
-                                                                        )}
-                                                                        <p className="text-muted-foreground text-xs">
-                                                                            {
-                                                                                member
-                                                                                    .user
-                                                                                    ?.email
-                                                                            }
-                                                                        </p>
-                                                                    </div>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {member.user
-                                                                    ?.id && (
-                                                                    <UserBadgesInTable
-                                                                        userId={
-                                                                            member
-                                                                                .user
-                                                                                .id
-                                                                        }
-                                                                    />
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                <Badge
-                                                                    variant={
-                                                                        member.role ===
-                                                                        'admin'
-                                                                            ? 'default'
-                                                                            : member.role ===
-                                                                                'moderator'
-                                                                              ? 'secondary'
-                                                                              : 'outline'
-                                                                    }
-                                                                >
-                                                                    {member.role ===
-                                                                    'admin'
-                                                                        ? 'Admin'
-                                                                        : member.role ===
-                                                                            'moderator'
-                                                                          ? 'Moderator'
-                                                                          : 'Member'}
-                                                                </Badge>
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {member.joinedAt
-                                                                    ? new Date(
-                                                                          member.joinedAt,
-                                                                      ).toLocaleDateString()
-                                                                    : '-'}
-                                                            </TableCell>
-                                                            <TableCell className="text-center">
-                                                                {canManageCommunityMembers && (
-                                                                    <DropdownMenu>
-                                                                        <DropdownMenuTrigger
-                                                                            asChild
-                                                                        >
-                                                                            <Button
-                                                                                variant="ghost"
-                                                                                size="icon"
-                                                                            >
-                                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                            </Button>
-                                                                        </DropdownMenuTrigger>
-                                                                        <DropdownMenuContent align="end">
-                                                                            {member.role ===
-                                                                                'member' && (
-                                                                                <>
-                                                                                    <DropdownMenuItem
-                                                                                        onClick={() =>
-                                                                                            handleAssignModerator(
-                                                                                                member.userId,
-                                                                                            )
-                                                                                        }
-                                                                                    >
-                                                                                        <Shield className="mr-2 h-4 w-4" />
-                                                                                        Make
-                                                                                        Moderator
-                                                                                    </DropdownMenuItem>
-                                                                                    {canManageCommunityAdmins && (
-                                                                                        <DropdownMenuItem
-                                                                                            onClick={() =>
-                                                                                                handleAssignAdmin(
-                                                                                                    member.userId,
-                                                                                                )
-                                                                                            }
-                                                                                        >
-                                                                                            <Crown className="mr-2 h-4 w-4" />
-                                                                                            Make
-                                                                                            Admin
-                                                                                        </DropdownMenuItem>
-                                                                                    )}
-                                                                                </>
-                                                                            )}
-                                                                            {member.role ===
-                                                                                'moderator' && (
-                                                                                <DropdownMenuItem
-                                                                                    onClick={() =>
-                                                                                        handleRemoveModerator(
-                                                                                            member.userId,
-                                                                                        )
-                                                                                    }
-                                                                                >
-                                                                                    <UserMinus className="mr-2 h-4 w-4" />
-                                                                                    Remove
-                                                                                    Mod
-                                                                                </DropdownMenuItem>
-                                                                            )}
-                                                                            {member.role ===
-                                                                                'admin' &&
-                                                                                canManageCommunityAdmins && (
-                                                                                    <DropdownMenuItem
-                                                                                        onClick={() =>
-                                                                                            handleRemoveAdmin(
-                                                                                                member.userId,
-                                                                                            )
-                                                                                        }
-                                                                                    >
-                                                                                        <UserMinus className="mr-2 h-4 w-4" />
-                                                                                        Remove
-                                                                                        Admin
-                                                                                    </DropdownMenuItem>
-                                                                                )}
-                                                                            <DropdownMenuSeparator />
-                                                                            <DropdownMenuItem
-                                                                                onClick={() =>
-                                                                                    handleRemoveUserFromCommunity(
-                                                                                        member.userId,
-                                                                                    )
-                                                                                }
-                                                                                className="text-destructive"
-                                                                            >
-                                                                                <UserMinus className="mr-2 h-4 w-4" />
-                                                                                Kick
-                                                                                User
-                                                                            </DropdownMenuItem>
-                                                                        </DropdownMenuContent>
-                                                                    </DropdownMenu>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                            </TableBody>
-                                        </Table>
-                                    </div>
-
-                                    {/* Pagination controls */}
-                                    {community.members.length >
-                                        membersPerPage && (
-                                        <div className="mt-6">
-                                            <div className="text-muted-foreground mb-2 text-center text-sm">
-                                                Showing{' '}
-                                                {(currentMembersPage - 1) *
-                                                    membersPerPage +
-                                                    1}{' '}
-                                                to{' '}
-                                                {Math.min(
-                                                    currentMembersPage *
-                                                        membersPerPage,
-                                                    community.members.length,
-                                                )}{' '}
-                                                of {community.members.length}{' '}
-                                                members
-                                            </div>
-                                            <div className="flex justify-center">
-                                                <div className="flex items-center gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            setCurrentMembersPage(
-                                                                (prev) =>
-                                                                    Math.max(
-                                                                        prev -
-                                                                            1,
-                                                                        1,
-                                                                    ),
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            currentMembersPage ===
-                                                            1
-                                                        }
-                                                    >
-                                                        Previous
-                                                    </Button>
-                                                    <div className="flex items-center gap-1">
-                                                        {(() => {
-                                                            const totalPages =
-                                                                Math.ceil(
-                                                                    community
-                                                                        .members
-                                                                        .length /
-                                                                        membersPerPage,
-                                                                );
-                                                            const pageNumbers =
-                                                                [];
-                                                            if (totalPages > 0)
-                                                                pageNumbers.push(
-                                                                    1,
-                                                                );
-                                                            if (
-                                                                currentMembersPage >
-                                                                3
-                                                            )
-                                                                pageNumbers.push(
-                                                                    'ellipsis1',
-                                                                );
-                                                            for (
-                                                                let i =
-                                                                    Math.max(
-                                                                        2,
-                                                                        currentMembersPage -
-                                                                            1,
-                                                                    );
-                                                                i <=
-                                                                Math.min(
-                                                                    totalPages -
-                                                                        1,
-                                                                    currentMembersPage +
-                                                                        1,
-                                                                );
-                                                                i++
-                                                            ) {
-                                                                if (
-                                                                    i !== 1 &&
-                                                                    i !==
-                                                                        totalPages
-                                                                )
-                                                                    pageNumbers.push(
-                                                                        i,
-                                                                    );
-                                                            }
-                                                            if (
-                                                                currentMembersPage <
-                                                                totalPages - 2
-                                                            )
-                                                                pageNumbers.push(
-                                                                    'ellipsis2',
-                                                                );
-                                                            if (totalPages > 1)
-                                                                pageNumbers.push(
-                                                                    totalPages,
-                                                                );
-
-                                                            return pageNumbers.map(
-                                                                (
-                                                                    page,
-                                                                    index,
-                                                                ) => {
-                                                                    if (
-                                                                        page ===
-                                                                            'ellipsis1' ||
-                                                                        page ===
-                                                                            'ellipsis2'
-                                                                    ) {
-                                                                        return (
-                                                                            <span
-                                                                                key={`ellipsis-${index}`}
-                                                                                className="px-2"
-                                                                            >
-                                                                                ...
-                                                                            </span>
-                                                                        );
-                                                                    }
-                                                                    return (
-                                                                        <Button
-                                                                            key={`page-${page}`}
-                                                                            variant={
-                                                                                currentMembersPage ===
-                                                                                page
-                                                                                    ? 'default'
-                                                                                    : 'outline'
-                                                                            }
-                                                                            size="sm"
-                                                                            className="h-8 w-8 p-0"
-                                                                            onClick={() =>
-                                                                                setCurrentMembersPage(
-                                                                                    page as number,
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            {
-                                                                                page
-                                                                            }
-                                                                        </Button>
-                                                                    );
-                                                                },
-                                                            );
-                                                        })()}
-                                                    </div>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            setCurrentMembersPage(
-                                                                (prev) =>
-                                                                    Math.min(
-                                                                        prev +
-                                                                            1,
-                                                                        Math.ceil(
-                                                                            community
-                                                                                .members
-                                                                                .length /
-                                                                                membersPerPage,
-                                                                        ),
-                                                                    ),
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            currentMembersPage ===
-                                                            Math.ceil(
-                                                                community
-                                                                    .members
-                                                                    .length /
-                                                                    membersPerPage,
-                                                            )
-                                                        }
-                                                    >
-                                                        Next
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </>
-                            ) : (
-                                <p className="text-muted-foreground">
-                                    No members found.
-                                </p>
-                            )}
-                        </div>
-
-                        <InviteEmailDialog
-                            open={isInviteEmailDialogOpen}
-                            onOpenChange={setIsInviteEmailDialogOpen}
-                            communityId={community.id}
-                            communityName={community.name}
-                            isAdmin={canManageCommunityAdmins}
-                        />
-                    </TabsContent>
-
-                    {canManageCommunityMembers && (
-                        <TabsContent value="manage" className="mt-0">
-                            <div className="space-y-6">
-                                <div>
-                                    <h2 className="mb-2 text-xl font-semibold">
-                                        Pending Requests
-                                    </h2>
-                                    <p className="text-muted-foreground mb-4 text-sm">
-                                        Manage join and follow requests for this
-                                        community
-                                    </p>
-
-                                    {pendingRequests &&
-                                    pendingRequests.length > 0 ? (
-                                        <div className="overflow-hidden rounded-md border">
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>
-                                                            User
-                                                        </TableHead>
-                                                        <TableHead>
-                                                            Request Type
-                                                        </TableHead>
-                                                        <TableHead>
-                                                            Requested At
-                                                        </TableHead>
-                                                        <TableHead className="text-right">
-                                                            Actions
-                                                        </TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {pendingRequests.map(
-                                                        (request) => (
-                                                            <TableRow
-                                                                key={request.id}
-                                                            >
-                                                                <TableCell>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <Avatar className="h-8 w-8">
-                                                                            <AvatarImage
-                                                                                src={
-                                                                                    request
-                                                                                        .user
-                                                                                        ?.image ||
-                                                                                    undefined ||
-                                                                                    '/placeholder.svg'
-                                                                                }
-                                                                            />
-                                                                            <AvatarFallback>
-                                                                                {request.user?.name
-                                                                                    ?.substring(
-                                                                                        0,
-                                                                                        2,
-                                                                                    )
-                                                                                    .toUpperCase() ||
-                                                                                    'U'}
-                                                                            </AvatarFallback>
-                                                                        </Avatar>
-                                                                        <span>
-                                                                            {
-                                                                                request
-                                                                                    .user
-                                                                                    ?.name
-                                                                            }
-                                                                        </span>
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <Badge
-                                                                        variant={
-                                                                            request.requestType ===
-                                                                            'join'
-                                                                                ? 'default'
-                                                                                : 'secondary'
-                                                                        }
-                                                                    >
-                                                                        {request.requestType ===
-                                                                        'join'
-                                                                            ? 'Join'
-                                                                            : 'Follow'}
-                                                                    </Badge>
-                                                                    <div className="text-muted-foreground mt-1 text-xs">
-                                                                        {request.requestType ===
-                                                                        'join'
-                                                                            ? 'User wants to become a member'
-                                                                            : 'User wants to follow posts'}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {new Date(
-                                                                        request.requestedAt,
-                                                                    ).toLocaleDateString()}
-                                                                    <div className="text-muted-foreground mt-1 text-xs">
-                                                                        {getRelativeTime(
-                                                                            new Date(
-                                                                                request.requestedAt,
-                                                                            ),
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    <div className="flex justify-end gap-2">
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            onClick={() =>
-                                                                                handleApproveRequest(
-                                                                                    request.id,
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <CheckCircle className="mr-1 h-4 w-4" />
-                                                                            Approve
-                                                                        </Button>
-                                                                        <Button
-                                                                            variant="outline"
-                                                                            size="sm"
-                                                                            onClick={() =>
-                                                                                handleRejectRequest(
-                                                                                    request.id,
-                                                                                )
-                                                                            }
-                                                                        >
-                                                                            <XCircle className="mr-1 h-4 w-4" />
-                                                                            Reject
-                                                                        </Button>
-                                                                    </div>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ),
-                                                    )}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    ) : (
-                                        <p className="text-muted-foreground py-8 text-center">
-                                            No pending requests at this time.
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </TabsContent>
-                    )}
-                </div>
-            </Tabs>
-
-            {/* Leave Community Alert Dialog */}
-            <AlertDialog
-                open={isLeaveCommunityDialogOpen}
-                onOpenChange={setIsLeaveCommunityDialogOpen}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Leave Community</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to leave this community? You
-                            will no longer have access to member-only content.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmLeaveCommunity}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Leave Community
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Remove Moderator Alert Dialog */}
-            <AlertDialog
-                open={isRemoveModeratorDialogOpen}
-                onOpenChange={setIsRemoveModeratorDialogOpen}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Remove Moderator</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to remove this user's
-                            moderator role? They will remain a member of the
-                            community but will no longer have moderation
-                            privileges.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmRemoveModerator}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Remove Moderator
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Remove User Alert Dialog */}
-            <AlertDialog
-                open={isRemoveUserDialogOpen}
-                onOpenChange={setIsRemoveUserDialogOpen}
-            >
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Remove User</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to remove this user from the
-                            community? They will lose access to all community
-                            content and will need to rejoin to access it again.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={confirmRemoveUserFromCommunity}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Remove User
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </div>
-    );
-}
-
-function CommunityDetailSkeleton() {
-    return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
-            {/* Banner and Community Info Skeleton */}
-            <div className="mb-8">
-                <Skeleton className="h-32 w-full rounded-lg sm:h-40 md:h-48 lg:h-56" />
-
-                {/* Overlapping Content Skeleton */}
-                <div className="relative -mt-8 px-4 sm:-mt-10 sm:px-6 md:-mt-12 md:px-8 lg:-mt-16">
-                    {/* Mobile Layout Skeleton */}
-                    <div className="block lg:hidden">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                            <Skeleton className="h-16 w-16 rounded-full sm:h-20 sm:w-20" />
-                            <div className="flex-1 sm:pb-2">
-                                <Skeleton className="mb-2 h-6 w-48" />
-                                <Skeleton className="mb-1 h-4 w-32" />
-                                <Skeleton className="h-4 w-40" />
-                            </div>
-                        </div>
-                        <div className="mt-4 space-y-2">
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                        </div>
-                    </div>
-
-                    {/* Desktop Layout Skeleton */}
-                    <div className="hidden lg:flex lg:items-end lg:justify-between">
-                        <div className="flex items-end gap-6">
-                            <Skeleton className="h-24 w-24 rounded-full xl:h-28 xl:w-28" />
-                            <div className="pb-3">
-                                <Skeleton className="mb-2 h-8 w-64" />
-                                <Skeleton className="h-4 w-48" />
-                            </div>
-                        </div>
-                        <div className="flex gap-3 pb-3">
-                            <Skeleton className="h-10 w-32" />
-                            <Skeleton className="h-10 w-32" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Tabs Skeleton */}
-            <div className="mb-6">
-                <div className="border-b">
-                    <Skeleton className="h-10 w-80" />
-                </div>
-            </div>
-
-            {/* Content Skeleton */}
-            <div className="space-y-4">
-                <Card>
-                    <CardHeader>
-                        <Skeleton className="h-6 w-3/4" />
-                        <Skeleton className="h-4 w-1/2" />
-                    </CardHeader>
-                    <CardContent>
-                        <Skeleton className="h-20 w-full" />
-                    </CardContent>
-                    <CardFooter>
-                        <Skeleton className="h-8 w-24" />
-                    </CardFooter>
-                </Card>
-            </div>
+            <CommunityDialogs
+                isLeaveCommunityDialogOpen={isLeaveCommunityDialogOpen}
+                isRemoveModeratorDialogOpen={isRemoveModeratorDialogOpen}
+                isRemoveUserDialogOpen={isRemoveUserDialogOpen}
+                onLeaveCommunityDialogChange={setIsLeaveCommunityDialogOpen}
+                onRemoveModeratorDialogChange={setIsRemoveModeratorDialogOpen}
+                onRemoveUserDialogChange={setIsRemoveUserDialogOpen}
+                onConfirmLeaveCommunity={confirmLeaveCommunity}
+                onConfirmRemoveModerator={confirmRemoveModerator}
+                onConfirmRemoveUser={confirmRemoveUserFromCommunity}
+            />
         </div>
     );
 }
