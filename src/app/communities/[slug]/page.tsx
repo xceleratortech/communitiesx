@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { isOrgAdminForCommunity } from '@/lib/utils';
+import type { Community } from '@/types/community';
 import {
     CommunityBanner,
     CommunityTabs,
