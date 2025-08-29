@@ -28,12 +28,9 @@ import { Loading } from '@/components/ui/loading';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    validatePostCreationMinRole,
+    validateCommunityType,
+} from '@/lib/utils';
 
 const formSchema = z.object({
     name: z.string().min(3).max(50),
@@ -120,16 +117,10 @@ export default function EditCommunityPage() {
                   name: community.name || '',
                   slug: community.slug || '',
                   description: community.description || '',
-                  type:
-                      community.type === 'public' ||
-                      community.type === 'private'
-                          ? community.type
-                          : 'public',
-                  postCreationMinRole:
-                      (community.postCreationMinRole as
-                          | 'member'
-                          | 'moderator'
-                          | 'admin') || 'member',
+                  type: validateCommunityType(community.type),
+                  postCreationMinRole: validatePostCreationMinRole(
+                      community.postCreationMinRole,
+                  ),
                   rules: community.rules || '',
                   avatar: community.avatar || '',
                   banner: community.banner || '',

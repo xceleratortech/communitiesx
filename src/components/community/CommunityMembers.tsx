@@ -31,7 +31,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -113,6 +113,29 @@ export function CommunityMembers({
         'member' | 'moderator'
     >('member');
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
+
+    // Memoize the sorted and paginated members to avoid recalculating on every render
+    const paginatedMembers = useMemo(() => {
+        if (!community.members) return [];
+
+        const roleOrder = {
+            admin: 0,
+            moderator: 1,
+            member: 2,
+            follower: 3,
+        };
+
+        return [...community.members]
+            .sort(
+                (a, b) =>
+                    roleOrder[a.role as keyof typeof roleOrder] -
+                    roleOrder[b.role as keyof typeof roleOrder],
+            )
+            .slice(
+                (currentMembersPage - 1) * membersPerPage,
+                currentMembersPage * membersPerPage,
+            );
+    }, [community.members, currentMembersPage, membersPerPage]);
 
     return (
         <TabsContent value="members" className="mt-0">
@@ -440,35 +463,8 @@ export function CommunityMembers({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {community.members
-                                        .sort(
-                                            (
-                                                a: CommunityMember,
-                                                b: CommunityMember,
-                                            ) => {
-                                                // Sort by role: admins first, then moderators, then members
-                                                const roleOrder = {
-                                                    admin: 0,
-                                                    moderator: 1,
-                                                    member: 2,
-                                                    follower: 3,
-                                                };
-                                                return (
-                                                    roleOrder[
-                                                        a.role as keyof typeof roleOrder
-                                                    ] -
-                                                    roleOrder[
-                                                        b.role as keyof typeof roleOrder
-                                                    ]
-                                                );
-                                            },
-                                        )
-                                        .slice(
-                                            (currentMembersPage - 1) *
-                                                membersPerPage,
-                                            currentMembersPage * membersPerPage,
-                                        )
-                                        .map((member: CommunityMember) => (
+                                    {paginatedMembers.map(
+                                        (member: CommunityMember) => (
                                             <TableRow key={member.userId}>
                                                 <TableCell className="text-center">
                                                     <div className="flex items-center justify-center gap-3">
@@ -724,7 +720,8 @@ export function CommunityMembers({
                                                     )}
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                        ),
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
