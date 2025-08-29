@@ -9,6 +9,7 @@ import { useSession } from '@/server/auth/client'; // Import useSession to infer
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 type SessionData = ReturnType<typeof useSession>['data'];
 
@@ -167,7 +168,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                         onClick={() => onSaveEdit(comment.id)}
                                         disabled={
                                             updateCommentMutationPending ||
-                                            !editedCommentContent.trim()
+                                            isHtmlContentEmpty(
+                                                editedCommentContent,
+                                            )
                                         }
                                     >
                                         {updateCommentMutationPending

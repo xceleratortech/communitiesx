@@ -264,7 +264,7 @@ export function PostsFilter({
                         </DropdownMenuSub>
 
                         {/* Tags Filter */}
-                        <DropdownMenuSub>
+                        {/* <DropdownMenuSub>
                             <DropdownMenuSubTrigger className="flex w-full items-center justify-between py-2">
                                 <div className="flex items-center space-x-2">
                                     <Tag className="h-4 w-4" />
@@ -279,7 +279,6 @@ export function PostsFilter({
                                             {filters.tags.length}
                                         </Badge>
                                     )}
-                                    {/* <ChevronRight className="h-4 w-4" /> */}
                                 </div>
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent className="max-h-64 w-56 overflow-y-auto">
@@ -313,7 +312,7 @@ export function PostsFilter({
                                     </DropdownMenuItem>
                                 )}
                             </DropdownMenuSubContent>
-                        </DropdownMenuSub>
+                        </DropdownMenuSub> */}
                     </DropdownMenuContent>
                 </DropdownMenu>
 

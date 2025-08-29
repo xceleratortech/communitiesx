@@ -26,6 +26,7 @@ import {
 import { Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Loading } from '@/components/ui/loading';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 export default function EditPostPage() {
     const params = useParams();
@@ -89,7 +90,7 @@ export default function EditPostPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!title.trim() || !content.trim()) {
+        if (!title.trim() || isHtmlContentEmpty(content)) {
             setError('Title and content are required.');
             return;
         }
@@ -257,7 +258,14 @@ export default function EditPostPage() {
                         </div>
                     </div>
                 )}
-                <Button type="submit" disabled={editPost.isPending}>
+                <Button
+                    type="submit"
+                    disabled={
+                        editPost.isPending ||
+                        !title.trim() ||
+                        isHtmlContentEmpty(content)
+                    }
+                >
                     {editPost.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
             </form>
