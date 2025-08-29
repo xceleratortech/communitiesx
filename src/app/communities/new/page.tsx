@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
@@ -88,10 +88,8 @@ const formSchema = z.object({
         .nullable(),
     orgId: z
         .string()
-        .min(1, { message: 'Please select an organization.' })
-        .refine((val) => val && val.trim().length > 0, {
-            message: 'Please select an organization.',
-        }),
+        .trim()
+        .min(1, { message: 'Please select an organization.' }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -153,14 +151,23 @@ function NewCommunityForm() {
         },
     });
 
+    const selectedOrganization = useMemo(() => {
+        const currentOrgId = form.watch('orgId');
+        if (!organizations?.length || !currentOrgId) return null;
+        return organizations.find((org) => org.id === currentOrgId) || null;
+    }, [organizations, form.watch('orgId')]);
+
     useEffect(() => {
-        if (organizations && organizations.length > 0 && !orgIdFromUrl) {
-            // If user has organizations and no orgId from URL, set to first organization
+        if (orgIdFromUrl) {
+            const currentOrgId = form.getValues('orgId');
+            if (currentOrgId !== orgIdFromUrl) {
+                form.setValue('orgId', orgIdFromUrl);
+            }
+        } else if (organizations && organizations.length > 0) {
             const currentOrgId = form.getValues('orgId');
             if (!currentOrgId || currentOrgId === '') {
                 form.setValue('orgId', organizations[0].id);
 
-                // Show a helpful message that organization was auto-selected (only to super admins)
                 if (organizations.length === 1 && appRole === 'admin') {
                     toast.success(
                         `Organization automatically set to ${organizations[0].name}`,
@@ -168,34 +175,12 @@ function NewCommunityForm() {
                 }
             }
         }
-    }, [organizations, orgIdFromUrl, form]);
-
-    // Update form when orgIdFromUrl changes or when organizations are loaded
-    useEffect(() => {
-        if (orgIdFromUrl) {
-            form.setValue('orgId', orgIdFromUrl);
-        } else if (
-            organizations &&
-            organizations.length > 0 &&
-            !form.getValues('orgId')
-        ) {
-            // Set to first organization if no orgId from URL and form doesn't have one
-            form.setValue('orgId', organizations[0].id);
-        }
-    }, [orgIdFromUrl, organizations, form]);
+    }, [orgIdFromUrl, organizations, form, appRole]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {
         if (!session) {
             toast.error('You must be signed in to create a community');
-            return;
-        }
-
-        if (!values.orgId || values.orgId.trim() === '') {
-            toast.error('Please select an organization for your community');
-            form.setError('orgId', {
-                message: 'Please select an organization',
-            });
             return;
         }
 
@@ -327,11 +312,7 @@ function NewCommunityForm() {
                                                         <span className="mt-1 block font-medium text-green-700">
                                                             ✓ Selected:{' '}
                                                             {
-                                                                organizations.find(
-                                                                    (org) =>
-                                                                        org.id ===
-                                                                        field.value,
-                                                                )?.name
+                                                                selectedOrganization?.name
                                                             }
                                                         </span>
                                                     )}
@@ -354,10 +335,8 @@ function NewCommunityForm() {
                                             </>
                                         ) : (
                                             <span className="text-muted-foreground mt-1 block text-xs">
-                                                {organizations &&
-                                                organizations.length > 1
-                                                    ? 'You have access to multiple organizations. The system will use your primary organization.'
-                                                    : 'Organization selection is automatically managed for you.'}
+                                                Organization selection is
+                                                automatically managed for you.
                                                 {organizations &&
                                                     organizations.length ===
                                                         1 && (
@@ -365,8 +344,7 @@ function NewCommunityForm() {
                                                             Your community will
                                                             be created under{' '}
                                                             {
-                                                                organizations[0]
-                                                                    .name
+                                                                selectedOrganization?.name
                                                             }
                                                         </span>
                                                     )}
@@ -428,15 +406,6 @@ function NewCommunityForm() {
                                         </div>
                                     </FormControl>
                                     <FormMessage />
-                                    {!isLoadingOrgs &&
-                                        organizations &&
-                                        organizations.length === 0 && (
-                                            <p className="text-muted-foreground text-sm">
-                                                You don't have access to any
-                                                organizations. Please contact
-                                                your administrator.
-                                            </p>
-                                        )}
                                 </FormItem>
                             )}
                         />
@@ -698,13 +667,7 @@ function NewCommunityForm() {
                                             </strong>{' '}
                                             Your community will be created under{' '}
                                             <span className="font-medium">
-                                                {
-                                                    organizations.find(
-                                                        (org) =>
-                                                            org.id ===
-                                                            form.watch('orgId'),
-                                                    )?.name
-                                                }
+                                                {selectedOrganization?.name}
                                             </span>
                                         </p>
                                     </div>
@@ -720,16 +683,18 @@ function NewCommunityForm() {
                                 }
                                 className="w-full"
                             >
-                                {isSubmitting
-                                    ? 'Creating...'
-                                    : isLoadingOrgs
-                                      ? 'Loading...'
-                                      : !organizations ||
-                                          organizations.length === 0
-                                        ? 'No Organizations Available'
-                                        : appRole === 'admin'
-                                          ? 'Create Community'
-                                          : 'Create Community in Your Organization'}
+                                {(() => {
+                                    if (isSubmitting) return 'Creating...';
+                                    if (isLoadingOrgs) return 'Loading...';
+                                    if (
+                                        !organizations ||
+                                        organizations.length === 0
+                                    )
+                                        return 'No Organizations Available';
+                                    if (appRole === 'admin')
+                                        return 'Create Community';
+                                    return 'Create Community in Your Organization';
+                                })()}
                             </Button>
                         </div>
                     </form>
