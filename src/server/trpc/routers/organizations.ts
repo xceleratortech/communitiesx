@@ -44,6 +44,8 @@ import type { Org, OrgMember } from '@/types/models';
 import { SQL } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email';
 import { createWelcomeEmail } from '@/lib/email-templates';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -347,18 +349,15 @@ export const organizationsRouter = router({
                     });
                 }
 
-                // Check if user is super admin or community admin
-                const isSuperAdmin = currentUser.appRole === 'admin';
-                const isCommunityAdmin =
-                    await db.query.communityMembers.findFirst({
-                        where: and(
-                            eq(communityMembers.communityId, input.communityId),
-                            eq(communityMembers.userId, ctx.session.user.id),
-                            eq(communityMembers.role, 'admin'),
-                        ),
-                    });
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canDelete = await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.DELETE_COMMUNITY,
+                );
 
-                if (!isSuperAdmin && !isCommunityAdmin) {
+                if (!canDelete) {
                     throw new TRPCError({
                         code: 'FORBIDDEN',
                         message:
@@ -366,139 +365,30 @@ export const organizationsRouter = router({
                     });
                 }
 
-                // Use a transaction to ensure all deletions happen atomically
                 const result = await db.transaction(async (tx) => {
-                    try {
-                        // Delete in the correct order to handle foreign key constraints
-                        // 1. Delete post tags for posts in this community
-                        await tx
-                            .delete(postTags)
-                            .where(
-                                inArray(
-                                    postTags.postId,
-                                    tx
-                                        .select({ id: posts.id })
-                                        .from(posts)
-                                        .where(
-                                            eq(
-                                                posts.communityId,
-                                                input.communityId,
-                                            ),
-                                        ),
-                                ),
-                            );
+                    const postIdsInCommunityQuery = tx
+                        .select({ id: posts.id })
+                        .from(posts)
+                        .where(eq(posts.communityId, input.communityId));
 
-                        // 2. Delete comments on posts in this community
-                        await tx
-                            .delete(comments)
-                            .where(
-                                inArray(
-                                    comments.postId,
-                                    tx
-                                        .select({ id: posts.id })
-                                        .from(posts)
-                                        .where(
-                                            eq(
-                                                posts.communityId,
-                                                input.communityId,
-                                            ),
-                                        ),
-                                ),
-                            );
+                    await tx
+                        .delete(comments)
+                        .where(
+                            inArray(comments.postId, postIdsInCommunityQuery),
+                        );
 
-                        // 3. Delete reactions on posts in this community
-                        await tx
-                            .delete(reactions)
-                            .where(
-                                inArray(
-                                    reactions.postId,
-                                    tx
-                                        .select({ id: posts.id })
-                                        .from(posts)
-                                        .where(
-                                            eq(
-                                                posts.communityId,
-                                                input.communityId,
-                                            ),
-                                        ),
-                                ),
-                            );
+                    await tx
+                        .delete(posts)
+                        .where(eq(posts.communityId, input.communityId));
 
-                        // 4. Delete attachments for posts in this community
-                        await tx
-                            .delete(attachments)
-                            .where(
-                                eq(attachments.communityId, input.communityId),
-                            );
+                    await tx
+                        .delete(communities)
+                        .where(eq(communities.id, input.communityId));
 
-                        // 5. Delete posts in this community
-                        await tx
-                            .delete(posts)
-                            .where(eq(posts.communityId, input.communityId));
-
-                        // 6. Delete community-specific data
-                        await tx
-                            .delete(notificationPreferences)
-                            .where(
-                                eq(
-                                    notificationPreferences.communityId,
-                                    input.communityId,
-                                ),
-                            );
-
-                        await tx
-                            .delete(communityMemberRequests)
-                            .where(
-                                eq(
-                                    communityMemberRequests.communityId,
-                                    input.communityId,
-                                ),
-                            );
-
-                        await tx
-                            .delete(communityInvites)
-                            .where(
-                                eq(
-                                    communityInvites.communityId,
-                                    input.communityId,
-                                ),
-                            );
-
-                        await tx
-                            .delete(communityAllowedOrgs)
-                            .where(
-                                eq(
-                                    communityAllowedOrgs.communityId,
-                                    input.communityId,
-                                ),
-                            );
-
-                        await tx
-                            .delete(communityMembers)
-                            .where(
-                                eq(
-                                    communityMembers.communityId,
-                                    input.communityId,
-                                ),
-                            );
-
-                        // 7. Delete tags for this community
-                        await tx
-                            .delete(tags)
-                            .where(eq(tags.communityId, input.communityId));
-
-                        // 8. Finally, delete the community itself
-                        await tx
-                            .delete(communities)
-                            .where(eq(communities.id, input.communityId));
-
-                        return {
-                            success: true,
-                            message: 'Community has been permanently deleted',
-                        };
-                    } catch (txError) {
-                        throw txError;
-                    }
+                    return {
+                        success: true,
+                        message: 'Community has been permanently deleted',
+                    };
                 });
 
                 return result;
