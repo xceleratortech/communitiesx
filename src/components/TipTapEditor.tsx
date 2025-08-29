@@ -27,7 +27,7 @@ import {
     Upload,
     Youtube as YoutubeIcon,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isHtmlContentEmpty } from '@/lib/utils';
 import { uploadAttachmentWithPresignedFlow } from '@/lib/image-upload-utils';
 import { useSession } from '@/server/auth/client';
 
@@ -624,8 +624,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             <div className="text-muted-foreground mt-2 text-xs">
                 {editor && (
                     <>
-                        {editor.getHTML() === '<p></p>' ||
-                        editor.getHTML() === '' ? (
+                        {isHtmlContentEmpty(editor.getHTML()) ? (
                             <span className="text-orange-500">
                                 Content cannot be empty
                             </span>

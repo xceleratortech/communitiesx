@@ -25,6 +25,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { Copy } from 'lucide-react';
 import type { inferProcedureOutput } from '@trpc/server';
 import type { AppRouter } from '@/server/trpc/routers';
+import { validatePostCreationMinRole } from '@/lib/utils';
 
 interface InviteLinkDialogProps {
     open: boolean;
@@ -45,7 +46,7 @@ export function InviteLinkDialog({
     isAdmin,
 }: InviteLinkDialogProps) {
     const [form, setForm] = useState({
-        role: 'member' as 'member' | 'moderator' | 'admin',
+        role: validatePostCreationMinRole('member'),
         expiresInDays: '7',
     });
 

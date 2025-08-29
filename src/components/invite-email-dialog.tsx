@@ -27,6 +27,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { Mail, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { inferProcedureOutput } from '@trpc/server';
 import { AppRouter } from '@/server/trpc/routers';
+import { validatePostCreationMinRole } from '@/lib/utils';
 
 interface InviteEmailDialogProps {
     open: boolean;
@@ -50,7 +51,7 @@ export function InviteEmailDialog({
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
     const [form, setForm] = useState({
         email: '',
-        role: 'member' as 'member' | 'moderator' | 'admin',
+        role: validatePostCreationMinRole('member'),
         senderName: '',
     });
 

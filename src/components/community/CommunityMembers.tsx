@@ -31,7 +31,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
     Dialog,
     DialogContent,
@@ -52,9 +52,15 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Loader2, Search } from 'lucide-react';
+import type {
+    User,
+    CommunityMember,
+    Community,
+    OrgMember,
+} from '@/types/community';
 
 interface CommunityMembersProps {
-    community: any;
+    community: Community;
     canManageCommunityMembers: boolean;
     canManageCommunityAdmins: boolean;
     canRemoveCommunityAdmins: boolean;
@@ -72,7 +78,7 @@ interface CommunityMembersProps {
         memberRole: string,
         memberUserId: string,
     ) => boolean;
-    availableOrgMembers: any[];
+    availableOrgMembers: OrgMember[];
     onAddMembers: (
         users: { userId: string; role: 'member' | 'moderator' }[],
     ) => Promise<void>;
@@ -107,6 +113,29 @@ export function CommunityMembers({
         'member' | 'moderator'
     >('member');
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
+
+    // Memoize the sorted and paginated members to avoid recalculating on every render
+    const paginatedMembers = useMemo(() => {
+        if (!community.members) return [];
+
+        const roleOrder = {
+            admin: 0,
+            moderator: 1,
+            member: 2,
+            follower: 3,
+        };
+
+        return [...community.members]
+            .sort(
+                (a, b) =>
+                    roleOrder[a.role as keyof typeof roleOrder] -
+                    roleOrder[b.role as keyof typeof roleOrder],
+            )
+            .slice(
+                (currentMembersPage - 1) * membersPerPage,
+                currentMembersPage * membersPerPage,
+            );
+    }, [community.members, currentMembersPage, membersPerPage]);
 
     return (
         <TabsContent value="members" className="mt-0">
@@ -176,7 +205,7 @@ export function CommunityMembers({
                                                 setSelectedRoleToAdd('member');
                                                 setMemberSearchTerm('');
                                             } catch (error) {
-                                                // Error handled by parent
+                                                console.error(error);
                                             }
                                         }}
                                         className="space-y-4"
@@ -434,30 +463,8 @@ export function CommunityMembers({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {community.members
-                                        .sort((a: any, b: any) => {
-                                            // Sort by role: admins first, then moderators, then members
-                                            const roleOrder = {
-                                                admin: 0,
-                                                moderator: 1,
-                                                member: 2,
-                                                follower: 3,
-                                            };
-                                            return (
-                                                roleOrder[
-                                                    a.role as keyof typeof roleOrder
-                                                ] -
-                                                roleOrder[
-                                                    b.role as keyof typeof roleOrder
-                                                ]
-                                            );
-                                        })
-                                        .slice(
-                                            (currentMembersPage - 1) *
-                                                membersPerPage,
-                                            currentMembersPage * membersPerPage,
-                                        )
-                                        .map((member: any) => (
+                                    {paginatedMembers.map(
+                                        (member: CommunityMember) => (
                                             <TableRow key={member.userId}>
                                                 <TableCell className="text-center">
                                                     <div className="flex items-center justify-center gap-3">
@@ -596,11 +603,7 @@ export function CommunityMembers({
                                                                             member.userId,
                                                                         )
                                                                             ? member.role ===
-                                                                                  'admin' ||
-                                                                              member.role ===
-                                                                                  'super-admin' ||
-                                                                              member.role ===
-                                                                                  'org-admin'
+                                                                              'admin'
                                                                                 ? 'Moderators cannot manage admin users'
                                                                                 : member.role ===
                                                                                     'moderator'
@@ -717,13 +720,14 @@ export function CommunityMembers({
                                                     )}
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                        ),
+                                    )}
                                 </TableBody>
                             </Table>
                         </div>
 
                         {/* Pagination controls */}
-                        {community.members.length > membersPerPage && (
+                        {(community.members?.length || 0) > membersPerPage && (
                             <div className="mt-6">
                                 <div className="text-muted-foreground mb-2 text-center text-sm">
                                     Showing{' '}
@@ -732,9 +736,9 @@ export function CommunityMembers({
                                     to{' '}
                                     {Math.min(
                                         currentMembersPage * membersPerPage,
-                                        community.members.length,
+                                        community.members?.length || 0,
                                     )}{' '}
-                                    of {community.members.length} members
+                                    of {community.members?.length || 0} members
                                 </div>
                                 <div className="flex justify-center">
                                     <div className="flex items-center gap-2">
@@ -756,7 +760,8 @@ export function CommunityMembers({
                                         <div className="flex items-center gap-1">
                                             {(() => {
                                                 const totalPages = Math.ceil(
-                                                    community.members.length /
+                                                    (community.members
+                                                        ?.length || 0) /
                                                         membersPerPage,
                                                 );
                                                 const pageNumbers = [];
@@ -844,8 +849,8 @@ export function CommunityMembers({
                                                     Math.min(
                                                         currentMembersPage + 1,
                                                         Math.ceil(
-                                                            community.members
-                                                                .length /
+                                                            (community.members
+                                                                ?.length || 0) /
                                                                 membersPerPage,
                                                         ),
                                                     ),
@@ -854,7 +859,8 @@ export function CommunityMembers({
                                             disabled={
                                                 currentMembersPage ===
                                                 Math.ceil(
-                                                    community.members.length /
+                                                    (community.members
+                                                        ?.length || 0) /
                                                         membersPerPage,
                                                 )
                                             }
