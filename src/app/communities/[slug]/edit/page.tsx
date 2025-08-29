@@ -277,9 +277,14 @@ export default function EditCommunityPage() {
                                                 placeholder="community-url"
                                                 {...field}
                                                 disabled
+                                                className="bg-muted"
                                             />
                                         </div>
                                     </FormControl>
+                                    <FormDescription className="text-muted-foreground">
+                                        Community URLs cannot be changed after
+                                        creation to maintain link consistency.
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

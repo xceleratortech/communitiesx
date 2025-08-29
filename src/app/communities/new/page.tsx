@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
@@ -34,6 +34,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { useSearchParams } from 'next/navigation';
+import { usePermission } from '@/hooks/use-permission';
 
 // Form schema
 const formSchema = z.object({
@@ -85,7 +86,10 @@ const formSchema = z.object({
         .or(z.literal(''))
         .optional()
         .nullable(),
-    orgId: z.string().min(1, { message: 'Please select an organization.' }),
+    orgId: z
+        .string()
+        .trim()
+        .min(1, { message: 'Please select an organization.' }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -97,6 +101,9 @@ function NewCommunityForm() {
     const sessionData = useSession();
     const session = sessionData.data;
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Get user permissions
+    const { appRole } = usePermission();
 
     // Get orgId from URL params if provided
     const orgIdFromUrl = searchParams.get('orgId');
@@ -140,16 +147,35 @@ function NewCommunityForm() {
             rules: '',
             avatar: '',
             banner: '',
-            orgId: orgIdFromUrl || '', // Pre-fill with orgId from URL
+            orgId: orgIdFromUrl || '',
         },
     });
 
-    // Update form when orgIdFromUrl changes
+    const selectedOrganization = useMemo(() => {
+        const currentOrgId = form.watch('orgId');
+        if (!organizations?.length || !currentOrgId) return null;
+        return organizations.find((org) => org.id === currentOrgId) || null;
+    }, [organizations, form.watch('orgId')]);
+
     useEffect(() => {
         if (orgIdFromUrl) {
-            form.setValue('orgId', orgIdFromUrl);
+            const currentOrgId = form.getValues('orgId');
+            if (currentOrgId !== orgIdFromUrl) {
+                form.setValue('orgId', orgIdFromUrl);
+            }
+        } else if (organizations && organizations.length > 0) {
+            const currentOrgId = form.getValues('orgId');
+            if (!currentOrgId || currentOrgId === '') {
+                form.setValue('orgId', organizations[0].id);
+
+                if (organizations.length === 1 && appRole === 'admin') {
+                    toast.success(
+                        `Organization automatically set to ${organizations[0].name}`,
+                    );
+                }
+            }
         }
-    }, [orgIdFromUrl, form]);
+    }, [orgIdFromUrl, organizations, form, appRole]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {
@@ -157,6 +183,7 @@ function NewCommunityForm() {
             toast.error('You must be signed in to create a community');
             return;
         }
+
         setIsSubmitting(true);
         createCommunity.mutate({
             name: values.name,
@@ -232,6 +259,17 @@ function NewCommunityForm() {
             </div>
 
             <div>
+                {organizations && organizations.length === 0 && (
+                    <div className="mb-6 rounded-md border border-yellow-200 bg-yellow-50 p-4">
+                        <p className="text-sm text-yellow-800">
+                            <strong>Note:</strong> You don't have access to any
+                            organizations. Communities must be created under an
+                            organization. Please contact your administrator to
+                            get access to an organization.
+                        </p>
+                    </div>
+                )}
+
                 <Form {...form}>
                     <form
                         onSubmit={form.handleSubmit(onSubmit)}
@@ -261,30 +299,110 @@ function NewCommunityForm() {
                             render={({ field }) => (
                                 <FormItem className="w-full">
                                     <FormLabel>Organization</FormLabel>
+                                    <FormDescription className="text-muted-foreground">
+                                        The community will be created under this
+                                        organization.
+                                        {appRole === 'admin' ? (
+                                            <>
+                                                If you have access to multiple
+                                                organizations, you can select
+                                                which one to use.
+                                                {field.value &&
+                                                    organizations && (
+                                                        <span className="mt-1 block font-medium text-green-700">
+                                                            ✓ Selected:{' '}
+                                                            {
+                                                                selectedOrganization?.name
+                                                            }
+                                                        </span>
+                                                    )}
+                                                {organizations &&
+                                                    organizations.length >
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-blue-600">
+                                                            You can change this
+                                                            selection if needed
+                                                        </span>
+                                                    )}
+                                                {organizations &&
+                                                    organizations.length ===
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-green-600">
+                                                            This is your only
+                                                            organization
+                                                        </span>
+                                                    )}
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground mt-1 block text-xs">
+                                                Organization selection is
+                                                automatically managed for you.
+                                                {organizations &&
+                                                    organizations.length ===
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-blue-600">
+                                                            Your community will
+                                                            be created under{' '}
+                                                            {
+                                                                selectedOrganization?.name
+                                                            }
+                                                        </span>
+                                                    )}
+                                            </span>
+                                        )}
+                                    </FormDescription>
                                     <FormControl>
                                         <div className="w-full">
-                                            <Select
-                                                key={field.value} // Force re-render when value changes
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                                disabled={isLoadingOrgs}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Select organization" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {organizations?.map(
-                                                        (org) => (
-                                                            <SelectItem
-                                                                key={org.id}
-                                                                value={org.id}
-                                                            >
-                                                                {org.name}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
+                                            {isLoadingOrgs ? (
+                                                <div className="border-input bg-background flex h-10 w-full items-center rounded-md border px-3 py-2 text-sm">
+                                                    <span className="text-muted-foreground">
+                                                        Loading organizations...
+                                                    </span>
+                                                </div>
+                                            ) : organizations &&
+                                              organizations.length === 0 ? (
+                                                <div className="flex h-10 w-full items-center rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm">
+                                                    <span className="text-red-600">
+                                                        No organizations
+                                                        available
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <Select
+                                                    key={field.value}
+                                                    value={field.value}
+                                                    onValueChange={
+                                                        field.onChange
+                                                    }
+                                                    disabled={isLoadingOrgs}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue
+                                                            placeholder={
+                                                                organizations &&
+                                                                organizations.length >
+                                                                    0
+                                                                    ? 'Select organization'
+                                                                    : 'No organizations available'
+                                                            }
+                                                        />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {organizations?.map(
+                                                            (org) => (
+                                                                <SelectItem
+                                                                    key={org.id}
+                                                                    value={
+                                                                        org.id
+                                                                    }
+                                                                >
+                                                                    {org.name}
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
                                         </div>
                                     </FormControl>
                                     <FormMessage />
@@ -537,15 +655,46 @@ function NewCommunityForm() {
                             )}
                         />
 
-                        <div className="pt-4">
+                        <div className="space-y-4 pt-4">
+                            {/* Only show summary card to super admins */}
+                            {appRole === 'admin' &&
+                                form.watch('orgId') &&
+                                organizations && (
+                                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                                        <p className="text-sm text-green-800">
+                                            <strong>
+                                                Ready to create community:
+                                            </strong>{' '}
+                                            Your community will be created under{' '}
+                                            <span className="font-medium">
+                                                {selectedOrganization?.name}
+                                            </span>
+                                        </p>
+                                    </div>
+                                )}
+
                             <Button
                                 type="submit"
-                                disabled={isSubmitting}
+                                disabled={
+                                    isSubmitting ||
+                                    isLoadingOrgs ||
+                                    !organizations ||
+                                    organizations.length === 0
+                                }
                                 className="w-full"
                             >
-                                {isSubmitting
-                                    ? 'Creating...'
-                                    : 'Create Community'}
+                                {(() => {
+                                    if (isSubmitting) return 'Creating...';
+                                    if (isLoadingOrgs) return 'Loading...';
+                                    if (
+                                        !organizations ||
+                                        organizations.length === 0
+                                    )
+                                        return 'No Organizations Available';
+                                    if (appRole === 'admin')
+                                        return 'Create Community';
+                                    return 'Create Community in Your Organization';
+                                })()}
                             </Button>
                         </div>
                     </form>

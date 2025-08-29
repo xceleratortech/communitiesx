@@ -37,12 +37,15 @@ import {
     orgMembers,
     notificationPreferences,
     postTags,
+    tags,
 } from '@/server/db/schema';
 import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
 import { SQL } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email';
 import { createWelcomeEmail } from '@/lib/email-templates';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -317,14 +320,88 @@ export const organizationsRouter = router({
             return { ...org, communities: allCommunities, members };
         }),
 
-    deleteCommunity: publicProcedure
+    deleteCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            // Optionally: check permissions here
-            await db
-                .delete(communities)
-                .where(eq(communities.id, input.communityId));
-            return { success: true };
+            try {
+                // Check if user has permission to delete this community
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Get the community to check ownership and permissions
+                const community = await db.query.communities.findFirst({
+                    where: eq(communities.id, input.communityId),
+                });
+
+                if (!community) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Community not found',
+                    });
+                }
+
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canDelete = await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.DELETE_COMMUNITY,
+                );
+
+                if (!canDelete) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to delete this community',
+                    });
+                }
+
+                const result = await db.transaction(async (tx) => {
+                    const postIdsInCommunityQuery = tx
+                        .select({ id: posts.id })
+                        .from(posts)
+                        .where(eq(posts.communityId, input.communityId));
+
+                    await tx
+                        .delete(comments)
+                        .where(
+                            inArray(comments.postId, postIdsInCommunityQuery),
+                        );
+
+                    await tx
+                        .delete(posts)
+                        .where(eq(posts.communityId, input.communityId));
+
+                    await tx
+                        .delete(communities)
+                        .where(eq(communities.id, input.communityId));
+
+                    return {
+                        success: true,
+                        message: 'Community has been permanently deleted',
+                    };
+                });
+
+                return result;
+            } catch (error) {
+                console.error('Error deleting community:', error);
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete community. Please try again.',
+                });
+            }
         }),
 
     getOrganizationsForCommunityCreate: publicProcedure
