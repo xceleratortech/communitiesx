@@ -29,6 +29,7 @@ import { Loading } from '@/components/ui/loading';
 import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 export default function EditCommunityPostPage() {
     const params = useParams();
@@ -99,7 +100,7 @@ export default function EditCommunityPostPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!title.trim() || !content.trim()) {
+        if (!title.trim() || isHtmlContentEmpty(content)) {
             setError('Title and content are required.');
             return;
         }
@@ -357,7 +358,14 @@ export default function EditCommunityPostPage() {
                         </div>
                     </div>
                 )}
-                <Button type="submit" disabled={editPost.isPending}>
+                <Button
+                    type="submit"
+                    disabled={
+                        editPost.isPending ||
+                        !title.trim() ||
+                        isHtmlContentEmpty(content)
+                    }
+                >
                     {editPost.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
             </form>

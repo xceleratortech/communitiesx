@@ -21,6 +21,7 @@ export const permissions = {
             'invite_community_members',
             'remove_community_creator',
             'assign_community_admin',
+            'remove_community_admin', // New permission for removing community admins
 
             'create_post',
             'edit_post',
@@ -57,11 +58,17 @@ export const permissions = {
             'invite_community_members',
             'remove_community_creator',
             'assign_community_admin',
+            'remove_community_admin', // New permission for removing community admins
 
             'create_post',
             'edit_post',
             'delete_post',
             'view_post',
+
+            'create_tag',
+            'edit_tag',
+            'delete_tag',
+            'view_tag',
         ] as const,
 
         moderator: [
