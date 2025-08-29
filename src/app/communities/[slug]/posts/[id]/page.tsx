@@ -17,6 +17,7 @@ import { Loading } from '@/components/ui/loading';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 type User = {
     id: string;
@@ -194,7 +195,7 @@ export default function CommunityPostPage() {
 
     const handleSubmitComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!comment.trim()) return;
+        if (isHtmlContentEmpty(comment)) return;
 
         try {
             await createComment.mutate({
@@ -221,7 +222,7 @@ export default function CommunityPostPage() {
     };
 
     const handleSubmitReply = async (parentId: number) => {
-        if (!replyContent.trim()) return;
+        if (isHtmlContentEmpty(replyContent)) return;
 
         await createComment.mutate({
             postId,
@@ -402,7 +403,10 @@ export default function CommunityPostPage() {
                         />
                         <Button
                             type="submit"
-                            disabled={createComment.isPending}
+                            disabled={
+                                createComment.isPending ||
+                                isHtmlContentEmpty(comment)
+                            }
                             className="mt-2"
                         >
                             {createComment.isPending

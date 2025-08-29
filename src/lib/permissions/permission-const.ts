@@ -13,6 +13,7 @@ export const PERMISSIONS = {
     INVITE_COMMUNITY_MEMBERS: 'invite_community_members',
     REMOVE_COMMUNITY_CREATOR: 'remove_community_creator',
     ASSIGN_COMMUNITY_ADMIN: 'assign_community_admin',
+    REMOVE_COMMUNITY_ADMIN: 'remove_community_admin', // New permission for removing community admins
 
     VIEW_ORG: 'view_org',
     UPDATE_ORG: 'update_org',

@@ -1514,9 +1514,13 @@ export const communityRouter = router({
                 communityId: z.number(),
                 name: z.string().min(3).max(50).optional(),
                 description: z.string().max(500).nullable().optional(),
+                type: z.enum(['public', 'private']).optional(),
                 rules: z.string().max(2000).nullable().optional(),
                 banner: z.string().nullable().optional(),
                 avatar: z.string().nullable().optional(),
+                postCreationMinRole: z
+                    .enum(['member', 'moderator', 'admin'])
+                    .optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -1552,11 +1556,14 @@ export const communityRouter = router({
                 if (input.name) updateData.name = input.name;
                 if (input.description !== undefined)
                     updateData.description = input.description;
+                if (input.type !== undefined) updateData.type = input.type;
                 if (input.rules !== undefined) updateData.rules = input.rules;
                 if (input.banner !== undefined)
                     updateData.banner = input.banner;
                 if (input.avatar !== undefined)
                     updateData.avatar = input.avatar;
+                if (input.postCreationMinRole !== undefined)
+                    updateData.postCreationMinRole = input.postCreationMinRole;
 
                 const [updatedCommunity] = await db
                     .update(communities)

@@ -14,6 +14,7 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 type User = {
     id: string;
@@ -178,7 +179,7 @@ export default function PostPage() {
 
     const handleSubmitComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!comment.trim()) return;
+        if (isHtmlContentEmpty(comment)) return;
 
         try {
             await createComment.mutate({
@@ -205,7 +206,7 @@ export default function PostPage() {
     };
 
     const handleSubmitReply = async (parentId: number) => {
-        if (!replyContent.trim()) return;
+        if (isHtmlContentEmpty(replyContent)) return;
 
         await createComment.mutate({
             postId,
@@ -306,7 +307,10 @@ export default function PostPage() {
                             />
                             <Button
                                 type="submit"
-                                disabled={createComment.isPending}
+                                disabled={
+                                    createComment.isPending ||
+                                    isHtmlContentEmpty(comment)
+                                }
                                 className="mt-2"
                             >
                                 {createComment.isPending
