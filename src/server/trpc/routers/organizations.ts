@@ -318,16 +318,9 @@ export const organizationsRouter = router({
             return { ...org, communities: allCommunities, members };
         }),
 
-    deleteCommunity: publicProcedure
+    deleteCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            if (!ctx.session?.user) {
-                throw new TRPCError({
-                    code: 'UNAUTHORIZED',
-                    message: 'You must be logged in to delete communities',
-                });
-            }
-
             try {
                 // Check if user has permission to delete this community
                 const currentUser = await db.query.users.findFirst({
