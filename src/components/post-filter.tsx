@@ -23,7 +23,9 @@ import {
     Users,
     User,
     Tag,
+    Clock,
 } from 'lucide-react';
+import { DateFilter, type DateFilterState } from './date-filter';
 
 // Types based on your existing code
 type UserCommunity = {
@@ -45,6 +47,7 @@ type FilterState = {
     tags: number[];
     showOrgOnly: boolean;
     showMyPosts: boolean;
+    dateFilter: DateFilterState;
 };
 
 interface PostsFilterProps {
@@ -65,6 +68,7 @@ export function PostsFilter({
         tags: [],
         showOrgOnly: false,
         showMyPosts: false,
+        dateFilter: { type: 'all' },
     });
 
     const [isOpen, setIsOpen] = useState(false);
@@ -108,12 +112,20 @@ export function PostsFilter({
         }));
     };
 
+    const handleDateFilterChange = (filter: DateFilterState) => {
+        setFilters((prev) => ({
+            ...prev,
+            dateFilter: filter,
+        }));
+    };
+
     const clearAllFilters = () => {
         setFilters({
             communities: [],
             tags: [],
             showOrgOnly: false,
             showMyPosts: false,
+            dateFilter: { type: 'all' },
         });
     };
 
@@ -122,7 +134,8 @@ export function PostsFilter({
             filters.communities.length +
             filters.tags.length +
             (filters.showOrgOnly ? 1 : 0) +
-            (filters.showMyPosts ? 1 : 0)
+            (filters.showMyPosts ? 1 : 0) +
+            (filters.dateFilter.type !== 'all' ? 1 : 0)
         );
     };
 
@@ -313,6 +326,24 @@ export function PostsFilter({
                                 )}
                             </DropdownMenuSubContent>
                         </DropdownMenuSub> */}
+
+                        <DateFilter
+                            value={filters.dateFilter}
+                            onChange={handleDateFilterChange}
+                            disabled={isLoading}
+                        />
+
+                        {getActiveFiltersCount() > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={clearAllFilters}
+                                className="h-9 px-2"
+                            >
+                                <X className="mr-1 h-4 w-4" />
+                                Clear all
+                            </Button>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -408,6 +439,27 @@ export function PostsFilter({
                             </button>
                         </Badge>
                     ))}
+
+                    {/* Date Filter Badge */}
+                    {filters.dateFilter.type !== 'all' && (
+                        <Badge variant="secondary" className="gap-1">
+                            <Clock className="h-3 w-3" />
+                            {filters.dateFilter.type === 'today' && 'Today'}
+                            {filters.dateFilter.type === 'week' && 'Last Week'}
+                            {filters.dateFilter.type === 'month' &&
+                                'Last Month'}
+                            {filters.dateFilter.type === 'custom' &&
+                                'Custom Range'}
+                            <button
+                                onClick={() =>
+                                    handleDateFilterChange({ type: 'all' })
+                                }
+                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    )}
                 </div>
             )}
         </div>
