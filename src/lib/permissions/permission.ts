@@ -82,9 +82,9 @@ export const permissions = {
             'delete_post',
             'view_post',
 
-            'create_tag',
-            'edit_tag',
-            'delete_tag',
+            // 'create_tag',
+            // 'edit_tag',
+            // 'delete_tag',
             'view_tag',
         ] as const,
 
