@@ -12,7 +12,7 @@ import {
     orgMembers,
     users,
 } from '@/server/db/schema';
-import { eq, and, desc, or, lt, inArray, sql, ilike } from 'drizzle-orm';
+import { eq, and, desc, or, lt, inArray, sql, ilike, asc } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
@@ -385,11 +385,19 @@ export const communitiesRouter = router({
         }),
 
     getBySlug: publicProcedure
-        .input(z.object({ slug: z.string() }))
+        .input(
+            z.object({
+                slug: z.string(),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+            }),
+        )
         .query(async ({ input, ctx }) => {
             try {
+                const { slug, sort } = input;
                 const community = await db.query.communities.findFirst({
-                    where: eq(communities.slug, input.slug),
+                    where: eq(communities.slug, slug),
                     with: {
                         members: {
                             with: {
@@ -476,6 +484,21 @@ export const communitiesRouter = router({
                     };
                 }
 
+                // Determine order by clause based on sort option
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    // For comment count sorting, we need to use a subquery
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
                 // Load posts with authors, tags, and comments
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
@@ -491,7 +514,7 @@ export const communitiesRouter = router({
                         },
                         comments: true, // <-- include comments
                     },
-                    orderBy: desc(posts.createdAt),
+                    orderBy: orderByClause,
                 });
 
                 // Transform posts to include tags array and comments array
@@ -501,11 +524,20 @@ export const communitiesRouter = router({
                     comments: post.comments?.filter((c) => !c.isDeleted) || [],
                 }));
 
+                let finalPosts = postsWithTags;
+                if (sort === 'most-commented') {
+                    finalPosts = postsWithTags.sort((a, b) => {
+                        const commentCountA = a.comments?.length || 0;
+                        const commentCountB = b.comments?.length || 0;
+                        return commentCountB - commentCountA; // Most commented first
+                    });
+                }
+
                 // Return the community with posts that include author information and tags
                 return {
                     ...community,
                     orgId: community.orgId, // <-- add this line
-                    posts: postsWithTags,
+                    posts: finalPosts,
                 };
             } catch (error) {
                 console.error(

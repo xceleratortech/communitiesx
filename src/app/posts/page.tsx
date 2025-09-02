@@ -30,6 +30,8 @@ import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { Input } from '@/components/ui/input';
 import { SafeHtml } from '@/lib/sanitize';
+import { SortSelect, type SortOption } from '@/components/ui/sort-select';
+import { DateFilterState } from '@/components/date-filter';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -75,6 +77,7 @@ type FilterState = {
     tags: number[];
     showOrgOnly: boolean;
     showMyPosts: boolean;
+    dateFilter: DateFilterState;
 };
 
 // Post skeleton component for loading state
@@ -164,7 +167,11 @@ export default function PostsPage() {
         tags: [],
         showOrgOnly: false,
         showMyPosts: false,
+        dateFilter: { type: 'all' },
     });
+
+    // Sort state
+    const [sortOption, setSortOption] = useState<SortOption>('latest');
 
     // Fixed search state - separate input value from search term
     const [searchInputValue, setSearchInputValue] = useState('');
@@ -219,6 +226,7 @@ export default function PostsPage() {
     const postsQuery = trpc.community.getAllRelevantPosts.useQuery({
         limit: 10,
         offset: 0,
+        sort: sortOption,
     });
 
     // Update posts state when query data changes
@@ -240,6 +248,7 @@ export default function PostsPage() {
             const data = await utils.community.getAllRelevantPosts.fetch({
                 limit: 10,
                 offset: offset,
+                sort: sortOption,
             });
 
             setPosts((prev) => [...prev, ...data.posts]);
@@ -256,6 +265,7 @@ export default function PostsPage() {
         hasNextPage,
         isFetchingNextPage,
         offset,
+        sortOption,
         utils.community.getAllRelevantPosts,
     ]);
 
@@ -430,6 +440,41 @@ export default function PostsPage() {
             );
         }
 
+        // Filter by date
+        if (activeFilters.dateFilter.type !== 'all') {
+            filtered = filtered.filter((post: PostDisplay) => {
+                const postDate = new Date(post.createdAt);
+
+                switch (activeFilters.dateFilter.type) {
+                    case 'today':
+                        const today = new Date();
+                        return postDate.toDateString() === today.toDateString();
+                    case 'week':
+                        const weekAgo = new Date();
+                        weekAgo.setDate(weekAgo.getDate() - 7);
+                        return postDate >= weekAgo;
+                    case 'month':
+                        const monthAgo = new Date();
+                        monthAgo.setDate(monthAgo.getDate() - 30);
+                        return postDate >= monthAgo;
+                    case 'custom':
+                        if (
+                            activeFilters.dateFilter.startDate &&
+                            activeFilters.dateFilter.endDate
+                        ) {
+                            return (
+                                postDate >=
+                                    activeFilters.dateFilter.startDate &&
+                                postDate <= activeFilters.dateFilter.endDate
+                            );
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            });
+        }
+
         return filtered;
     }, [posts, activeFilters, session?.user?.id]);
 
@@ -463,7 +508,12 @@ export default function PostsPage() {
 
     // Search API call with proper enabled condition
     const searchQuery = trpc.community.searchRelevantPost.useQuery(
-        { search: searchTerm, limit: 50, offset: 0 }, // Increased limit for better search results
+        {
+            search: searchTerm,
+            limit: 50,
+            offset: 0,
+            sort: sortOption,
+        }, // Increased limit for better search results
         {
             enabled: !!searchTerm && searchTerm.length >= 2, // Only search if term is at least 2 characters
             staleTime: 5 * 60 * 1000, // Cache results for 5 minutes
@@ -536,6 +586,7 @@ export default function PostsPage() {
                                     tags: [],
                                     showOrgOnly: false,
                                     showMyPosts: false,
+                                    dateFilter: { type: 'all' },
                                 })
                             }
                         >
@@ -849,10 +900,22 @@ export default function PostsPage() {
         );
     };
 
+    // Handle sort change
+    const handleSortChange = (newSort: SortOption) => {
+        setSortOption(newSort);
+        // Reset pagination when sort changes
+        setPosts([]);
+        setOffset(0);
+        setHasNextPage(true);
+        // Invalidate both the posts query and search query to refresh with new sort
+        utils.community.getAllRelevantPosts.invalidate();
+        utils.community.searchRelevantPost.invalidate();
+    };
+
     return (
         <div className="py-4">
             <div className="mb-4">
-                {/* Header with filter */}
+                {/* Header with filter and sort */}
                 <div className="mb-4 flex flex-row items-center gap-2">
                     <div className="min-w-[180px] flex-1">
                         <Input
@@ -863,6 +926,12 @@ export default function PostsPage() {
                             onChange={(e) =>
                                 handleSearchInputChange(e.target.value)
                             }
+                        />
+                    </div>
+                    <div className="flex-shrink-0">
+                        <SortSelect
+                            value={sortOption}
+                            onValueChange={handleSortChange}
                         />
                     </div>
                     <div className="flex-shrink-0">

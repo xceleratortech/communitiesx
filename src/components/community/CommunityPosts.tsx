@@ -15,6 +15,7 @@ import {
 import Link from 'next/link';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
+import { DateFilter, type DateFilterState } from '@/components/date-filter';
 
 interface CommunityPostsProps {
     community: any;
@@ -24,6 +25,8 @@ interface CommunityPostsProps {
     filteredPosts: any[];
     showMyPosts: boolean;
     selectedTagFilters: number[];
+    dateFilter: DateFilterState;
+    onDateFilterChange: (filter: DateFilterState) => void;
     onPostFilterToggle: () => void;
     onTagFilterToggle: (tagId: number) => void;
     onClearTagFilters: () => void;
@@ -42,6 +45,8 @@ export function CommunityPosts({
     filteredPosts,
     showMyPosts,
     selectedTagFilters,
+    dateFilter,
+    onDateFilterChange,
     onPostFilterToggle,
     onTagFilterToggle,
     onClearTagFilters,
@@ -128,31 +133,36 @@ export function CommunityPosts({
                     </div>
 
                     {/* Post Filter */}
-                    <div className="mb-4 flex flex-wrap items-center gap-2">
-                        <button
-                            onClick={onPostFilterToggle}
-                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                !showMyPosts
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            }`}
-                        >
-                            <Building className="h-4 w-4" />
-                            All Posts
-                        </button>
-                        <button
-                            onClick={onPostFilterToggle}
-                            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                showMyPosts
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                            }`}
-                        >
-                            <Users className="h-4 w-4" />
-                            My Posts
-                        </button>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={onPostFilterToggle}
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                                    !showMyPosts
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                }`}
+                            >
+                                <Building className="h-4 w-4" />
+                                All Posts
+                            </button>
+                            <button
+                                onClick={onPostFilterToggle}
+                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                                    showMyPosts
+                                        ? 'bg-primary text-primary-foreground'
+                                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                                }`}
+                            >
+                                <Users className="h-4 w-4" />
+                                My Posts
+                            </button>
+                        </div>
+                        <DateFilter
+                            value={dateFilter}
+                            onChange={onDateFilterChange}
+                        />
                     </div>
-
                     {/* Tag Filter */}
                     {community.tags && community.tags.length > 0 && (
                         <div className="mt-4 mb-6">
