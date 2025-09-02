@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import ReactCrop, {
     centerCrop,
     makeAspectCrop,
@@ -94,6 +94,18 @@ export function ImageCropDialog({
     const [croppedImageUrl, setCroppedImageUrl] = useState<string>('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
+    const [objectUrl, setObjectUrl] = useState<string>('');
+
+    // Create and cleanup object URL
+    useEffect(() => {
+        if (!imageFile) return;
+
+        const url = URL.createObjectURL(imageFile);
+        setObjectUrl(url);
+
+        // Cleanup function to revoke the object URL
+        return () => URL.revokeObjectURL(url);
+    }, [imageFile]);
 
     const onImageLoad = useCallback(
         (e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -151,8 +163,12 @@ export function ImageCropDialog({
         setCrop(undefined);
         setCroppedImageUrl('');
         setImageLoaded(false);
+        if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+            setObjectUrl('');
+        }
         onClose();
-    }, [onClose]);
+    }, [onClose, objectUrl]);
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -197,7 +213,7 @@ export function ImageCropDialog({
                                 <img
                                     ref={imgRef}
                                     alt="Crop me"
-                                    src={URL.createObjectURL(imageFile)}
+                                    src={objectUrl}
                                     style={{
                                         maxHeight: '60vh',
                                         maxWidth: '100%',
