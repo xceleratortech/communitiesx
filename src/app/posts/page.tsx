@@ -227,6 +227,7 @@ export default function PostsPage() {
         limit: 10,
         offset: 0,
         sort: sortOption,
+        dateFilter: activeFilters.dateFilter,
     });
 
     // Update posts state when query data changes
@@ -249,6 +250,7 @@ export default function PostsPage() {
                 limit: 10,
                 offset: offset,
                 sort: sortOption,
+                dateFilter: activeFilters.dateFilter,
             });
 
             setPosts((prev) => [...prev, ...data.posts]);
@@ -440,40 +442,7 @@ export default function PostsPage() {
             );
         }
 
-        // Filter by date
-        if (activeFilters.dateFilter.type !== 'all') {
-            filtered = filtered.filter((post: PostDisplay) => {
-                const postDate = new Date(post.createdAt);
-
-                switch (activeFilters.dateFilter.type) {
-                    case 'today':
-                        const today = new Date();
-                        return postDate.toDateString() === today.toDateString();
-                    case 'week':
-                        const weekAgo = new Date();
-                        weekAgo.setDate(weekAgo.getDate() - 7);
-                        return postDate >= weekAgo;
-                    case 'month':
-                        const monthAgo = new Date();
-                        monthAgo.setDate(monthAgo.getDate() - 30);
-                        return postDate >= monthAgo;
-                    case 'custom':
-                        if (
-                            activeFilters.dateFilter.startDate &&
-                            activeFilters.dateFilter.endDate
-                        ) {
-                            return (
-                                postDate >=
-                                    activeFilters.dateFilter.startDate &&
-                                postDate <= activeFilters.dateFilter.endDate
-                            );
-                        }
-                        return true;
-                    default:
-                        return true;
-                }
-            });
-        }
+        // Date filtering is now handled on the backend
 
         return filtered;
     }, [posts, activeFilters, session?.user?.id]);
@@ -513,6 +482,7 @@ export default function PostsPage() {
             limit: 50,
             offset: 0,
             sort: sortOption,
+            dateFilter: activeFilters.dateFilter,
         }, // Increased limit for better search results
         {
             enabled: !!searchTerm && searchTerm.length >= 2, // Only search if term is at least 2 characters
@@ -912,6 +882,18 @@ export default function PostsPage() {
         utils.community.searchRelevantPost.invalidate();
     };
 
+    // Handle date filter change
+    const handleDateFilterChange = (dateFilter: DateFilterState) => {
+        setActiveFilters((prev) => ({ ...prev, dateFilter }));
+        // Reset pagination when date filter changes
+        setPosts([]);
+        setOffset(0);
+        setHasNextPage(true);
+        // Invalidate queries to refresh with new date filter
+        utils.community.getAllRelevantPosts.invalidate();
+        utils.community.searchRelevantPost.invalidate();
+    };
+
     return (
         <div className="py-4">
             <div className="mb-4">
@@ -947,6 +929,7 @@ export default function PostsPage() {
                             }))}
                             availableTags={availableTags}
                             onFilterChange={handleFilterChange}
+                            onDateFilterChange={handleDateFilterChange}
                             isLoading={isLoading}
                         />
                     </div>

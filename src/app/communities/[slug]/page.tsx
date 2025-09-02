@@ -69,13 +69,30 @@ export default function CommunityDetailPage() {
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
 
     const [isClient, setIsClient] = useState(false);
+    const { checkCommunityPermission } = usePermission();
+    const utils = trpc.useUtils();
+
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    const { checkCommunityPermission } = usePermission();
-
-    const utils = trpc.useUtils();
+    // Refetch data when date filter changes
+    useEffect(() => {
+        if (isClient && session) {
+            utils.communities.getBySlug.invalidate({
+                slug,
+                sort: sortOption,
+                dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
+            });
+        }
+    }, [
+        dateFilter,
+        isClient,
+        session,
+        slug,
+        sortOption,
+        utils.communities.getBySlug,
+    ]);
 
     const {
         data: community,
@@ -85,6 +102,7 @@ export default function CommunityDetailPage() {
         {
             slug,
             sort: sortOption,
+            dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
         },
         {
             enabled: !!session,
@@ -646,44 +664,8 @@ export default function CommunityDetailPage() {
             );
         }
 
-        if (dateFilter.type !== 'all') {
-            filtered = filtered.filter((post) => {
-                const postDate = new Date(post.createdAt);
-
-                switch (dateFilter.type) {
-                    case 'today':
-                        const today = new Date();
-                        return postDate.toDateString() === today.toDateString();
-                    case 'week':
-                        const weekAgo = new Date();
-                        weekAgo.setDate(weekAgo.getDate() - 7);
-                        return postDate >= weekAgo;
-                    case 'month':
-                        const monthAgo = new Date();
-                        monthAgo.setDate(monthAgo.getDate() - 30);
-                        return postDate >= monthAgo;
-                    case 'custom':
-                        if (dateFilter.startDate && dateFilter.endDate) {
-                            return (
-                                postDate >= dateFilter.startDate &&
-                                postDate <= dateFilter.endDate
-                            );
-                        }
-                        return true;
-                    default:
-                        return true;
-                }
-            });
-        }
-
         return filtered;
-    }, [
-        community?.posts,
-        selectedTagFilters,
-        showMyPosts,
-        session?.user?.id,
-        dateFilter,
-    ]);
+    }, [community?.posts, selectedTagFilters, showMyPosts, session?.user?.id]);
 
     const handleTagFilterToggle = (tagId: number) => {
         setSelectedTagFilters((prev) =>
@@ -700,8 +682,6 @@ export default function CommunityDetailPage() {
     // Handle sort change
     const handleSortChange = (newSort: SortOption) => {
         setSortOption(newSort);
-        // Refetch community data with new sort
-        utils.communities.getBySlug.invalidate({ slug, sort: newSort });
     };
 
     if (!isClient) {

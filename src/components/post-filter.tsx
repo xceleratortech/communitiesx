@@ -54,6 +54,7 @@ interface PostsFilterProps {
     userCommunities: UserCommunity[];
     availableTags: PostTag[];
     onFilterChange: (filters: FilterState) => void;
+    onDateFilterChange: (dateFilter: DateFilterState) => void;
     isLoading?: boolean;
 }
 
@@ -61,6 +62,7 @@ export function PostsFilter({
     userCommunities,
     availableTags,
     onFilterChange,
+    onDateFilterChange,
     isLoading = false,
 }: PostsFilterProps) {
     const [filters, setFilters] = useState<FilterState>({
@@ -117,16 +119,21 @@ export function PostsFilter({
             ...prev,
             dateFilter: filter,
         }));
+        // Also call the parent's date filter change handler
+        onDateFilterChange(filter);
     };
 
     const clearAllFilters = () => {
-        setFilters({
+        const clearedFilters: FilterState = {
             communities: [],
             tags: [],
             showOrgOnly: false,
             showMyPosts: false,
             dateFilter: { type: 'all' },
-        });
+        };
+        setFilters(clearedFilters);
+        // Also call the parent's date filter change handler
+        onDateFilterChange(clearedFilters.dateFilter);
     };
 
     const getActiveFiltersCount = () => {
