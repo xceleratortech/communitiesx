@@ -718,7 +718,9 @@ export const communityRouter = router({
                         source: {
                             type: post.communityId ? 'community' : 'org',
                             orgId: post.orgId,
-                            communityId: post.communityId,
+                            communityId: post.communityId
+                                ? post.communityId
+                                : undefined,
                             reason: post.communityId
                                 ? `SuperAdmin access to ${post.community?.name || 'community'}`
                                 : `SuperAdmin access to organization`,
@@ -791,100 +793,63 @@ export const communityRouter = router({
                     ]),
                 ];
 
-                // For comment count sorting, we need to fetch posts with comment counts
-                let orgOrderByClause;
+                // Build a single WHERE clause that covers both org posts and community posts
+                const baseWhereConditions = [eq(posts.isDeleted, false)];
+
+                if (dateFilterCondition) {
+                    baseWhereConditions.push(dateFilterCondition);
+                }
+
+                // Create OR condition for org posts OR community posts
+                const orgCondition = and(
+                    eq(posts.orgId, orgId),
+                    isNull(posts.communityId),
+                );
+
+                const communityCondition =
+                    allCommunityIds.length > 0
+                        ? inArray(posts.communityId, allCommunityIds)
+                        : sql`false`; // If no communities, this condition will never match
+
+                const combinedWhere = and(
+                    ...baseWhereConditions,
+                    or(orgCondition, communityCondition),
+                );
+
+                // Build ORDER BY clause
+                let orderByClause;
                 if (sort === 'most-commented') {
-                    orgOrderByClause = sql`(
+                    // Use a subquery to get comment counts and sort by them
+                    orderByClause = sql`(
                         SELECT COUNT(*) FROM comments c 
                         WHERE c.post_id = posts.id AND c.is_deleted = false
                     ) DESC`;
                 } else {
-                    orgOrderByClause =
+                    orderByClause =
                         sort === 'latest'
                             ? desc(posts.createdAt)
                             : asc(posts.createdAt);
                 }
 
-                // Get organization-wide posts (not belonging to any community)
-                const orgPostsWhere = dateFilterCondition
-                    ? and(
-                          eq(posts.orgId, orgId),
-                          isNull(posts.communityId),
-                          eq(posts.isDeleted, false),
-                          dateFilterCondition,
-                      )
-                    : and(
-                          eq(posts.orgId, orgId),
-                          isNull(posts.communityId),
-                          eq(posts.isDeleted, false),
-                      );
-
-                const orgPosts = await db.query.posts.findMany({
-                    where: orgPostsWhere,
-                    orderBy: [orgOrderByClause],
-                    with: {
-                        author: {
-                            with: {
-                                organization: true,
-                            },
-                        },
-                        comments: true,
-                        postTags: {
-                            with: {
-                                tag: true,
-                            },
-                        },
-                    },
-                });
-
-                // Get organization name
+                // Get organization name for source information
                 const organization = await db.query.orgs.findFirst({
                     where: eq(orgs.id, orgId),
                 });
-
                 const orgName = organization?.name || 'your organization';
 
-                // Add source information to org posts
-                const orgPostsWithSource = orgPosts.map((post) => ({
-                    ...post,
-                    tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
-                    source: {
-                        type: 'org',
-                        orgId,
-                        reason: `Because you are part of ${orgName}`,
-                    },
-                }));
-
-                // Get community posts if user is part of any communities
-                let communityPosts: PostWithSource[] = [];
-                if (allCommunityIds.length > 0) {
-                    let communityOrderByClause;
-                    if (sort === 'most-commented') {
-                        communityOrderByClause = sql`(
-                            SELECT COUNT(*) FROM comments c 
-                            WHERE c.post_id = posts.id AND c.is_deleted = false
-                        ) DESC`;
-                    } else {
-                        communityOrderByClause =
-                            sort === 'latest'
-                                ? desc(posts.createdAt)
-                                : asc(posts.createdAt);
-                    }
-
-                    const communityPostsWhere = dateFilterCondition
-                        ? and(
-                              inArray(posts.communityId, allCommunityIds),
-                              eq(posts.isDeleted, false),
-                              dateFilterCondition,
-                          )
-                        : and(
-                              inArray(posts.communityId, allCommunityIds),
-                              eq(posts.isDeleted, false),
-                          );
-
-                    const rawCommunityPosts = await db.query.posts.findMany({
-                        where: communityPostsWhere,
-                        orderBy: [communityOrderByClause],
+                // Execute single query with proper pagination and sorting
+                const [totalCountResult, paginatedDbPosts] = await Promise.all([
+                    // Get total count
+                    db
+                        .select({ count: sql<number>`count(*)` })
+                        .from(posts)
+                        .where(combinedWhere),
+                    // Get paginated posts with all relations
+                    db.query.posts.findMany({
+                        where: combinedWhere,
+                        orderBy: [orderByClause],
+                        limit,
+                        offset,
                         with: {
                             author: {
                                 with: {
@@ -899,70 +864,46 @@ export const communityRouter = router({
                                 },
                             },
                         },
-                    });
+                    }),
+                ]);
 
-                    // Add source information to community posts
-                    communityPosts = rawCommunityPosts.map((post) => {
-                        const membershipType = communityMembershipMap.get(
-                            post.communityId,
-                        );
-                        return {
-                            ...post,
-                            tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
-                            source: {
-                                type: 'community',
-                                communityId: post.communityId ?? undefined,
-                                reason:
-                                    membershipType === 'member'
-                                        ? `Because you are a member of ${post.community?.name}`
-                                        : `Because you are following ${post.community?.name}`,
-                            },
-                        } as PostWithSource;
-                    });
-                }
+                const totalCount = totalCountResult[0]?.count || 0;
 
-                // Combine and sort all posts
-                let allPosts;
-                if (sort === 'most-commented') {
-                    // For comment count sorting, we need to sort by actual comment count
-                    allPosts = [...orgPostsWithSource, ...communityPosts].sort(
-                        (a, b) => {
-                            const commentCountA =
-                                a.comments?.filter((c) => !c.isDeleted)
-                                    .length || 0;
-                            const commentCountB =
-                                b.comments?.filter((c) => !c.isDeleted)
-                                    .length || 0;
-                            return commentCountB - commentCountA; // Most commented first
-                        },
-                    );
-                } else {
-                    // For date-based sorting, use the existing logic
-                    allPosts = [...orgPostsWithSource, ...communityPosts].sort(
-                        (a, b) => {
-                            const dateA = new Date(a.createdAt).getTime();
-                            const dateB = new Date(b.createdAt).getTime();
-                            return sort === 'latest'
-                                ? dateB - dateA
-                                : dateA - dateB;
-                        },
-                    );
-                }
+                // Add source information to posts
+                const postsWithSource = paginatedDbPosts.map((post) => {
+                    const isOrgPost = post.orgId === orgId && !post.communityId;
+                    const membershipType = post.communityId
+                        ? communityMembershipMap.get(post.communityId)
+                        : null;
 
-                // Calculate total count
-                const totalCount = allPosts.length;
-
-                // Apply pagination
-                const paginatedPosts = allPosts.slice(offset, offset + limit);
+                    return {
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
+                        source: isOrgPost
+                            ? {
+                                  type: 'org' as const,
+                                  orgId,
+                                  reason: `Because you are part of ${orgName}`,
+                              }
+                            : {
+                                  type: 'community' as const,
+                                  communityId: post.communityId
+                                      ? post.communityId
+                                      : undefined,
+                                  reason:
+                                      membershipType === 'member'
+                                          ? `Because you are a member of ${post.community?.name}`
+                                          : `Because you are following ${post.community?.name}`,
+                              },
+                    } as PostWithSource;
+                });
 
                 // Check if there are more results
                 const hasNextPage = offset + limit < totalCount;
-
-                // Calculate next offset
                 const nextOffset = hasNextPage ? offset + limit : null;
 
                 return {
-                    posts: paginatedPosts,
+                    posts: postsWithSource,
                     nextOffset,
                     hasNextPage,
                     totalCount,
@@ -2609,19 +2550,8 @@ export const communityRouter = router({
                     })) || [],
             }));
 
-            let finalPosts = transformedPosts;
-            if (sort === 'most-commented') {
-                finalPosts = transformedPosts.sort((a, b) => {
-                    const commentCountA =
-                        a.comments?.filter((c) => !c.isDeleted).length || 0;
-                    const commentCountB =
-                        b.comments?.filter((c) => !c.isDeleted).length || 0;
-                    return commentCountB - commentCountA; // Most commented first
-                });
-            }
-
             return {
-                posts: finalPosts,
+                posts: transformedPosts,
                 totalCount,
                 hasNextPage: offset + limit < totalCount,
                 nextOffset: offset + limit < totalCount ? offset + limit : null,

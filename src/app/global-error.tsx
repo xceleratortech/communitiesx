@@ -23,34 +23,48 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
         Sentry.captureException(error);
     }, [error]);
 
-    // Determine if this is a database-related error
-    const isDatabaseError =
-        error.message?.includes('database') ||
-        error.message?.includes('connection') ||
-        error.message?.includes('timeout') ||
-        error.message?.includes('ECONNREFUSED') ||
-        error.message?.includes('ENOTFOUND') ||
-        error.message?.includes('ETIMEDOUT') ||
-        error.message?.includes('relation') ||
-        error.message?.includes('column') ||
-        error.message?.includes('syntax') ||
-        error.message?.includes('duplicate') ||
-        error.message?.includes('constraint');
+    // Define error type keywords
+    const DB_ERROR_KEYWORDS = [
+        'database',
+        'connection',
+        'timeout',
+        'ECONNREFUSED',
+        'ENOTFOUND',
+        'ETIMEDOUT',
+        'relation',
+        'column',
+        'syntax',
+        'duplicate',
+        'constraint',
+    ];
 
-    // Determine if this is a validation error
-    const isValidationError =
-        error.message?.includes('validation') ||
-        error.message?.includes('invalid') ||
-        error.message?.includes('required') ||
-        error.message?.includes('format');
+    const VALIDATION_ERROR_KEYWORDS = [
+        'validation',
+        'invalid',
+        'required',
+        'format',
+    ];
 
-    // Determine if this is an authentication error
-    const isAuthError =
-        error.message?.includes('unauthorized') ||
-        error.message?.includes('forbidden') ||
-        error.message?.includes('authentication') ||
-        error.message?.includes('session') ||
-        error.message?.includes('token');
+    const AUTH_ERROR_KEYWORDS = [
+        'unauthorized',
+        'forbidden',
+        'authentication',
+        'session',
+        'token',
+    ];
+
+    // Determine error types using keyword arrays
+    const isDatabaseError = DB_ERROR_KEYWORDS.some((keyword) =>
+        error.message?.includes(keyword),
+    );
+
+    const isValidationError = VALIDATION_ERROR_KEYWORDS.some((keyword) =>
+        error.message?.includes(keyword),
+    );
+
+    const isAuthError = AUTH_ERROR_KEYWORDS.some((keyword) =>
+        error.message?.includes(keyword),
+    );
 
     // Get appropriate error message based on error type
     const getErrorMessage = () => {
