@@ -88,6 +88,7 @@
         "react": "^19.0.0",
         "react-dom": "^19.0.0",
         "react-hook-form": "^7.56.4",
+        "react-image-crop": "^11.0.10",
         "recharts": "^3.0.0",
         "require-in-the-middle": "^7.5.2",
         "resend": "^4.5.1",

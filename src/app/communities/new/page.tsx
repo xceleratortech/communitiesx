@@ -23,7 +23,7 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form';
-import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select';
 import { useSearchParams } from 'next/navigation';
 import { usePermission } from '@/hooks/use-permission';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 // Form schema
 const formSchema = z.object({
@@ -76,14 +77,26 @@ const formSchema = z.object({
         .optional(),
     avatar: z
         .string()
-        .url({ message: 'Please enter a valid URL' })
-        .or(z.literal(''))
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
         .optional()
         .nullable(),
     banner: z
         .string()
-        .url({ message: 'Please enter a valid URL' })
-        .or(z.literal(''))
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
         .optional()
         .nullable(),
     orgId: z
@@ -614,18 +627,19 @@ function NewCommunityForm() {
                             name="avatar"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Avatar URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/avatar.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Avatar (Optional)"
+                                            placeholder="https://example.com/avatar.png"
+                                            description="Upload an avatar image for your community or provide a URL"
+                                            maxSize={5}
+                                            enableCropping={true}
+                                            cropAspectRatio={1}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -637,18 +651,19 @@ function NewCommunityForm() {
                             name="banner"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Banner URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/banner.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Banner (Optional)"
+                                            placeholder="https://example.com/banner.png"
+                                            description="Upload a banner image for your community or provide a URL"
+                                            maxSize={10}
+                                            enableCropping={true}
+                                            cropAspectRatio={16 / 5}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
