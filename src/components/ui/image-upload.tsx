@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useTypedSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Upload, X, ImageIcon, Link as LinkIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageCropDialog } from './image-crop-dialog';
+import { nanoid } from 'nanoid';
 
 interface ImageUploadProps {
     currentImageUrl?: string | null;
@@ -44,6 +45,12 @@ export function ImageUpload({
     const [cropDialogOpen, setCropDialogOpen] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Synchronize internal state with currentImageUrl prop
+    useEffect(() => {
+        setPreviewUrl(currentImageUrl || null);
+        setUrlInput(currentImageUrl || '');
+    }, [currentImageUrl]);
 
     const displayImageUrl = previewUrl || currentImageUrl;
 
@@ -94,7 +101,7 @@ export function ImageUpload({
 
             // Generate file key for community images
             const fileExtension = file.name.split('.').pop();
-            const key = `${session.user.email.toLowerCase()}/community-images/${Date.now()}.${fileExtension}`;
+            const key = `${session.user.email.toLowerCase()}/community-images/${nanoid()}.${fileExtension}`;
 
             // Get presigned URL
             const presignedResponse = await fetch(
