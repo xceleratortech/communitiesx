@@ -12,7 +12,19 @@ import {
     orgMembers,
     users,
 } from '@/server/db/schema';
-import { eq, and, desc, or, lt, inArray, sql, ilike } from 'drizzle-orm';
+import {
+    eq,
+    and,
+    desc,
+    or,
+    lt,
+    inArray,
+    sql,
+    ilike,
+    asc,
+    gte,
+    lte,
+} from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
@@ -385,11 +397,32 @@ export const communitiesRouter = router({
         }),
 
     getBySlug: publicProcedure
-        .input(z.object({ slug: z.string() }))
+        .input(
+            z.object({
+                slug: z.string(),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+                dateFilter: z
+                    .object({
+                        type: z.enum([
+                            'all',
+                            'today',
+                            'week',
+                            'month',
+                            'custom',
+                        ]),
+                        startDate: z.date().optional(),
+                        endDate: z.date().optional(),
+                    })
+                    .optional(),
+            }),
+        )
         .query(async ({ input, ctx }) => {
             try {
+                const { slug, sort, dateFilter } = input;
                 const community = await db.query.communities.findFirst({
-                    where: eq(communities.slug, input.slug),
+                    where: eq(communities.slug, slug),
                     with: {
                         members: {
                             with: {
@@ -476,11 +509,105 @@ export const communitiesRouter = router({
                     };
                 }
 
+                // Determine order by clause based on sort option
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    // For comment count sorting, we need to use a subquery
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
+                // Build date filter conditions
+                let dateFilterConditions = [];
+                if (dateFilter && dateFilter.type !== 'all') {
+                    const now = new Date();
+                    let startDate: Date | undefined;
+                    let endDate: Date | undefined;
+
+                    switch (dateFilter.type) {
+                        case 'today':
+                            startDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                            );
+                            endDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                                23,
+                                59,
+                                59,
+                                999,
+                            );
+                            break;
+                        case 'week':
+                            startDate = new Date(
+                                now.getTime() - 7 * 24 * 60 * 60 * 1000,
+                            );
+                            endDate = now;
+                            break;
+                        case 'month':
+                            startDate = new Date(
+                                now.getTime() - 30 * 24 * 60 * 60 * 1000,
+                            );
+                            endDate = now;
+                            break;
+                        case 'custom':
+                            startDate = dateFilter.startDate;
+                            endDate = dateFilter.endDate;
+                            // Ensure start date is at the beginning of the day
+                            if (startDate) {
+                                startDate = new Date(
+                                    startDate.getFullYear(),
+                                    startDate.getMonth(),
+                                    startDate.getDate(),
+                                    0,
+                                    0,
+                                    0,
+                                    0,
+                                );
+                            }
+                            // Ensure end date includes the full day
+                            if (endDate) {
+                                endDate = new Date(
+                                    endDate.getFullYear(),
+                                    endDate.getMonth(),
+                                    endDate.getDate(),
+                                    23,
+                                    59,
+                                    59,
+                                    999,
+                                );
+                            }
+                            break;
+                    }
+
+                    if (startDate) {
+                        dateFilterConditions.push(
+                            gte(posts.createdAt, startDate),
+                        );
+                    }
+                    if (endDate) {
+                        dateFilterConditions.push(
+                            lte(posts.createdAt, endDate),
+                        );
+                    }
+                }
+
                 // Load posts with authors, tags, and comments
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
                         eq(posts.isDeleted, false),
+                        ...dateFilterConditions,
                     ),
                     with: {
                         author: true,
@@ -491,7 +618,7 @@ export const communitiesRouter = router({
                         },
                         comments: true, // <-- include comments
                     },
-                    orderBy: desc(posts.createdAt),
+                    orderBy: orderByClause,
                 });
 
                 // Transform posts to include tags array and comments array
