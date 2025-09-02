@@ -22,6 +22,8 @@ import {
     CommunityDialogs,
     CommunitySkeleton,
 } from '@/components/community';
+import { SortSelect, type SortOption } from '@/components/ui/sort-select';
+import { DateFilter, type DateFilterState } from '@/components/date-filter';
 
 export default function CommunityDetailPage() {
     const params = useParams();
@@ -30,14 +32,16 @@ export default function CommunityDetailPage() {
     const sessionData = useTypedSession();
     const session = sessionData.data;
 
-    const {
-        data: community,
-        isLoading,
-        refetch,
-    } = trpc.communities.getBySlug.useQuery({ slug }, { enabled: !!session });
-
     const [activeTab, setActiveTab] = useState('posts');
     const [isActionInProgress, setIsActionInProgress] = useState(false);
+
+    // Sort state
+    const [sortOption, setSortOption] = useState<SortOption>('latest');
+
+    // Filter state
+    const [dateFilter, setDateFilter] = useState<DateFilterState>({
+        type: 'all',
+    });
 
     // Alert dialog states
     const [isLeaveCommunityDialogOpen, setIsLeaveCommunityDialogOpen] =
@@ -65,11 +69,45 @@ export default function CommunityDetailPage() {
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
 
     const [isClient, setIsClient] = useState(false);
+    const { checkCommunityPermission } = usePermission();
+    const utils = trpc.useUtils();
+
     useEffect(() => {
         setIsClient(true);
     }, []);
 
-    const { checkCommunityPermission } = usePermission();
+    // Refetch data when date filter changes
+    useEffect(() => {
+        if (isClient && session) {
+            utils.communities.getBySlug.invalidate({
+                slug,
+                sort: sortOption,
+                dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
+            });
+        }
+    }, [
+        dateFilter,
+        isClient,
+        session,
+        slug,
+        sortOption,
+        utils.communities.getBySlug,
+    ]);
+
+    const {
+        data: community,
+        isLoading,
+        refetch,
+    } = trpc.communities.getBySlug.useQuery(
+        {
+            slug,
+            sort: sortOption,
+            dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
+        },
+        {
+            enabled: !!session,
+        },
+    );
 
     const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
         session?.user,
@@ -641,6 +679,11 @@ export default function CommunityDetailPage() {
         setShowMyPosts((prev) => !prev);
     };
 
+    // Handle sort change
+    const handleSortChange = (newSort: SortOption) => {
+        setSortOption(newSort);
+    };
+
     if (!isClient) {
         return <CommunitySkeleton />;
     }
@@ -713,6 +756,21 @@ export default function CommunityDetailPage() {
                 onUnfollowCommunity={handleUnfollowCommunity}
             />
 
+            {/* Add sort control above tabs */}
+            {community && (
+                <div className="mb-4 flex justify-end">
+                    <DateFilter
+                        value={dateFilter}
+                        onChange={setDateFilter}
+                        disabled={isLoading}
+                    />
+                    <SortSelect
+                        value={sortOption}
+                        onValueChange={handleSortChange}
+                    />
+                </div>
+            )}
+
             <CommunityTabs
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
@@ -737,6 +795,8 @@ export default function CommunityDetailPage() {
                     canEditPost={canEditPost}
                     canDeletePost={canDeletePost}
                     router={router}
+                    dateFilter={dateFilter}
+                    onDateFilterChange={setDateFilter}
                 />
 
                 <CommunityTags

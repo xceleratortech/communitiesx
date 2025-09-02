@@ -25,6 +25,9 @@ import {
     lt,
     ilike,
     sql,
+    asc,
+    gte,
+    lte,
 } from 'drizzle-orm';
 import { db } from '@/server/db';
 import type { Context } from '@/server/trpc/context';
@@ -121,12 +124,23 @@ export const communityRouter = router({
                 ctx: Context;
             }) => {
                 try {
-                    // Always fetch orgId from DB
+                    // Always fetch user details from DB
                     const user = await db.query.users.findFirst({
                         where: eq(users.id, ctx.session?.user?.id ?? ''),
                     });
-                    const orgId = user?.orgId;
-                    if (!orgId) {
+
+                    if (!user) {
+                        throw new TRPCError({
+                            code: 'UNAUTHORIZED',
+                            message: 'User not found.',
+                        });
+                    }
+
+                    // Super admins don't need an orgId
+                    const isSuperAdmin = user.appRole === 'admin';
+                    const orgId = user.orgId;
+
+                    if (!isSuperAdmin && !orgId) {
                         throw new TRPCError({
                             code: 'UNAUTHORIZED',
                             message: 'User does not have an organization.',
@@ -161,17 +175,20 @@ export const communityRouter = router({
                                 m.status === 'active',
                         );
 
-                        // --- ORG ADMIN OVERRIDE ---
+                        // --- PERMISSION OVERRIDES ---
                         // Check if user is org admin for this community
                         const isOrgAdminForCommunityCheck =
                             isOrgAdminForCommunity(
-                                ctx.session?.user,
+                                { role: user.role, orgId: user.orgId },
                                 community.orgId,
                             );
 
-                        // Super admins and org admins can always create posts in their org's communities
-                        if (isOrgAdminForCommunityCheck) {
-                            // Org admin can create posts - skip membership check
+                        // Super admins can create posts in ANY community across all organizations
+                        // Org admins can create posts in ANY community within their organization
+                        if (isSuperAdmin) {
+                            // Super admin can create posts anywhere - skip all checks
+                        } else if (isOrgAdminForCommunityCheck) {
+                            // Org admin can create posts in their org's communities - skip membership check
                         } else if (!userMembership) {
                             throw new TRPCError({
                                 code: 'FORBIDDEN',
@@ -181,8 +198,8 @@ export const communityRouter = router({
                         }
 
                         // Check if user's role meets the minimum requirement for post creation
-                        // Org admins bypass role hierarchy checks
-                        if (!isOrgAdminForCommunityCheck) {
+                        // Super admins and org admins bypass role hierarchy checks
+                        if (!isSuperAdmin && !isOrgAdminForCommunityCheck) {
                             const userRole = userMembership?.role || 'member';
                             const minRole = community.postCreationMinRole;
 
@@ -237,6 +254,32 @@ export const communityRouter = router({
 
                     // Use a transaction to create post and link tags
                     const result = await db.transaction(async (tx) => {
+                        // Determine the orgId for the post
+                        // For super admins posting in communities, use the community's orgId
+                        // For regular users, use their own orgId
+                        let postOrgId = orgId;
+                        if (isSuperAdmin && input.communityId) {
+                            // For super admins, get the community's orgId
+                            const community =
+                                await tx.query.communities.findFirst({
+                                    where: eq(
+                                        communities.id,
+                                        input.communityId,
+                                    ),
+                                    columns: { orgId: true },
+                                });
+                            postOrgId = community?.orgId || orgId;
+                        }
+
+                        // Ensure we have a valid orgId
+                        if (!postOrgId) {
+                            throw new TRPCError({
+                                code: 'BAD_REQUEST',
+                                message:
+                                    'Unable to determine organization for post creation',
+                            });
+                        }
+
                         // Create the post
                         const [post] = await tx
                             .insert(posts)
@@ -244,7 +287,7 @@ export const communityRouter = router({
                                 title: input.title.trim(),
                                 content: input.content,
                                 authorId: ctx.session?.user?.id ?? '',
-                                orgId: orgId,
+                                orgId: postOrgId,
                                 communityId: input.communityId || null,
                                 visibility: input.communityId
                                     ? 'community'
@@ -530,12 +573,82 @@ export const communityRouter = router({
             z.object({
                 limit: z.number().min(1).max(100).default(10),
                 offset: z.number().default(0),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+                dateFilter: z
+                    .object({
+                        type: z
+                            .enum(['all', 'today', 'week', 'month', 'custom'])
+                            .default('all'),
+                        startDate: z.date().optional(),
+                        endDate: z.date().optional(),
+                    })
+                    .optional()
+                    .default({ type: 'all' }),
             }),
         )
         .query(async ({ ctx, input }) => {
             try {
-                const { limit, offset } = input;
+                const { limit, offset, sort, dateFilter } = input;
                 const userId = ctx.session.user.id;
+
+                // Helper function to create date filter conditions
+                const createDateFilter = () => {
+                    if (dateFilter.type === 'all') {
+                        return undefined;
+                    }
+
+                    const now = new Date();
+                    let startDate: Date;
+                    let endDate: Date = now;
+
+                    switch (dateFilter.type) {
+                        case 'today':
+                            startDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                            );
+                            endDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                                23,
+                                59,
+                                59,
+                                999,
+                            );
+                            break;
+                        case 'week':
+                            startDate = new Date(
+                                now.getTime() - 7 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'month':
+                            startDate = new Date(
+                                now.getTime() - 30 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'custom':
+                            if (dateFilter.startDate && dateFilter.endDate) {
+                                startDate = dateFilter.startDate;
+                                endDate = dateFilter.endDate;
+                            } else {
+                                return undefined;
+                            }
+                            break;
+                        default:
+                            return undefined;
+                    }
+
+                    return and(
+                        gte(posts.createdAt, startDate),
+                        lte(posts.createdAt, endDate),
+                    );
+                };
+
+                const dateFilterCondition = createDateFilter();
 
                 // Check if user is SuperAdmin
                 const user = await db.query.users.findFirst({
@@ -548,7 +661,24 @@ export const communityRouter = router({
 
                 // If SuperAdmin, get posts from ALL communities and organizations
                 if (isSuperAdmin(ctx.session)) {
-                    const whereClause = eq(posts.isDeleted, false);
+                    const whereClause = dateFilterCondition
+                        ? and(eq(posts.isDeleted, false), dateFilterCondition)
+                        : eq(posts.isDeleted, false);
+
+                    // For comment count sorting, we need to fetch posts with comment counts
+                    let orderByClause;
+                    if (sort === 'most-commented') {
+                        // Use a subquery to get comment counts and sort by them
+                        orderByClause = sql`(
+                            SELECT COUNT(*) FROM comments c 
+                            WHERE c.post_id = posts.id AND c.is_deleted = false
+                        ) DESC`;
+                    } else {
+                        orderByClause =
+                            sort === 'latest'
+                                ? desc(posts.createdAt)
+                                : asc(posts.createdAt);
+                    }
 
                     // Fetch total count and paginated posts in parallel for efficiency
                     const [totalCountResult, paginatedDbPosts] =
@@ -559,7 +689,7 @@ export const communityRouter = router({
                                 .where(whereClause),
                             db.query.posts.findMany({
                                 where: whereClause,
-                                orderBy: [desc(posts.createdAt)],
+                                orderBy: [orderByClause],
                                 limit,
                                 offset,
                                 with: {
@@ -588,7 +718,9 @@ export const communityRouter = router({
                         source: {
                             type: post.communityId ? 'community' : 'org',
                             orgId: post.orgId,
-                            communityId: post.communityId,
+                            communityId: post.communityId
+                                ? post.communityId
+                                : undefined,
                             reason: post.communityId
                                 ? `SuperAdmin access to ${post.community?.name || 'community'}`
                                 : `SuperAdmin access to organization`,
@@ -661,56 +793,63 @@ export const communityRouter = router({
                     ]),
                 ];
 
-                // Get organization-wide posts (not belonging to any community)
-                const orgPosts = await db.query.posts.findMany({
-                    where: and(
-                        eq(posts.orgId, orgId),
-                        isNull(posts.communityId),
-                        eq(posts.isDeleted, false),
-                    ),
-                    orderBy: [desc(posts.createdAt)],
-                    with: {
-                        author: {
-                            with: {
-                                organization: true,
-                            },
-                        },
-                        comments: true,
-                        postTags: {
-                            with: {
-                                tag: true,
-                            },
-                        },
-                    },
-                });
+                // Build a single WHERE clause that covers both org posts and community posts
+                const baseWhereConditions = [eq(posts.isDeleted, false)];
 
-                // Get organization name
+                if (dateFilterCondition) {
+                    baseWhereConditions.push(dateFilterCondition);
+                }
+
+                // Create OR condition for org posts OR community posts
+                const orgCondition = and(
+                    eq(posts.orgId, orgId),
+                    isNull(posts.communityId),
+                );
+
+                const communityCondition =
+                    allCommunityIds.length > 0
+                        ? inArray(posts.communityId, allCommunityIds)
+                        : sql`false`; // If no communities, this condition will never match
+
+                const combinedWhere = and(
+                    ...baseWhereConditions,
+                    or(orgCondition, communityCondition),
+                );
+
+                // Build ORDER BY clause
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    // Use a subquery to get comment counts and sort by them
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
+                // Get organization name for source information
                 const organization = await db.query.orgs.findFirst({
                     where: eq(orgs.id, orgId),
                 });
-
                 const orgName = organization?.name || 'your organization';
 
-                // Add source information to org posts
-                const orgPostsWithSource = orgPosts.map((post) => ({
-                    ...post,
-                    tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
-                    source: {
-                        type: 'org',
-                        orgId,
-                        reason: `Because you are part of ${orgName}`,
-                    },
-                }));
-
-                // Get community posts if user is part of any communities
-                let communityPosts: PostWithSource[] = [];
-                if (allCommunityIds.length > 0) {
-                    const rawCommunityPosts = await db.query.posts.findMany({
-                        where: and(
-                            inArray(posts.communityId, allCommunityIds),
-                            eq(posts.isDeleted, false),
-                        ),
-                        orderBy: [desc(posts.createdAt)],
+                // Execute single query with proper pagination and sorting
+                const [totalCountResult, paginatedDbPosts] = await Promise.all([
+                    // Get total count
+                    db
+                        .select({ count: sql<number>`count(*)` })
+                        .from(posts)
+                        .where(combinedWhere),
+                    // Get paginated posts with all relations
+                    db.query.posts.findMany({
+                        where: combinedWhere,
+                        orderBy: [orderByClause],
+                        limit,
+                        offset,
                         with: {
                             author: {
                                 with: {
@@ -725,52 +864,46 @@ export const communityRouter = router({
                                 },
                             },
                         },
-                    });
+                    }),
+                ]);
 
-                    // Add source information to community posts
-                    communityPosts = rawCommunityPosts.map((post) => {
-                        const membershipType = communityMembershipMap.get(
-                            post.communityId,
-                        );
-                        return {
-                            ...post,
-                            tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
-                            source: {
-                                type: 'community',
-                                communityId: post.communityId ?? undefined,
-                                reason:
-                                    membershipType === 'member'
-                                        ? `Because you are a member of ${post.community?.name}`
-                                        : `Because you are following ${post.community?.name}`,
-                            },
-                        } as PostWithSource;
-                    });
-                }
+                const totalCount = totalCountResult[0]?.count || 0;
 
-                // Combine and sort all posts by creation date
-                const allPosts = [
-                    ...orgPostsWithSource,
-                    ...communityPosts,
-                ].sort(
-                    (a, b) =>
-                        new Date(b.createdAt).getTime() -
-                        new Date(a.createdAt).getTime(),
-                );
+                // Add source information to posts
+                const postsWithSource = paginatedDbPosts.map((post) => {
+                    const isOrgPost = post.orgId === orgId && !post.communityId;
+                    const membershipType = post.communityId
+                        ? communityMembershipMap.get(post.communityId)
+                        : null;
 
-                // Calculate total count
-                const totalCount = allPosts.length;
-
-                // Apply pagination
-                const paginatedPosts = allPosts.slice(offset, offset + limit);
+                    return {
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
+                        source: isOrgPost
+                            ? {
+                                  type: 'org' as const,
+                                  orgId,
+                                  reason: `Because you are part of ${orgName}`,
+                              }
+                            : {
+                                  type: 'community' as const,
+                                  communityId: post.communityId
+                                      ? post.communityId
+                                      : undefined,
+                                  reason:
+                                      membershipType === 'member'
+                                          ? `Because you are a member of ${post.community?.name}`
+                                          : `Because you are following ${post.community?.name}`,
+                              },
+                    } as PostWithSource;
+                });
 
                 // Check if there are more results
                 const hasNextPage = offset + limit < totalCount;
-
-                // Calculate next offset
                 const nextOffset = hasNextPage ? offset + limit : null;
 
                 return {
-                    posts: paginatedPosts,
+                    posts: postsWithSource,
                     nextOffset,
                     hasNextPage,
                     totalCount,
@@ -2204,11 +2337,81 @@ export const communityRouter = router({
                 search: z.string().min(1),
                 limit: z.number().min(1).max(100).default(10),
                 offset: z.number().default(0),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+                dateFilter: z
+                    .object({
+                        type: z
+                            .enum(['all', 'today', 'week', 'month', 'custom'])
+                            .default('all'),
+                        startDate: z.date().optional(),
+                        endDate: z.date().optional(),
+                    })
+                    .optional()
+                    .default({ type: 'all' }),
             }),
         )
         .query(async ({ ctx, input }) => {
-            const { search, limit, offset } = input;
+            const { search, limit, offset, sort, dateFilter } = input;
             const userId = ctx.session.user.id;
+
+            // Helper function to create date filter conditions
+            const createDateFilter = () => {
+                if (dateFilter.type === 'all') {
+                    return undefined;
+                }
+
+                const now = new Date();
+                let startDate: Date;
+                let endDate: Date = now;
+
+                switch (dateFilter.type) {
+                    case 'today':
+                        startDate = new Date(
+                            now.getFullYear(),
+                            now.getMonth(),
+                            now.getDate(),
+                        );
+                        endDate = new Date(
+                            now.getFullYear(),
+                            now.getMonth(),
+                            now.getDate(),
+                            23,
+                            59,
+                            59,
+                            999,
+                        );
+                        break;
+                    case 'week':
+                        startDate = new Date(
+                            now.getTime() - 7 * 24 * 60 * 60 * 1000,
+                        );
+                        break;
+                    case 'month':
+                        startDate = new Date(
+                            now.getTime() - 30 * 24 * 60 * 60 * 1000,
+                        );
+                        break;
+                    case 'custom':
+                        if (dateFilter.startDate && dateFilter.endDate) {
+                            startDate = dateFilter.startDate;
+                            endDate = dateFilter.endDate;
+                        } else {
+                            return undefined;
+                        }
+                        break;
+                    default:
+                        return undefined;
+                }
+
+                return and(
+                    gte(posts.createdAt, startDate),
+                    lte(posts.createdAt, endDate),
+                );
+            };
+
+            const dateFilterCondition = createDateFilter();
 
             // Get user's org and communities
             const user = await db.query.users.findFirst({
@@ -2261,13 +2464,22 @@ export const communityRouter = router({
             );
 
             // Add search conditions - use database-level text search for better performance
-            const searchConditions = and(
-                baseConditions,
-                or(
-                    ilike(posts.title, searchTerm),
-                    ilike(posts.content, searchTerm),
-                ),
-            );
+            const searchConditions = dateFilterCondition
+                ? and(
+                      baseConditions,
+                      or(
+                          ilike(posts.title, searchTerm),
+                          ilike(posts.content, searchTerm),
+                      ),
+                      dateFilterCondition,
+                  )
+                : and(
+                      baseConditions,
+                      or(
+                          ilike(posts.title, searchTerm),
+                          ilike(posts.content, searchTerm),
+                      ),
+                  );
 
             // Get total count for pagination
             const totalCountResult = await db
@@ -2276,6 +2488,21 @@ export const communityRouter = router({
                 .where(searchConditions);
 
             const totalCount = totalCountResult[0]?.count || 0;
+
+            // Determine order by clause based on sort option
+            let orderByClause;
+            if (sort === 'most-commented') {
+                // For comment count sorting, we need to use a subquery
+                orderByClause = sql`(
+                    SELECT COUNT(*) FROM comments c 
+                    WHERE c.post_id = posts.id AND c.is_deleted = false
+                ) DESC`;
+            } else {
+                orderByClause =
+                    sort === 'latest'
+                        ? desc(posts.createdAt)
+                        : asc(posts.createdAt);
+            }
 
             // Fetch paginated results with all necessary relations
             const searchResults = await db.query.posts.findMany({
@@ -2294,7 +2521,7 @@ export const communityRouter = router({
                     },
                     comments: true, // Include comments for count
                 },
-                orderBy: [desc(posts.createdAt)], // Order by creation date
+                orderBy: orderByClause,
                 limit: limit,
                 offset: offset,
             });
@@ -2307,12 +2534,12 @@ export const communityRouter = router({
                     ? {
                           type: 'community' as const,
                           communityId: post.communityId,
-                          reason: 'from your community',
+                          reason: `from ${post.community?.name || 'your community'}`,
                       }
                     : {
                           type: 'org' as const,
                           orgId: post.orgId,
-                          reason: 'from your organization',
+                          reason: `from ${(post.author as any)?.organization?.name || 'your organization'}`,
                       },
                 // Transform tags to match PostTag type
                 tags:
