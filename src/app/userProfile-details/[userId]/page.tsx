@@ -9,11 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Users, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Building, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useChat } from '@/providers/chat-provider';
 import { UserBadgeDisplay } from '@/components/ui/user-badge-display';
-import { SafeHtml } from '@/lib/sanitize';
 import type { UserProfileMetadata } from '@/types/models';
 import { ProfileSkeleton } from '@/components/profile';
 
@@ -22,7 +20,6 @@ export default function UserProfilePage() {
     const userId = params.userId as string;
     const { data: session } = useSession();
     const router = useRouter();
-    const { openChat, setActiveThreadId } = useChat();
 
     // Get user details
     const { data: userData, isLoading: isLoadingUser } =
