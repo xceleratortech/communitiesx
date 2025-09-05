@@ -130,7 +130,7 @@ export function UserProfilePopover({
         e.preventDefault();
         e.stopPropagation();
         setIsOpen(false);
-        router.push(`/users/${userId}`);
+        router.push(`/userProfile-details/${userId}`);
     };
 
     return (

@@ -9,11 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Building, Users, MessageSquare, ArrowLeft } from 'lucide-react';
+import { Building, ArrowLeft } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useChat } from '@/providers/chat-provider';
 import { UserBadgeDisplay } from '@/components/ui/user-badge-display';
-import { SafeHtml } from '@/lib/sanitize';
 import type { UserProfileMetadata } from '@/types/models';
 import { ProfileSkeleton } from '@/components/profile';
 
@@ -22,7 +20,6 @@ export default function UserProfilePage() {
     const userId = params.userId as string;
     const { data: session } = useSession();
     const router = useRouter();
-    const { openChat, setActiveThreadId } = useChat();
 
     // Get user details
     const { data: userData, isLoading: isLoadingUser } =
@@ -42,18 +39,6 @@ export default function UserProfilePage() {
             { enabled: !!userId && !!session?.user },
         );
 
-    // Get user's posts
-    const { data: userPosts, isLoading: isLoadingPosts } =
-        trpc.users.getUserPosts.useQuery({ userId }, { enabled: !!userId });
-
-    // // Mutation for starting a chat
-    // const findOrCreateThreadMutation = trpc.chat.findOrCreateThread.useMutation({
-    //     onSuccess: (data) => {
-    //         setActiveThreadId(data.threadId);
-    //         openChat();
-    //     },
-    // });
-
     // Function to get initials from name
     const getInitials = (name: string) => {
         if (!name) return '?';
@@ -64,12 +49,6 @@ export default function UserProfilePage() {
             .toUpperCase()
             .substring(0, 2);
     };
-
-    // // Function to start a chat with this user
-    // const startChat = () => {
-    //     if (session?.user?.id === userId) return;
-    //     findOrCreateThreadMutation.mutate({ recipientId: userId });
-    // };
 
     // Handle community click
     const handleCommunityClick = (slug: string) => {
@@ -148,18 +127,6 @@ export default function UserProfilePage() {
                         </div>
                     )}
                 </div>
-                {/* {session?.user?.id !== userId && (
-                    <Button
-                        onClick={startChat}
-                        disabled={findOrCreateThreadMutation.isPending}
-                        size="sm"
-                    >
-                        <MessageSquare className="mr-2 h-4 w-4" />
-                        {findOrCreateThreadMutation.isPending
-                            ? 'Opening...'
-                            : 'Message'}
-                    </Button>
-                )} */}
             </div>
 
             {/* Profile Information - Read Only */}
