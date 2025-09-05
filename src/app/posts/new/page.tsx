@@ -61,7 +61,11 @@ function NewPostForm() {
         );
 
     // Check if user is a member of the community
-    const { checkCommunityPermission, isAppAdmin } = usePermission();
+    const {
+        checkCommunityPermission,
+        isAppAdmin,
+        isLoading: isPermissionLoading,
+    } = usePermission();
 
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
@@ -74,6 +78,8 @@ function NewPostForm() {
     // Check if user can create posts using proper permission system
     const canCreatePost = React.useMemo(() => {
         if (!community?.id) return false;
+
+        if (isPermissionLoading) return false;
 
         // SuperAdmin can create posts anywhere
         if (isAppAdmin()) return true;
@@ -113,6 +119,7 @@ function NewPostForm() {
         community?.postCreationMinRole,
         checkCommunityPermission,
         isAppAdmin,
+        isPermissionLoading,
     ]);
 
     // Get available tags for the community
