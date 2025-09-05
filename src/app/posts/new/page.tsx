@@ -61,7 +61,11 @@ function NewPostForm() {
         );
 
     // Check if user is a member of the community
-    const { checkCommunityPermission, isAppAdmin } = usePermission();
+    const {
+        checkCommunityPermission,
+        isAppAdmin,
+        isLoading: isPermissionLoading,
+    } = usePermission();
 
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
@@ -131,7 +135,13 @@ function NewPostForm() {
 
     // If community ID is provided but user cannot create posts, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !canCreatePost && !isLoadingCommunity) {
+        if (
+            communityId &&
+            community &&
+            !canCreatePost &&
+            !isLoadingCommunity &&
+            !isPermissionLoading
+        ) {
             router.push(`/communities/${communitySlug}`);
         }
     }, [
@@ -141,6 +151,7 @@ function NewPostForm() {
         communitySlug,
         router,
         isLoadingCommunity,
+        isPermissionLoading,
     ]);
 
     if (!session) {
@@ -157,8 +168,8 @@ function NewPostForm() {
         );
     }
 
-    // Show loading state while checking community membership
-    if (communityId && isLoadingCommunity) {
+    // Show loading state while checking community membership and permissions
+    if (communityId && (isLoadingCommunity || isPermissionLoading)) {
         return <Loading message="Loading community information..." />;
     }
 
