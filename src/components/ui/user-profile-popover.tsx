@@ -125,6 +125,14 @@ export function UserProfilePopover({
         router.push(`/communities/${slug}`);
     };
 
+    // Handle user profile click
+    const handleUserProfileClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsOpen(false);
+        router.push(`/userProfile-details/${userId}`);
+    };
+
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
@@ -157,7 +165,10 @@ export function UserProfilePopover({
                 ) : userData ? (
                     <div className="space-y-3">
                         {/* User header */}
-                        <div className="flex items-center space-x-3 border-b p-4">
+                        <div
+                            className="hover:bg-accent flex cursor-pointer items-center space-x-3 border-b p-4 transition-colors"
+                            onClick={handleUserProfileClick}
+                        >
                             <Avatar className="h-12 w-12">
                                 <AvatarImage
                                     src={userData.image || undefined}
