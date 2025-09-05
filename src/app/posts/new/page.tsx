@@ -79,8 +79,6 @@ function NewPostForm() {
     const canCreatePost = React.useMemo(() => {
         if (!community?.id) return false;
 
-        if (isPermissionLoading) return false;
-
         // SuperAdmin can create posts anywhere
         if (isAppAdmin()) return true;
 
@@ -119,7 +117,6 @@ function NewPostForm() {
         community?.postCreationMinRole,
         checkCommunityPermission,
         isAppAdmin,
-        isPermissionLoading,
     ]);
 
     // Get available tags for the community
@@ -138,7 +135,13 @@ function NewPostForm() {
 
     // If community ID is provided but user cannot create posts, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !canCreatePost && !isLoadingCommunity) {
+        if (
+            communityId &&
+            community &&
+            !canCreatePost &&
+            !isLoadingCommunity &&
+            !isPermissionLoading
+        ) {
             router.push(`/communities/${communitySlug}`);
         }
     }, [
@@ -148,6 +151,7 @@ function NewPostForm() {
         communitySlug,
         router,
         isLoadingCommunity,
+        isPermissionLoading,
     ]);
 
     if (!session) {
@@ -164,8 +168,8 @@ function NewPostForm() {
         );
     }
 
-    // Show loading state while checking community membership
-    if (communityId && isLoadingCommunity) {
+    // Show loading state while checking community membership and permissions
+    if (communityId && (isLoadingCommunity || isPermissionLoading)) {
         return <Loading message="Loading community information..." />;
     }
 
