@@ -25,13 +25,32 @@ export const metadata = {
     title: 'Community-X',
     description: 'Community to connect and engage yourself for your interests',
     manifest: '/manifest.json',
+    applicationName: 'Community-X',
     themeColor: '#000000',
-    viewport:
-        'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+    viewport: 'width=device-width, initial-scale=1',
+    formatDetection: {
+        telephone: false,
+    },
     appleWebApp: {
         capable: true,
         statusBarStyle: 'default',
         title: 'Community-X',
+    },
+    icons: {
+        icon: '/favicon.ico',
+        shortcut: '/favicon.ico',
+        apple: [
+            { url: '/diamond-192.png', sizes: '192x192', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '152x152', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '180x180', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '167x167', type: 'image/png' },
+        ],
+    },
+    other: {
+        'mobile-web-app-capable': 'yes',
+        'msapplication-TileColor': '#000000',
+        'msapplication-tap-highlight': 'no',
+        'msapplication-navbutton-color': '#000000',
     },
 };
 
@@ -42,46 +61,6 @@ export default function RootLayout({
 }) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <head>
-                {/* PWA Meta Tags */}
-                <meta name="application-name" content="Community-X" />
-                <meta name="apple-mobile-web-app-capable" content="yes" />
-                <meta
-                    name="apple-mobile-web-app-status-bar-style"
-                    content="default"
-                />
-                <meta name="apple-mobile-web-app-title" content="Community-X" />
-                <meta name="format-detection" content="telephone=no" />
-                <meta name="mobile-web-app-capable" content="yes" />
-                <meta name="msapplication-TileColor" content="#000000" />
-                <meta name="msapplication-tap-highlight" content="no" />
-
-                {/* Apple Touch Icons */}
-                <link rel="apple-touch-icon" href="/diamond-192.png" />
-                <link
-                    rel="apple-touch-icon"
-                    sizes="152x152"
-                    href="/diamond-192.png"
-                />
-                <link
-                    rel="apple-touch-icon"
-                    sizes="180x180"
-                    href="/diamond-192.png"
-                />
-                <link
-                    rel="apple-touch-icon"
-                    sizes="167x167"
-                    href="/diamond-192.png"
-                />
-
-                {/* Favicons */}
-                <link rel="icon" href="/favicon.ico" />
-                <link rel="shortcut icon" href="/favicon.ico" />
-
-                {/* Theme Colors */}
-                <meta name="theme-color" content="#000000" />
-                <meta name="msapplication-navbutton-color" content="#000000" />
-            </head>
             <body
                 className={cn(
                     geistSans.variable,
