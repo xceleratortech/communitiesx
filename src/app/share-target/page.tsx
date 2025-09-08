@@ -33,8 +33,6 @@ export default function ShareTargetPage() {
 
     // tRPC mutations
     const createPostMutation = trpc.community.createPost.useMutation();
-    const getCommunitiesMutation =
-        trpc.communities.getUserCommunities.useQuery();
 
     useEffect(() => {
         // Handle shared data from Web Share Target API
@@ -69,30 +67,7 @@ export default function ShareTargetPage() {
             }
         };
 
-        // Listen for form data from share target
-        const handleFormData = () => {
-            // This will be handled by the form submission
-            const form = document.querySelector('form');
-            if (form) {
-                const formData = new FormData(form);
-                const title = formData.get('title') as string;
-                const text = formData.get('text') as string;
-                const url = formData.get('url') as string;
-                const files = formData.getAll('file') as File[];
-
-                if (title || text || url || files.length > 0) {
-                    setSharedData({
-                        title: title || '',
-                        text: text || '',
-                        url: url || '',
-                        files: files.length > 0 ? files : undefined,
-                    });
-                }
-            }
-        };
-
         handleSharedData();
-        handleFormData();
 
         window.addEventListener('message', handleServiceWorkerMessage);
 
