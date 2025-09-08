@@ -33,7 +33,7 @@ export function useWebShare(): UseWebShareReturn {
 
             try {
                 // Prepare share data
-                const shareData: any = {
+                const shareData: ShareData = {
                     title: data.title,
                     text: data.text,
                     url: data.url,

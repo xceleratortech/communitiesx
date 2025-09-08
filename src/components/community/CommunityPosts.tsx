@@ -308,7 +308,7 @@ export function CommunityPosts({
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
                                                                 router.push(
-                                                                    `/posts/${post.id}`,
+                                                                    `/communities/${community.slug}/posts/${post.id}`,
                                                                 );
                                                             }}
                                                         >
@@ -334,7 +334,7 @@ export function CommunityPosts({
                                                         <ShareButton
                                                             title={post.title}
                                                             text={`Check out this post: ${post.title}`}
-                                                            url={`${typeof window !== 'undefined' ? window.location.origin : ''}/posts/${post.id}`}
+                                                            url={`${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${community.slug}/posts/${post.id}`}
                                                             variant="ghost"
                                                             size="sm"
                                                             className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"

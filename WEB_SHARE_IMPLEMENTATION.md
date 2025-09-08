@@ -28,7 +28,7 @@ The implementation provides two main features:
 #### Features:
 
 - Share post titles, content, and URLs
-- Support for file sharing (images, PDFs, text files)
+- Support for file sharing (images, PDFs, text files, videos)
 - Graceful fallback when Web Share API is not supported
 - Loading states and error handling
 - Success feedback with toast notifications
@@ -238,7 +238,7 @@ public/
 
 ## Security Considerations
 
-1. **File Validation**: Only accept specific file types (images, text, PDFs)
+1. **File Validation**: Only accept specific file types (images, text, PDFs, videos)
 2. **Content Sanitization**: Use existing SafeHtml component for content
 3. **Size Limits**: Consider implementing file size limits
 4. **URL Validation**: Validate shared URLs before processing
