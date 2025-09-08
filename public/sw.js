@@ -199,3 +199,39 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('install', function (event) {
     self.skipWaiting();
 });
+
+// Handle fetch events for share target
+self.addEventListener('fetch', function (event) {
+    const url = new URL(event.request.url);
+    if (
+        event.request.method === 'POST' &&
+        url.pathname.endsWith('/share-target')
+    ) {
+        event.respondWith(
+            (async () => {
+                const formData = await event.request.formData();
+                const data = {
+                    title: formData.get('title') || '',
+                    text: formData.get('text') || '',
+                    url: formData.get('url') || '',
+                    files: formData.getAll('file'),
+                };
+
+                // A more robust implementation would use IndexedDB to avoid race conditions.
+                const clients = await self.clients.matchAll({
+                    type: 'window',
+                    includeUncontrolled: true,
+                });
+                clients.forEach((client) => {
+                    client.postMessage({
+                        type: 'SHARE_TARGET_DATA',
+                        data: data,
+                    });
+                });
+
+                // Redirect to the share target page to display the UI.
+                return Response.redirect('/share-target', 303);
+            })(),
+        );
+    }
+});
