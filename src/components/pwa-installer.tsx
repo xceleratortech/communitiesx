@@ -5,15 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 
-interface BeforeInstallPromptEvent extends Event {
-    readonly platforms: string[];
-    readonly userChoice: Promise<{
-        outcome: 'accepted' | 'dismissed';
-        platform: string;
-    }>;
-    prompt(): Promise<void>;
-}
-
 export function PWAInstaller() {
     const [deferredPrompt, setDeferredPrompt] =
         useState<BeforeInstallPromptEvent | null>(null);
@@ -29,7 +20,7 @@ export function PWAInstaller() {
             }
 
             // Check if running in standalone mode on iOS
-            if ((window.navigator as any).standalone === true) {
+            if (window.navigator.standalone === true) {
                 setIsInstalled(true);
                 return;
             }
