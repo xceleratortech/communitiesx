@@ -13,14 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import {
-    Loader2,
-    Link,
-    FileText,
-    Image,
-    ArrowLeft,
-    ExternalLink,
-} from 'lucide-react';
+import { Loader2, Link, ArrowLeft, ExternalLink } from 'lucide-react';
 import {
     fetchLinkPreview,
     isValidUrl,
@@ -31,7 +24,6 @@ interface SharedData {
     title?: string;
     text?: string;
     url?: string;
-    files?: File[];
 }
 
 interface Community {
@@ -39,8 +31,12 @@ interface Community {
     name: string;
     slug: string;
     organization?: {
+        id: string;
         name: string;
-    };
+        createdAt: Date;
+        slug: string;
+        allowCrossOrgDM: boolean;
+    } | null;
 }
 
 interface ContentReviewProps {
@@ -77,13 +73,6 @@ export function ContentReview({
             builtContent += `Shared from: ${sharedData.url}`;
         }
 
-        if (sharedData.files && sharedData.files.length > 0) {
-            if (builtContent) {
-                builtContent += '\n\n';
-            }
-            builtContent += `Attached files: ${sharedData.files.map((f) => f.name).join(', ')}`;
-        }
-
         setContent(builtContent);
     }, [sharedData]);
 
@@ -103,18 +92,10 @@ export function ContentReview({
 
         setIsSubmitting(true);
         try {
-            onNext(title.trim(), content);
+            onNext(title.trim(), content.trim());
         } finally {
             setIsSubmitting(false);
         }
-    };
-
-    const getFileIcon = (file: File) => {
-        if (file.type.startsWith('image/'))
-            return <Image className="h-4 w-4" />;
-        if (file.type.startsWith('text/'))
-            return <FileText className="h-4 w-4" />;
-        return <FileText className="h-4 w-4" />;
     };
 
     return (
@@ -248,34 +229,6 @@ export function ContentReview({
                                     </a>
                                 </div>
                             )}
-                        </div>
-                    )}
-
-                    {/* File Attachments */}
-                    {sharedData.files && sharedData.files.length > 0 && (
-                        <div className="bg-muted/50 rounded-lg border p-4">
-                            <div className="mb-2 flex items-center space-x-2">
-                                <FileText className="text-muted-foreground h-4 w-4" />
-                                <span className="text-sm font-medium">
-                                    Attached Files
-                                </span>
-                            </div>
-                            <div className="space-y-2">
-                                {sharedData.files.map((file, index) => (
-                                    <div
-                                        key={index}
-                                        className="flex items-center space-x-2 text-sm"
-                                    >
-                                        {getFileIcon(file)}
-                                        <span className="flex-1 truncate">
-                                            {file.name}
-                                        </span>
-                                        <span className="text-muted-foreground">
-                                            {(file.size / 1024).toFixed(1)} KB
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
                         </div>
                     )}
                 </CardContent>

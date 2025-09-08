@@ -28,7 +28,7 @@ The implementation provides two main features:
 #### Features:
 
 - Share post titles, content, and URLs
-- Support for file sharing (images, PDFs, text files, videos)
+- Support for URL and text content sharing
 - Graceful fallback when Web Share API is not supported
 - Loading states and error handling
 - Success feedback with toast notifications
@@ -44,8 +44,7 @@ The implementation provides two main features:
 #### Features:
 
 - Receive shared content from other apps
-- Support for text, URLs, and files
-- File preview for images
+- Support for text and URLs
 - Create posts from shared content
 - Form validation and error handling
 - Integration with existing post creation flow
@@ -62,7 +61,6 @@ await share({
     title: 'Post Title',
     text: 'Post content',
     url: 'https://example.com/post/123',
-    files: [file1, file2], // optional
 });
 ```
 
@@ -238,9 +236,9 @@ public/
 
 ## Security Considerations
 
-1. **File Validation**: Only accept specific file types (images, text, PDFs, videos)
+1. **Content Validation**: Validate shared URLs and text content
 2. **Content Sanitization**: Use existing SafeHtml component for content
-3. **Size Limits**: Consider implementing file size limits
+3. **Content Length Limits**: Consider implementing content length limits
 4. **URL Validation**: Validate shared URLs before processing
 
 ## Future Enhancements
@@ -265,10 +263,10 @@ public/
     - Ensure service worker is registered
     - Verify PWA is installed
 
-3. **Files not sharing**:
-    - Check file type restrictions
-    - Verify browser supports file sharing
-    - Check file size limits
+3. **Content not sharing**:
+    - Check URL validity
+    - Verify content length limits
+    - Check browser support for Web Share API
 
 ### Debug Mode:
 
