@@ -8,6 +8,7 @@ import { TRPCProvider } from '@/providers/trpc-provider';
 import { Navbar } from '@/components/navbar';
 import { Toaster } from '@/components/ui/sonner';
 import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
+import { PWAInstaller } from '@/components/pwa-installer';
 import Script from 'next/script';
 
 const geistSans = Geist({
@@ -23,6 +24,34 @@ const geistMono = Geist_Mono({
 export const metadata = {
     title: 'Community-X',
     description: 'Community to connect and engage yourself for your interests',
+    manifest: '/manifest.json',
+    applicationName: 'Community-X',
+    themeColor: '#000000',
+    viewport: 'width=device-width, initial-scale=1',
+    formatDetection: {
+        telephone: false,
+    },
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: 'default',
+        title: 'Community-X',
+    },
+    icons: {
+        icon: '/favicon.ico',
+        shortcut: '/favicon.ico',
+        apple: [
+            { url: '/diamond-192.png', sizes: '192x192', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '152x152', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '180x180', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '167x167', type: 'image/png' },
+        ],
+    },
+    other: {
+        'mobile-web-app-capable': 'yes',
+        'msapplication-TileColor': '#000000',
+        'msapplication-tap-highlight': 'no',
+        'msapplication-navbutton-color': '#000000',
+    },
 };
 
 export default function RootLayout({
@@ -69,6 +98,7 @@ export default function RootLayout({
                         </ChatProvider> */}
                     </TRPCProvider>
                 </ThemeProvider>
+                <PWAInstaller />
             </body>
         </html>
     );
