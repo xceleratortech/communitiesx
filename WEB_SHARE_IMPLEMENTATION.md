@@ -217,11 +217,16 @@ A test page is available at `/share-test` to test both Web Share API and Web Sha
 src/
 ├── hooks/
 │   └── use-web-share.ts              # Web Share API hook
+├── lib/
+│   └── link-preview.ts               # Link preview utilities
 ├── components/
 │   └── ui/
 │       ├── share-button.tsx          # Share button component
 │       └── share-dialog.tsx          # Share dialog component
 ├── app/
+│   ├── api/
+│   │   └── link-preview/
+│   │       └── route.ts              # Server-side link preview API
 │   ├── share-target/
 │   │   └── page.tsx                  # Share target handler
 │   ├── share-test/
@@ -240,6 +245,9 @@ public/
 2. **Content Sanitization**: Use existing SafeHtml component for content
 3. **Content Length Limits**: Consider implementing content length limits
 4. **URL Validation**: Validate shared URLs before processing
+5. **Secure Link Preview**: Server-side link preview generation prevents CORS issues and external proxy dependencies
+6. **Request Timeouts**: 10-second timeout prevents hanging requests
+7. **User-Agent Spoofing**: Proper User-Agent header to avoid blocking
 
 ## Future Enhancements
 

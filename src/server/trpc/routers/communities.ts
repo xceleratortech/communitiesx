@@ -1709,30 +1709,20 @@ export const communitiesRouter = router({
             }
 
             // Get organization data for all communities
-            const allCommunityIds = [
-                ...userMemberships.map((m) => m.community.id),
-                ...orgCommunities.map((c) => c.id),
-                ...allCommunities.map((c) => c.id),
-            ];
+            const orgIds = new Set<string>();
+            userMemberships.forEach(
+                (m) => m.community.orgId && orgIds.add(m.community.orgId),
+            );
+            orgCommunities.forEach((c) => c.orgId && orgIds.add(c.orgId));
+            allCommunities.forEach((c) => c.orgId && orgIds.add(c.orgId));
 
-            const orgs = await db.query.orgs.findMany({
-                where: (orgs, { inArray }) =>
-                    inArray(
-                        orgs.id,
-                        allCommunityIds
-                            .map(
-                                (id) =>
-                                    userMemberships.find(
-                                        (m) => m.community.id === id,
-                                    )?.community.orgId ||
-                                    orgCommunities.find((c) => c.id === id)
-                                        ?.orgId ||
-                                    allCommunities.find((c) => c.id === id)
-                                        ?.orgId,
-                            )
-                            .filter(Boolean) as string[],
-                    ),
-            });
+            const orgs =
+                orgIds.size > 0
+                    ? await db.query.orgs.findMany({
+                          where: (orgs, { inArray }) =>
+                              inArray(orgs.id, Array.from(orgIds)),
+                      })
+                    : [];
 
             const orgMap = new Map(orgs.map((org) => [org.id, org]));
 
