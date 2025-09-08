@@ -23,9 +23,12 @@ interface Community {
     canPost: boolean;
     reason: 'member' | 'org_admin' | 'super_admin';
     organization?: {
+        id: string;
         name: string;
+        createdAt: Date;
         slug: string;
-    };
+        allowCrossOrgDM: boolean;
+    } | null;
 }
 
 interface CommunitySelectorProps {
