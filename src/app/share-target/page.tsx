@@ -10,12 +10,11 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Share2, FileText, Image, Link } from 'lucide-react';
+import { Loader2, Share2, CheckCircle } from 'lucide-react';
 import { trpc } from '@/providers/trpc-provider';
+import { CommunitySelector } from '@/components/share-target/community-selector';
+import { ContentReview } from '@/components/share-target/content-review';
 
 interface SharedData {
     title?: string;
@@ -24,12 +23,25 @@ interface SharedData {
     files?: File[];
 }
 
+interface Community {
+    id: number;
+    name: string;
+    slug: string;
+    organization?: {
+        name: string;
+    };
+}
+
+type WizardStep = 'communities' | 'content' | 'creating' | 'success';
+
 export default function ShareTargetPage() {
     const router = useRouter();
     const [sharedData, setSharedData] = useState<SharedData>({});
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [currentStep, setCurrentStep] = useState<WizardStep>('communities');
+    const [selectedCommunities, setSelectedCommunities] = useState<number[]>(
+        [],
+    );
     const [error, setError] = useState<string | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     // tRPC mutations
     const createPostMutation = trpc.community.createPost.useMutation();
@@ -68,7 +80,6 @@ export default function ShareTargetPage() {
         };
 
         handleSharedData();
-
         window.addEventListener('message', handleServiceWorkerMessage);
 
         return () => {
@@ -76,80 +87,114 @@ export default function ShareTargetPage() {
         };
     }, []);
 
-    // Handle file preview
-    useEffect(() => {
-        if (sharedData.files && sharedData.files.length > 0) {
-            const file = sharedData.files[0];
-            if (file.type.startsWith('image/')) {
-                const url = URL.createObjectURL(file);
-                setPreviewUrl(url);
-                return () => URL.revokeObjectURL(url);
-            }
-        }
-    }, [sharedData.files]);
-
-    const handleInputChange = (field: keyof SharedData, value: string) => {
-        setSharedData((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
+    const handleCommunitySelection = (communityIds: number[]) => {
+        setSelectedCommunities(communityIds);
     };
 
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const files = event.target.files;
-        if (files && files.length > 0) {
-            setSharedData((prev) => ({
-                ...prev,
-                files: Array.from(files),
-            }));
-        }
+    const handleNextToContent = () => {
+        setCurrentStep('content');
     };
 
-    const handleCreatePost = async () => {
-        if (!sharedData.title?.trim() && !sharedData.text?.trim()) {
-            setError('Please provide a title or content for your post.');
+    const handleBackToCommunities = () => {
+        setCurrentStep('communities');
+    };
+
+    const handleCreatePost = async (title: string, content: string) => {
+        if (selectedCommunities.length === 0) {
+            setError('Please select at least one community');
             return;
         }
 
-        setIsProcessing(true);
+        setCurrentStep('creating');
         setError(null);
 
         try {
-            // Create post content
-            let content = sharedData.text || '';
+            // Create posts for each selected community
+            const postPromises = selectedCommunities.map((communityId) =>
+                createPostMutation.mutateAsync({
+                    title,
+                    content,
+                    communityId,
+                }),
+            );
 
-            // Add URL if provided
-            if (sharedData.url) {
-                content += `\n\nShared from: ${sharedData.url}`;
-            }
-
-            // Add file information if provided
-            if (sharedData.files && sharedData.files.length > 0) {
-                content += `\n\nAttached files: ${sharedData.files.map((f) => f.name).join(', ')}`;
-            }
-
-            await createPostMutation.mutateAsync({
-                title: sharedData.title || 'Shared Content',
-                content: content.trim(),
-                communityId: null, // Post to general feed
-            });
-
-            // Redirect to posts page
-            router.push('/posts');
+            await Promise.all(postPromises);
+            setCurrentStep('success');
         } catch (err) {
-            console.error('Error creating post:', err);
-            setError('Failed to create post. Please try again.');
-        } finally {
-            setIsProcessing(false);
+            console.error('Error creating posts:', err);
+            setError('Failed to create posts. Please try again.');
+            setCurrentStep('content');
         }
     };
 
-    const getFileIcon = (file: File) => {
-        if (file.type.startsWith('image/'))
-            return <Image className="h-4 w-4" />;
-        if (file.type.startsWith('text/'))
-            return <FileText className="h-4 w-4" />;
-        return <FileText className="h-4 w-4" />;
+    const handleFinish = () => {
+        router.push('/posts');
+    };
+
+    const renderStep = () => {
+        switch (currentStep) {
+            case 'communities':
+                return (
+                    <CommunitySelector
+                        selectedCommunities={selectedCommunities}
+                        onSelectionChange={handleCommunitySelection}
+                        onNext={handleNextToContent}
+                    />
+                );
+
+            case 'content':
+                // Get community details for display
+                const { data: communities } =
+                    trpc.communities.getUserPostableCommunities.useQuery();
+                const selectedCommunityDetails =
+                    communities?.filter((c) =>
+                        selectedCommunities.includes(c.id),
+                    ) || [];
+
+                return (
+                    <ContentReview
+                        sharedData={sharedData}
+                        selectedCommunities={selectedCommunityDetails}
+                        onBack={handleBackToCommunities}
+                        onNext={handleCreatePost}
+                    />
+                );
+
+            case 'creating':
+                return (
+                    <div className="py-8 text-center">
+                        <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin" />
+                        <h2 className="mb-2 text-xl font-semibold">
+                            Creating Posts...
+                        </h2>
+                        <p className="text-muted-foreground">
+                            Please wait while we create your posts in the
+                            selected communities.
+                        </p>
+                    </div>
+                );
+
+            case 'success':
+                return (
+                    <div className="py-8 text-center">
+                        <CheckCircle className="mx-auto mb-4 h-12 w-12 text-green-500" />
+                        <h2 className="mb-2 text-xl font-semibold">
+                            Posts Created Successfully!
+                        </h2>
+                        <p className="text-muted-foreground mb-6">
+                            Your content has been shared to{' '}
+                            {selectedCommunities.length} community
+                            {selectedCommunities.length !== 1 ? 'ies' : ''}.
+                        </p>
+                        <Button onClick={handleFinish} className="w-full">
+                            View Posts
+                        </Button>
+                    </div>
+                );
+
+            default:
+                return null;
+        }
     };
 
     return (
@@ -159,139 +204,58 @@ export default function ShareTargetPage() {
                     <Share2 className="text-primary mx-auto h-12 w-12" />
                     <h1 className="mt-4 text-2xl font-bold">Share Content</h1>
                     <p className="text-muted-foreground">
-                        Create a post from shared content
+                        Share content from other apps to your communities
                     </p>
                 </div>
 
+                {/* Progress Indicator */}
+                <div className="mb-8 flex justify-center space-x-4">
+                    <div
+                        className={`flex items-center space-x-2 ${currentStep === 'communities' ? 'text-primary' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                    >
+                        <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'communities' ? 'bg-primary text-primary-foreground' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
+                        >
+                            1
+                        </div>
+                        <span className="text-sm">Select Communities</span>
+                    </div>
+                    <div
+                        className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                    />
+                    <div
+                        className={`flex items-center space-x-2 ${currentStep === 'content' ? 'text-primary' : currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                    >
+                        <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'content' ? 'bg-primary text-primary-foreground' : currentStep === 'creating' || currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
+                        >
+                            2
+                        </div>
+                        <span className="text-sm">Review Content</span>
+                    </div>
+                    <div
+                        className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                    />
+                    <div
+                        className={`flex items-center space-x-2 ${currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                    >
+                        <div
+                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
+                        >
+                            3
+                        </div>
+                        <span className="text-sm">Complete</span>
+                    </div>
+                </div>
+
+                {error && (
+                    <Alert variant="destructive">
+                        <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                )}
+
                 <Card>
-                    <CardHeader>
-                        <CardTitle>Create Post</CardTitle>
-                        <CardDescription>
-                            Review and edit the shared content before posting
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        {error && (
-                            <Alert variant="destructive">
-                                <AlertDescription>{error}</AlertDescription>
-                            </Alert>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label htmlFor="title">Title</Label>
-                            <Input
-                                id="title"
-                                placeholder="Enter post title..."
-                                value={sharedData.title || ''}
-                                onChange={(e) =>
-                                    handleInputChange('title', e.target.value)
-                                }
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label htmlFor="content">Content</Label>
-                            <Textarea
-                                id="content"
-                                placeholder="Enter post content..."
-                                value={sharedData.text || ''}
-                                onChange={(e) =>
-                                    handleInputChange('text', e.target.value)
-                                }
-                                rows={6}
-                            />
-                        </div>
-
-                        {sharedData.url && (
-                            <div className="space-y-2">
-                                <Label>Shared URL</Label>
-                                <div className="flex items-center space-x-2 rounded-md border p-3">
-                                    <Link className="text-muted-foreground h-4 w-4" />
-                                    <a
-                                        href={sharedData.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex-1 truncate text-sm text-blue-600 hover:underline"
-                                    >
-                                        {sharedData.url}
-                                    </a>
-                                </div>
-                            </div>
-                        )}
-
-                        {sharedData.files && sharedData.files.length > 0 && (
-                            <div className="space-y-2">
-                                <Label>Attached Files</Label>
-                                <div className="space-y-2">
-                                    {sharedData.files.map((file, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center space-x-2 rounded-md border p-3"
-                                        >
-                                            {getFileIcon(file)}
-                                            <span className="flex-1 text-sm">
-                                                {file.name}
-                                            </span>
-                                            <span className="text-muted-foreground text-xs">
-                                                {(file.size / 1024).toFixed(1)}{' '}
-                                                KB
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                                {previewUrl && (
-                                    <div className="mt-2">
-                                        <img
-                                            src={previewUrl}
-                                            alt="Preview"
-                                            className="max-h-48 w-full rounded-md object-cover"
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        <div className="space-y-2">
-                            <Label htmlFor="files">
-                                Add More Files (Optional)
-                            </Label>
-                            <Input
-                                id="files"
-                                type="file"
-                                multiple
-                                accept="image/*,text/*,application/pdf"
-                                onChange={handleFileChange}
-                            />
-                        </div>
-
-                        <div className="flex space-x-2 pt-4">
-                            <Button
-                                variant="outline"
-                                onClick={() => router.back()}
-                                disabled={isProcessing}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={handleCreatePost}
-                                disabled={
-                                    isProcessing ||
-                                    (!sharedData.title?.trim() &&
-                                        !sharedData.text?.trim())
-                                }
-                                className="flex-1"
-                            >
-                                {isProcessing ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Creating Post...
-                                    </>
-                                ) : (
-                                    'Create Post'
-                                )}
-                            </Button>
-                        </div>
-                    </CardContent>
+                    <CardContent className="p-6">{renderStep()}</CardContent>
                 </Card>
             </div>
         </div>

@@ -1666,6 +1666,138 @@ export const communitiesRouter = router({
         }
     }),
 
+    // Get communities where user can post (member, org admin, or super admin)
+    getUserPostableCommunities: authProcedure.query(async ({ ctx }) => {
+        try {
+            const userId = ctx.session.user.id;
+            const user = await db.query.users.findFirst({
+                where: eq(users.id, userId),
+            });
+
+            if (!user) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'User not found',
+                });
+            }
+
+            // Get communities where user is a member with posting permissions
+            const userMemberships = await db.query.communityMembers.findMany({
+                where: and(
+                    eq(communityMembers.userId, userId),
+                    eq(communityMembers.status, 'active'),
+                    eq(communityMembers.membershipType, 'member'), // Only members can post
+                ),
+                with: {
+                    community: true,
+                },
+            });
+
+            // Get communities from user's organization (if user is org admin)
+            let orgCommunities: any[] = [];
+            if (user.orgId && user.role === 'admin') {
+                orgCommunities = await db.query.communities.findMany({
+                    where: eq(communities.orgId, user.orgId),
+                });
+            }
+
+            // Get all communities (if user is super admin)
+            let allCommunities: any[] = [];
+            if (user.role === 'admin' && !user.orgId) {
+                // This is a super admin
+                allCommunities = await db.query.communities.findMany();
+            }
+
+            // Get organization data for all communities
+            const allCommunityIds = [
+                ...userMemberships.map((m) => m.community.id),
+                ...orgCommunities.map((c) => c.id),
+                ...allCommunities.map((c) => c.id),
+            ];
+
+            const orgs = await db.query.orgs.findMany({
+                where: (orgs, { inArray }) =>
+                    inArray(
+                        orgs.id,
+                        allCommunityIds
+                            .map(
+                                (id) =>
+                                    userMemberships.find(
+                                        (m) => m.community.id === id,
+                                    )?.community.orgId ||
+                                    orgCommunities.find((c) => c.id === id)
+                                        ?.orgId ||
+                                    allCommunities.find((c) => c.id === id)
+                                        ?.orgId,
+                            )
+                            .filter(Boolean) as string[],
+                    ),
+            });
+
+            const orgMap = new Map(orgs.map((org) => [org.id, org]));
+
+            // Combine and deduplicate communities
+            const memberCommunities = userMemberships.map((membership) => ({
+                ...membership.community,
+                userRole: membership.role,
+                canPost: true,
+                reason: 'member' as const,
+                organization: membership.community.orgId
+                    ? orgMap.get(membership.community.orgId)
+                    : null,
+            }));
+
+            const orgAdminCommunities = orgCommunities
+                .filter(
+                    (community) =>
+                        !memberCommunities.some(
+                            (member) => member.id === community.id,
+                        ),
+                )
+                .map((community) => ({
+                    ...community,
+                    userRole: 'admin',
+                    canPost: true,
+                    reason: 'org_admin' as const,
+                    organization: community.orgId
+                        ? orgMap.get(community.orgId)
+                        : null,
+                }));
+
+            const superAdminCommunities = allCommunities
+                .filter(
+                    (community) =>
+                        !memberCommunities.some(
+                            (member) => member.id === community.id,
+                        ) &&
+                        !orgAdminCommunities.some(
+                            (org) => org.id === community.id,
+                        ),
+                )
+                .map((community) => ({
+                    ...community,
+                    userRole: 'admin',
+                    canPost: true,
+                    reason: 'super_admin' as const,
+                    organization: community.orgId
+                        ? orgMap.get(community.orgId)
+                        : null,
+                }));
+
+            return [
+                ...memberCommunities,
+                ...orgAdminCommunities,
+                ...superAdminCommunities,
+            ];
+        } catch (error) {
+            console.error('Error fetching postable communities:', error);
+            throw new TRPCError({
+                code: 'INTERNAL_SERVER_ERROR',
+                message: 'Failed to fetch postable communities',
+            });
+        }
+    }),
+
     // Remove a user from a community (with role-based security checks)
     removeUserFromCommunity: authProcedure
         .input(
