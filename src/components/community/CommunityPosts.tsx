@@ -12,6 +12,7 @@ import {
     Edit,
     Trash2,
 } from 'lucide-react';
+import { ShareButton } from '@/components/ui/share-button';
 import Link from 'next/link';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
@@ -307,7 +308,7 @@ export function CommunityPosts({
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
                                                                 router.push(
-                                                                    `/posts/${post.id}`,
+                                                                    `/communities/${community.slug}/posts/${post.id}`,
                                                                 );
                                                             }}
                                                         >
@@ -324,6 +325,21 @@ export function CommunityPosts({
 
                                                 {/* Action buttons */}
                                                 <div className="flex space-x-1">
+                                                    <div
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            e.stopPropagation();
+                                                        }}
+                                                    >
+                                                        <ShareButton
+                                                            title={post.title}
+                                                            text={`Check out this post: ${post.title}`}
+                                                            url={`${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${community.slug}/posts/${post.id}`}
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"
+                                                        />
+                                                    </div>
                                                     {canEditPost(post) && (
                                                         <button
                                                             type="button"
