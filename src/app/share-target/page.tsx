@@ -20,7 +20,6 @@ interface SharedData {
     title?: string;
     text?: string;
     url?: string;
-    files?: File[];
 }
 
 interface Community {
@@ -28,8 +27,12 @@ interface Community {
     name: string;
     slug: string;
     organization?: {
+        id: string;
         name: string;
-    };
+        createdAt: Date;
+        slug: string;
+        allowCrossOrgDM: boolean;
+    } | null;
 }
 
 type WizardStep = 'communities' | 'content' | 'creating' | 'success';
@@ -43,8 +46,10 @@ export default function ShareTargetPage() {
     );
     const [error, setError] = useState<string | null>(null);
 
-    // tRPC mutations
+    // tRPC mutations and queries
     const createPostMutation = trpc.community.createPost.useMutation();
+    const { data: communities } =
+        trpc.communities.getUserPostableCommunities.useQuery();
 
     useEffect(() => {
         // Handle shared data from Web Share Target API
@@ -74,7 +79,6 @@ export default function ShareTargetPage() {
                     title: data.title || '',
                     text: data.text || '',
                     url: data.url || '',
-                    files: data.files || [],
                 });
             }
         };
@@ -144,8 +148,6 @@ export default function ShareTargetPage() {
 
             case 'content':
                 // Get community details for display
-                const { data: communities } =
-                    trpc.communities.getUserPostableCommunities.useQuery();
                 const selectedCommunityDetails =
                     communities?.filter((c) =>
                         selectedCommunities.includes(c.id),
@@ -154,7 +156,9 @@ export default function ShareTargetPage() {
                 return (
                     <ContentReview
                         sharedData={sharedData}
-                        selectedCommunities={selectedCommunityDetails}
+                        selectedCommunities={
+                            selectedCommunityDetails as Community[]
+                        }
                         onBack={handleBackToCommunities}
                         onNext={handleCreatePost}
                     />

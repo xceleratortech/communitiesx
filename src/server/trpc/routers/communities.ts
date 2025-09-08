@@ -1694,7 +1694,7 @@ export const communitiesRouter = router({
             });
 
             // Get communities from user's organization (if user is org admin)
-            let orgCommunities: any[] = [];
+            let orgCommunities: (typeof communities.$inferSelect)[] = [];
             if (user.orgId && user.role === 'admin') {
                 orgCommunities = await db.query.communities.findMany({
                     where: eq(communities.orgId, user.orgId),
@@ -1702,7 +1702,7 @@ export const communitiesRouter = router({
             }
 
             // Get all communities (if user is super admin)
-            let allCommunities: any[] = [];
+            let allCommunities: (typeof communities.$inferSelect)[] = [];
             if (user.role === 'admin' && !user.orgId) {
                 // This is a super admin
                 allCommunities = await db.query.communities.findMany();
@@ -1771,7 +1771,7 @@ export const communitiesRouter = router({
                             (member) => member.id === community.id,
                         ) &&
                         !orgAdminCommunities.some(
-                            (org) => org.id === community.id,
+                            (orgCommunity) => orgCommunity.id === community.id,
                         ),
                 )
                 .map((community) => ({
