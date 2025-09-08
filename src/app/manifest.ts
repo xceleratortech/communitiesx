@@ -56,17 +56,6 @@ export default function manifest(): MetadataRoute.Manifest {
                 title: 'title',
                 text: 'text',
                 url: 'url',
-                files: [
-                    {
-                        name: 'file',
-                        accept: [
-                            'image/*',
-                            'text/plain',
-                            'application/pdf',
-                            'video/*',
-                        ],
-                    },
-                ],
             },
         },
         categories: ['social', 'productivity', 'utilities'],

@@ -214,7 +214,6 @@ self.addEventListener('fetch', function (event) {
                     title: formData.get('title') || '',
                     text: formData.get('text') || '',
                     url: formData.get('url') || '',
-                    files: formData.getAll('file'),
                 };
 
                 // A more robust implementation would use IndexedDB to avoid race conditions.
