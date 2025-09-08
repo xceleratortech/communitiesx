@@ -199,3 +199,32 @@ self.addEventListener('activate', function (event) {
 self.addEventListener('install', function (event) {
     self.skipWaiting();
 });
+
+// Handle share target events
+self.addEventListener('message', function (event) {
+    if (event.data && event.data.type === 'SHARE_TARGET') {
+        // Handle share target data
+        const shareData = event.data.data;
+        console.log('📤 Share target data received:', shareData);
+
+        // Store share data for the share target page
+        event.waitUntil(
+            self.clients.matchAll({ type: 'window' }).then(function (clients) {
+                clients.forEach(function (client) {
+                    client.postMessage({
+                        type: 'SHARE_TARGET_DATA',
+                        data: shareData,
+                    });
+                });
+            }),
+        );
+    }
+});
+
+// Handle fetch events for share target
+self.addEventListener('fetch', function (event) {
+    if (event.request.url.includes('/share-target')) {
+        // Let the page handle the share target
+        return;
+    }
+});

@@ -4,14 +4,11 @@ import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useRef } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Edit, Trash2 } from 'lucide-react';
+import { ShareDialog } from '@/components/ui/share-dialog';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
 import { isHtmlContentEmpty } from '@/lib/utils';
@@ -258,12 +255,28 @@ export default function PostPage() {
             <div className="mx-auto">
                 <div className="mb-8">
                     <div className="mb-2 flex items-start justify-between">
-                        <div>
+                        <div className="flex-1">
                             <h1 className="text-3xl font-bold dark:text-white">
                                 {postData.isDeleted
                                     ? '[Deleted]'
                                     : postData.title}
                             </h1>
+                        </div>
+                        <div className="ml-4 flex items-center space-x-2">
+                            <ShareDialog
+                                title={postData.title}
+                                text={`Check out this post: ${postData.title}`}
+                                url={
+                                    typeof window !== 'undefined'
+                                        ? window.location.href
+                                        : ''
+                                }
+                                trigger={
+                                    <Button variant="outline" size="sm">
+                                        Share
+                                    </Button>
+                                }
+                            />
                         </div>
                     </div>
                     <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none">

@@ -17,6 +17,7 @@ import {
     CalendarDays,
     ShieldCheck,
 } from 'lucide-react';
+import { ShareButton } from '@/components/ui/share-button';
 import { useRouter } from 'next/navigation';
 import type { posts, users, communities, comments } from '@/server/db/schema';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
@@ -782,6 +783,25 @@ export default function PostsPage() {
                                     {/* Action buttons */}
                                     {
                                         <div className="flex space-x-1">
+                                            <div
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                }}
+                                            >
+                                                <ShareButton
+                                                    title={post.title}
+                                                    text={`Check out this post: ${post.title}`}
+                                                    url={`${typeof window !== 'undefined' ? window.location.origin : ''}${
+                                                        post.community
+                                                            ? `/communities/${post.community.slug}/posts/${post.id}`
+                                                            : `/posts/${post.id}`
+                                                    }`}
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="text-muted-foreground hover:bg-accent hover:text-foreground rounded-full p-1.5"
+                                                />
+                                            </div>
                                             {canEditPost(post) && (
                                                 <button
                                                     type="button"
