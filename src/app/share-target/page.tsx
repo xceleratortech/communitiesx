@@ -45,9 +45,6 @@ export default function ShareTargetPage() {
         [],
     );
     const [error, setError] = useState<string | null>(null);
-    const [serviceWorkerStatus, setServiceWorkerStatus] =
-        useState<string>('checking');
-    const [isRequestingData, setIsRequestingData] = useState(false);
 
     // tRPC mutations and queries
     const createPostMutation = trpc.community.createPost.useMutation();
@@ -76,11 +73,8 @@ export default function ShareTargetPage() {
 
         // Listen for service worker messages
         const handleServiceWorkerMessage = (event: MessageEvent) => {
-            console.log('Received message from service worker:', event.data);
             if (event.data && event.data.type === 'SHARE_TARGET_DATA') {
                 const data = event.data.data;
-                console.log('Processing shared data:', data);
-                setIsRequestingData(false);
                 setSharedData({
                     title: data.title || '',
                     text: data.text || '',
@@ -98,14 +92,11 @@ export default function ShareTargetPage() {
                 handleServiceWorkerMessage,
             );
 
-            // Check if service worker is ready
+            // Check if service worker is ready and request shared data
             navigator.serviceWorker.ready
                 .then((registration) => {
-                    setServiceWorkerStatus('ready');
-
                     // Try to get shared data directly from service worker
                     if (registration.active) {
-                        setIsRequestingData(true);
                         registration.active.postMessage({
                             type: 'GET_SHARED_DATA',
                         });
@@ -114,7 +105,6 @@ export default function ShareTargetPage() {
                     // Also try after a delay in case of timing issues
                     setTimeout(() => {
                         if (registration.active) {
-                            setIsRequestingData(true);
                             registration.active.postMessage({
                                 type: 'GET_SHARED_DATA',
                             });
@@ -122,10 +112,8 @@ export default function ShareTargetPage() {
                     }, 1000);
                 })
                 .catch(() => {
-                    setServiceWorkerStatus('error');
+                    // Service worker error - silently handle
                 });
-        } else {
-            setServiceWorkerStatus('not-supported');
         }
 
         return () => {
@@ -257,42 +245,6 @@ export default function ShareTargetPage() {
                     <p className="text-muted-foreground">
                         Share content from other apps to your communities
                     </p>
-
-                    {/* Service Worker Status */}
-                    <div className="bg-muted/50 mt-4 rounded-lg p-3">
-                        <div className="text-muted-foreground text-sm">
-                            <strong>Service Worker Status:</strong>
-                            <div className="mt-1">
-                                {serviceWorkerStatus === 'checking' && (
-                                    <span className="text-blue-600">
-                                        🔄 Checking...
-                                    </span>
-                                )}
-                                {serviceWorkerStatus === 'ready' &&
-                                    !isRequestingData && (
-                                        <span className="text-green-600">
-                                            ✅ Ready to receive shared content
-                                        </span>
-                                    )}
-                                {serviceWorkerStatus === 'ready' &&
-                                    isRequestingData && (
-                                        <span className="text-blue-600">
-                                            🔄 Requesting shared data...
-                                        </span>
-                                    )}
-                                {serviceWorkerStatus === 'error' && (
-                                    <span className="text-red-600">
-                                        ❌ Service worker error
-                                    </span>
-                                )}
-                                {serviceWorkerStatus === 'not-supported' && (
-                                    <span className="text-amber-600">
-                                        ⚠️ Service worker not supported
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
                 </div>
 
                 {/* Progress Indicator */}
