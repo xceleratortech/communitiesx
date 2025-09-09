@@ -200,6 +200,9 @@ self.addEventListener('install', function (event) {
     self.skipWaiting();
 });
 
+// Store shared data globally
+let sharedData = null;
+
 // Handle fetch events for share target
 self.addEventListener('fetch', function (event) {
     const url = new URL(event.request.url);
@@ -215,6 +218,9 @@ self.addEventListener('fetch', function (event) {
                     text: formData.get('text') || '',
                     url: formData.get('url') || '',
                 };
+
+                // Store the shared data
+                sharedData = data;
 
                 // A more robust implementation would use IndexedDB to avoid race conditions.
                 const clients = await self.clients.matchAll({
@@ -232,5 +238,22 @@ self.addEventListener('fetch', function (event) {
                 return Response.redirect('/share-target', 303);
             })(),
         );
+    }
+});
+
+// Handle messages from clients
+self.addEventListener('message', function (event) {
+    if (event.data && event.data.type === 'GET_SHARED_DATA') {
+        // Send the stored shared data back to all clients
+        if (sharedData) {
+            self.clients.matchAll().then(function (clients) {
+                clients.forEach(function (client) {
+                    client.postMessage({
+                        type: 'SHARE_TARGET_DATA',
+                        data: sharedData,
+                    });
+                });
+            });
+        }
     }
 });

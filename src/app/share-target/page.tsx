@@ -47,6 +47,7 @@ export default function ShareTargetPage() {
     const [error, setError] = useState<string | null>(null);
     const [serviceWorkerStatus, setServiceWorkerStatus] =
         useState<string>('checking');
+    const [isRequestingData, setIsRequestingData] = useState(false);
 
     // tRPC mutations and queries
     const createPostMutation = trpc.community.createPost.useMutation();
@@ -75,8 +76,11 @@ export default function ShareTargetPage() {
 
         // Listen for service worker messages
         const handleServiceWorkerMessage = (event: MessageEvent) => {
+            console.log('Received message from service worker:', event.data);
             if (event.data && event.data.type === 'SHARE_TARGET_DATA') {
                 const data = event.data.data;
+                console.log('Processing shared data:', data);
+                setIsRequestingData(false);
                 setSharedData({
                     title: data.title || '',
                     text: data.text || '',
@@ -96,8 +100,26 @@ export default function ShareTargetPage() {
 
             // Check if service worker is ready
             navigator.serviceWorker.ready
-                .then(() => {
+                .then((registration) => {
                     setServiceWorkerStatus('ready');
+
+                    // Try to get shared data directly from service worker
+                    if (registration.active) {
+                        setIsRequestingData(true);
+                        registration.active.postMessage({
+                            type: 'GET_SHARED_DATA',
+                        });
+                    }
+
+                    // Also try after a delay in case of timing issues
+                    setTimeout(() => {
+                        if (registration.active) {
+                            setIsRequestingData(true);
+                            registration.active.postMessage({
+                                type: 'GET_SHARED_DATA',
+                            });
+                        }
+                    }, 1000);
                 })
                 .catch(() => {
                     setServiceWorkerStatus('error');
@@ -246,11 +268,18 @@ export default function ShareTargetPage() {
                                         🔄 Checking...
                                     </span>
                                 )}
-                                {serviceWorkerStatus === 'ready' && (
-                                    <span className="text-green-600">
-                                        ✅ Ready to receive shared content
-                                    </span>
-                                )}
+                                {serviceWorkerStatus === 'ready' &&
+                                    !isRequestingData && (
+                                        <span className="text-green-600">
+                                            ✅ Ready to receive shared content
+                                        </span>
+                                    )}
+                                {serviceWorkerStatus === 'ready' &&
+                                    isRequestingData && (
+                                        <span className="text-blue-600">
+                                            🔄 Requesting shared data...
+                                        </span>
+                                    )}
                                 {serviceWorkerStatus === 'error' && (
                                     <span className="text-red-600">
                                         ❌ Service worker error
