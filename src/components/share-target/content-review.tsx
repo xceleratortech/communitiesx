@@ -46,6 +46,24 @@ interface ContentReviewProps {
     onNext: (title: string, content: string) => void;
 }
 
+// Build initial content from shared data
+const buildInitialContent = (data: SharedData) => {
+    let builtContent = '';
+
+    if (data.text) {
+        builtContent += data.text;
+    }
+
+    if (data.url) {
+        if (builtContent) {
+            builtContent += '\n\n';
+        }
+        builtContent += `Shared from: ${data.url}`;
+    }
+
+    return builtContent;
+};
+
 export function ContentReview({
     sharedData,
     selectedCommunities,
@@ -53,27 +71,15 @@ export function ContentReview({
     onNext,
 }: ContentReviewProps) {
     const [title, setTitle] = useState(sharedData.title || '');
-    const [content, setContent] = useState('');
+    const [content, setContent] = useState(buildInitialContent(sharedData));
     const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        // Build content from shared data
-        let builtContent = '';
-
-        if (sharedData.text) {
-            builtContent += sharedData.text;
-        }
-
-        if (sharedData.url) {
-            if (builtContent) {
-                builtContent += '\n\n';
-            }
-            builtContent += `Shared from: ${sharedData.url}`;
-        }
-
-        setContent(builtContent);
+        // Update content when sharedData changes
+        const newContent = buildInitialContent(sharedData);
+        setContent(newContent);
     }, [sharedData]);
 
     useEffect(() => {
@@ -105,6 +111,50 @@ export function ContentReview({
                 <p className="text-muted-foreground mt-2">
                     Review and edit the content before posting
                 </p>
+
+                {/* Data received indicator */}
+                <div className="bg-muted/50 mt-4 rounded-lg p-3">
+                    <div className="text-muted-foreground text-sm">
+                        <strong>Received data:</strong>
+                        <div className="mt-1 space-y-1">
+                            {sharedData.title && (
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-green-600">✓</span>
+                                    <span>Title: "{sharedData.title}"</span>
+                                </div>
+                            )}
+                            {sharedData.text && (
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-green-600">✓</span>
+                                    <span>
+                                        Text: "
+                                        {sharedData.text.substring(0, 50)}
+                                        {sharedData.text.length > 50
+                                            ? '...'
+                                            : ''}
+                                        "
+                                    </span>
+                                </div>
+                            )}
+                            {sharedData.url && (
+                                <div className="flex items-center space-x-2">
+                                    <span className="text-green-600">✓</span>
+                                    <span>URL: {sharedData.url}</span>
+                                </div>
+                            )}
+                            {!sharedData.title &&
+                                !sharedData.text &&
+                                !sharedData.url && (
+                                    <div className="flex items-center space-x-2">
+                                        <span className="text-amber-600">
+                                            ⚠
+                                        </span>
+                                        <span>No shared content detected</span>
+                                    </div>
+                                )}
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Selected Communities */}
@@ -164,7 +214,13 @@ export function ContentReview({
                     <Textarea
                         value={content}
                         onChange={(e) => setContent(e.target.value)}
-                        placeholder="Enter post content..."
+                        placeholder={
+                            sharedData.title ||
+                            sharedData.text ||
+                            sharedData.url
+                                ? 'Content from shared data will appear here...'
+                                : 'Enter post content...'
+                        }
                         rows={8}
                         className="resize-none"
                     />
