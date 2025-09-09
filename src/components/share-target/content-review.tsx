@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
+import { sanitizeHtml } from '@/lib/sanitize';
 import { Loader2, Link, ArrowLeft, ExternalLink } from 'lucide-react';
 import {
     fetchLinkPreview,
@@ -66,7 +67,8 @@ const buildInitialContent = (data: SharedData) => {
 
 // Convert URLs in text to clickable links
 const convertUrlsToLinks = (text: string) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urlRegex =
+        /(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?/gi;
     const parts = text.split(urlRegex);
 
     return parts.map((part, index) => {
@@ -83,7 +85,7 @@ const convertUrlsToLinks = (text: string) => {
                 </a>
             );
         }
-        return part;
+        return <React.Fragment key={index}>{part}</React.Fragment>;
     });
 };
 
@@ -241,9 +243,7 @@ export function ContentReview({
                                 Preview (with clickable links):
                             </span>
                         </div>
-                        <div className="text-sm whitespace-pre-wrap">
-                            {convertUrlsToLinks(content)}
-                        </div>
+                        <div className="text-sm whitespace-pre-wrap dangerouslySetInnerHTML={{ __html: sanitizeHtml(convertUrlsToLinks(content)) }}" />
                     </div>
 
                     {/* Editable Content */}
