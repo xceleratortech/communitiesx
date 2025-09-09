@@ -64,6 +64,29 @@ const buildInitialContent = (data: SharedData) => {
     return builtContent;
 };
 
+// Convert URLs in text to clickable links
+const convertUrlsToLinks = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+
+    return parts.map((part, index) => {
+        if (urlRegex.test(part)) {
+            return (
+                <a
+                    key={index}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                >
+                    {part}
+                </a>
+            );
+        }
+        return part;
+    });
+};
+
 export function ContentReview({
     sharedData,
     selectedCommunities,
@@ -211,19 +234,41 @@ export function ContentReview({
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <Textarea
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        placeholder={
-                            sharedData.title ||
-                            sharedData.text ||
-                            sharedData.url
-                                ? 'Content from shared data will appear here...'
-                                : 'Enter post content...'
-                        }
-                        rows={8}
-                        className="resize-none"
-                    />
+                    {/* Content Preview with Clickable Links */}
+                    <div className="bg-muted/20 rounded-lg border p-4">
+                        <div className="mb-2 flex items-center space-x-2">
+                            <span className="text-muted-foreground text-sm font-medium">
+                                Preview (with clickable links):
+                            </span>
+                        </div>
+                        <div className="text-sm whitespace-pre-wrap">
+                            {convertUrlsToLinks(content)}
+                        </div>
+                    </div>
+
+                    {/* Editable Content */}
+                    <div>
+                        <Label
+                            htmlFor="content"
+                            className="text-sm font-medium"
+                        >
+                            Edit Content:
+                        </Label>
+                        <Textarea
+                            id="content"
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder={
+                                sharedData.title ||
+                                sharedData.text ||
+                                sharedData.url
+                                    ? 'Content from shared data will appear here...'
+                                    : 'Enter post content...'
+                            }
+                            rows={6}
+                            className="mt-2 resize-none"
+                        />
+                    </div>
 
                     {/* Link Preview */}
                     {sharedData.url && (
