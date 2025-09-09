@@ -46,30 +46,30 @@ interface ContentReviewProps {
     onNext: (title: string, content: string) => void;
 }
 
+// Build initial content from shared data
+const buildInitialContent = (data: SharedData) => {
+    let builtContent = '';
+
+    if (data.text) {
+        builtContent += data.text;
+    }
+
+    if (data.url) {
+        if (builtContent) {
+            builtContent += '\n\n';
+        }
+        builtContent += `Shared from: ${data.url}`;
+    }
+
+    return builtContent;
+};
+
 export function ContentReview({
     sharedData,
     selectedCommunities,
     onBack,
     onNext,
 }: ContentReviewProps) {
-    // Build initial content from shared data
-    const buildInitialContent = (data: SharedData) => {
-        let builtContent = '';
-
-        if (data.text) {
-            builtContent += data.text;
-        }
-
-        if (data.url) {
-            if (builtContent) {
-                builtContent += '\n\n';
-            }
-            builtContent += `Shared from: ${data.url}`;
-        }
-
-        return builtContent;
-    };
-
     const [title, setTitle] = useState(sharedData.title || '');
     const [content, setContent] = useState(buildInitialContent(sharedData));
     const [linkPreview, setLinkPreview] = useState<LinkPreview | null>(null);
