@@ -45,6 +45,8 @@ export default function ShareTargetPage() {
         [],
     );
     const [error, setError] = useState<string | null>(null);
+    const [serviceWorkerStatus, setServiceWorkerStatus] =
+        useState<string>('checking');
 
     // tRPC mutations and queries
     const createPostMutation = trpc.community.createPost.useMutation();
@@ -84,10 +86,33 @@ export default function ShareTargetPage() {
         };
 
         handleSharedData();
-        window.addEventListener('message', handleServiceWorkerMessage);
+
+        // Check service worker status and listen for messages
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener(
+                'message',
+                handleServiceWorkerMessage,
+            );
+
+            // Check if service worker is ready
+            navigator.serviceWorker.ready
+                .then(() => {
+                    setServiceWorkerStatus('ready');
+                })
+                .catch(() => {
+                    setServiceWorkerStatus('error');
+                });
+        } else {
+            setServiceWorkerStatus('not-supported');
+        }
 
         return () => {
-            window.removeEventListener('message', handleServiceWorkerMessage);
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.removeEventListener(
+                    'message',
+                    handleServiceWorkerMessage,
+                );
+            }
         };
     }, []);
 
@@ -210,6 +235,35 @@ export default function ShareTargetPage() {
                     <p className="text-muted-foreground">
                         Share content from other apps to your communities
                     </p>
+
+                    {/* Service Worker Status */}
+                    <div className="bg-muted/50 mt-4 rounded-lg p-3">
+                        <div className="text-muted-foreground text-sm">
+                            <strong>Service Worker Status:</strong>
+                            <div className="mt-1">
+                                {serviceWorkerStatus === 'checking' && (
+                                    <span className="text-blue-600">
+                                        🔄 Checking...
+                                    </span>
+                                )}
+                                {serviceWorkerStatus === 'ready' && (
+                                    <span className="text-green-600">
+                                        ✅ Ready to receive shared content
+                                    </span>
+                                )}
+                                {serviceWorkerStatus === 'error' && (
+                                    <span className="text-red-600">
+                                        ❌ Service worker error
+                                    </span>
+                                )}
+                                {serviceWorkerStatus === 'not-supported' && (
+                                    <span className="text-amber-600">
+                                        ⚠️ Service worker not supported
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Progress Indicator */}
