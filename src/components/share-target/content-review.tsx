@@ -65,27 +65,13 @@ const buildInitialContent = (data: SharedData) => {
     return builtContent;
 };
 
-// Convert URLs in text to clickable links
-const convertUrlsToLinks = (text: string) => {
+// Convert URLs in text to HTML links (for sanitization)
+const convertUrlsToHtmlLinks = (text: string): string => {
     const urlRegex =
         /(?:(?:https?|ftp):\/\/)(?:\S+(?::\S*)?@)?(?:(?!10(?:\.\d{1,3}){3})(?!127(?:\.\d{1,3}){3})(?!169\.254(?:\.\d{1,3}){2})(?!192\.168(?:\.\d{1,3}){2})(?!172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(?:[1-9]\d?|1\d\d|2[01]\d|22[0-3])(?:\.(?:1?\d{1,2}|2[0-4]\d|25[0-5])){2}(?:\.(?:[1-9]\d?|1\d\d|2[0-4]\d|25[0-4]))|(?:(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)(?:\.(?:[a-z\u00a1-\uffff0-9]+-?)*[a-z\u00a1-\uffff0-9]+)*(?:\.(?:[a-z\u00a1-\uffff]{2,})))(?::\d{2,5})?(?:\/[^\s]*)?/gi;
-    const parts = text.split(urlRegex);
 
-    return parts.map((part, index) => {
-        if (urlRegex.test(part)) {
-            return (
-                <a
-                    key={index}
-                    href={part}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 hover:underline"
-                >
-                    {part}
-                </a>
-            );
-        }
-        return <React.Fragment key={index}>{part}</React.Fragment>;
+    return text.replace(urlRegex, (url) => {
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
     });
 };
 
@@ -123,7 +109,8 @@ export function ContentReview({
 
         setIsSubmitting(true);
         try {
-            onNext(title.trim(), content.trim());
+            const contentWithLinks = convertUrlsToHtmlLinks(content.trim());
+            onNext(title.trim(), sanitizeHtml(contentWithLinks));
         } finally {
             setIsSubmitting(false);
         }
@@ -243,7 +230,14 @@ export function ContentReview({
                                 Preview (with clickable links):
                             </span>
                         </div>
-                        <div className="text-sm whitespace-pre-wrap dangerouslySetInnerHTML={{ __html: sanitizeHtml(convertUrlsToLinks(content)) }}" />
+                        <div
+                            className="text-sm whitespace-pre-wrap [&_a]:break-all [&_a]:text-blue-600 [&_a]:hover:underline"
+                            dangerouslySetInnerHTML={{
+                                __html: sanitizeHtml(
+                                    convertUrlsToHtmlLinks(content),
+                                ),
+                            }}
+                        />
                     </div>
 
                     {/* Editable Content */}
