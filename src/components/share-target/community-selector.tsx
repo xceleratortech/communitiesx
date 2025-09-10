@@ -140,71 +140,76 @@ export function CommunitySelector({
     }
 
     return (
-        <div className="space-y-6">
-            <div className="text-center">
-                <h2 className="text-2xl font-bold">Select Communities</h2>
-                <p className="text-muted-foreground mt-2">
-                    Choose which communities you want to share this content to
-                </p>
-            </div>
+        <>
+            <div className="space-y-6 pb-20">
+                <div className="text-center">
+                    <h2 className="text-2xl font-bold">Select Communities</h2>
+                    <p className="text-muted-foreground mt-2">
+                        Choose which communities you want to share this content
+                        to
+                    </p>
+                </div>
 
-            <div className="grid max-h-96 gap-4 overflow-y-auto">
-                {communities.map((community: Community) => (
-                    <Card
-                        key={community.id}
-                        className={`cursor-pointer transition-all hover:shadow-md ${
-                            selectedCommunities.includes(community.id)
-                                ? 'ring-primary bg-primary/5 ring-2'
-                                : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => handleCommunityToggle(community.id)}
-                    >
-                        <CardContent className="p-4">
-                            <div className="flex items-start space-x-3">
-                                <Checkbox
-                                    checked={selectedCommunities.includes(
-                                        community.id,
-                                    )}
-                                    onChange={() =>
-                                        handleCommunityToggle(community.id)
-                                    }
-                                    className="mt-1"
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="truncate text-lg font-semibold">
-                                            {community.name}
-                                        </h3>
-                                        <div className="flex items-center space-x-2">
-                                            {getRoleIcon(community.reason)}
-                                            {getRoleBadge(community.reason)}
+                <div className="grid max-h-96 gap-4 overflow-y-auto">
+                    {communities.map((community: Community) => (
+                        <Card
+                            key={community.id}
+                            className={`cursor-pointer transition-all hover:shadow-md ${
+                                selectedCommunities.includes(community.id)
+                                    ? 'ring-primary bg-primary/5 ring-2'
+                                    : 'hover:bg-muted/50'
+                            }`}
+                            onClick={() => handleCommunityToggle(community.id)}
+                        >
+                            <CardContent className="p-4">
+                                <div className="flex items-start space-x-3">
+                                    <Checkbox
+                                        checked={selectedCommunities.includes(
+                                            community.id,
+                                        )}
+                                        onChange={() =>
+                                            handleCommunityToggle(community.id)
+                                        }
+                                        className="mt-1"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center space-x-3">
+                                            <h3 className="truncate text-lg font-semibold">
+                                                {community.name}
+                                            </h3>
+                                            <div className="flex items-center space-x-2">
+                                                {getRoleIcon(community.reason)}
+                                                {getRoleBadge(community.reason)}
+                                            </div>
                                         </div>
+
+                                        {community.description && (
+                                            <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+                                                {community.description}
+                                            </p>
+                                        )}
+
+                                        {community.organization && (
+                                            <p className="text-muted-foreground mt-2 text-xs">
+                                                Organization:{' '}
+                                                {community.organization.name}
+                                            </p>
+                                        )}
                                     </div>
-
-                                    {community.description && (
-                                        <p className="text-muted-foreground mt-1 line-clamp-2 text-sm">
-                                            {community.description}
-                                        </p>
-                                    )}
-
-                                    {community.organization && (
-                                        <p className="text-muted-foreground mt-2 text-xs">
-                                            Organization:{' '}
-                                            {community.organization.name}
-                                        </p>
-                                    )}
                                 </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
 
-            <div className="flex items-center justify-between border-t pt-4">
-                <p className="text-muted-foreground text-sm">
-                    {selectedCommunities.length} community
-                    {selectedCommunities.length !== 1 ? 'ies' : ''} selected
-                </p>
+                <div className="flex items-center justify-between border-t pt-4">
+                    <p className="text-muted-foreground text-sm">
+                        {selectedCommunities.length} community
+                        {selectedCommunities.length !== 1 ? 'ies' : ''} selected
+                    </p>
+                </div>
+            </div>
+            <div className="fixed right-4 bottom-4 z-50">
                 <Button
                     onClick={handleNext}
                     disabled={selectedCommunities.length === 0 || isLoading}
@@ -220,6 +225,6 @@ export function CommunitySelector({
                     )}
                 </Button>
             </div>
-        </div>
+        </>
     );
 }
