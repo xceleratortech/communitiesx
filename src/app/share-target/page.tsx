@@ -261,7 +261,7 @@ export default function ShareTargetPage() {
                             Select Communities
                         </span>
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex h-8 items-center">
                         <div
                             className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
                         />
@@ -278,7 +278,7 @@ export default function ShareTargetPage() {
                             Review Content
                         </span>
                     </div>
-                    <div className="flex items-center">
+                    <div className="flex h-8 items-center">
                         <div
                             className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
                         />
