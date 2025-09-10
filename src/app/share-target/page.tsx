@@ -248,7 +248,7 @@ export default function ShareTargetPage() {
                 </div>
 
                 {/* Progress Indicator */}
-                <div className="mb-8 flex items-end justify-center space-x-4">
+                <div className="mb-8 flex items-start justify-center space-x-8">
                     <div
                         className={`flex flex-col items-center space-y-2 ${currentStep === 'communities' ? 'text-primary' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
@@ -257,11 +257,15 @@ export default function ShareTargetPage() {
                         >
                             1
                         </div>
-                        <span className="text-sm">Select Communities</span>
+                        <span className="text-center text-sm">
+                            Select Communities
+                        </span>
                     </div>
-                    <div
-                        className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
-                    />
+                    <div className="flex items-center">
+                        <div
+                            className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                        />
+                    </div>
                     <div
                         className={`flex flex-col items-center space-y-2 ${currentStep === 'content' ? 'text-primary' : currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
@@ -270,11 +274,15 @@ export default function ShareTargetPage() {
                         >
                             2
                         </div>
-                        <span className="text-sm">Review Content</span>
+                        <span className="text-center text-sm">
+                            Review Content
+                        </span>
                     </div>
-                    <div
-                        className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
-                    />
+                    <div className="flex items-center">
+                        <div
+                            className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                        />
+                    </div>
                     <div
                         className={`flex flex-col items-center space-y-2 ${currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
@@ -283,7 +291,7 @@ export default function ShareTargetPage() {
                         >
                             3
                         </div>
-                        <span className="text-sm">Complete</span>
+                        <span className="text-center text-sm">Complete</span>
                     </div>
                 </div>
 
