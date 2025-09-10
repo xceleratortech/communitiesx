@@ -248,42 +248,50 @@ export default function ShareTargetPage() {
                 </div>
 
                 {/* Progress Indicator */}
-                <div className="mb-8 flex justify-center space-x-4">
+                <div className="mb-8 flex items-start justify-center space-x-8">
                     <div
-                        className={`flex items-center space-x-2 ${currentStep === 'communities' ? 'text-primary' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                        className={`flex flex-col items-center space-y-2 ${currentStep === 'communities' ? 'text-primary' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
                         <div
                             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'communities' ? 'bg-primary text-primary-foreground' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
                         >
                             1
                         </div>
-                        <span className="text-sm">Select Communities</span>
+                        <span className="text-center text-sm">
+                            Select Communities
+                        </span>
+                    </div>
+                    <div className="flex h-8 items-center">
+                        <div
+                            className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                        />
                     </div>
                     <div
-                        className={`h-1 w-8 ${currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
-                    />
-                    <div
-                        className={`flex items-center space-x-2 ${currentStep === 'content' ? 'text-primary' : currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                        className={`flex flex-col items-center space-y-2 ${currentStep === 'content' ? 'text-primary' : currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
                         <div
                             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'content' ? 'bg-primary text-primary-foreground' : currentStep === 'creating' || currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
                         >
                             2
                         </div>
-                        <span className="text-sm">Review Content</span>
+                        <span className="text-center text-sm">
+                            Review Content
+                        </span>
+                    </div>
+                    <div className="flex h-8 items-center">
+                        <div
+                            className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
+                        />
                     </div>
                     <div
-                        className={`h-1 w-8 ${currentStep === 'success' ? 'bg-green-600' : 'bg-muted'}`}
-                    />
-                    <div
-                        className={`flex items-center space-x-2 ${currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
+                        className={`flex flex-col items-center space-y-2 ${currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
                         <div
                             className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium ${currentStep === 'success' ? 'bg-green-100 text-green-600' : 'bg-muted'}`}
                         >
                             3
                         </div>
-                        <span className="text-sm">Complete</span>
+                        <span className="text-center text-sm">Complete</span>
                     </div>
                 </div>
 
@@ -293,9 +301,10 @@ export default function ShareTargetPage() {
                     </Alert>
                 )}
 
-                <Card>
+                {/* <Card>
                     <CardContent className="p-6">{renderStep()}</CardContent>
-                </Card>
+                </Card> */}
+                {renderStep()}
             </div>
         </div>
     );
