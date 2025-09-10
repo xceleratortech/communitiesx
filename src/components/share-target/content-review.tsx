@@ -109,7 +109,8 @@ export function ContentReview({
 
         setIsSubmitting(true);
         try {
-            onNext(title.trim(), content.trim());
+            const contentWithLinks = convertUrlsToHtmlLinks(content.trim());
+            onNext(title.trim(), sanitizeHtml(contentWithLinks));
         } finally {
             setIsSubmitting(false);
         }
