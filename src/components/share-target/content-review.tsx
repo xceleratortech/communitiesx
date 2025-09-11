@@ -342,7 +342,7 @@ export function ContentReview({
                 </Card>
             </div>
 
-            {/* Navigation */}
+            {/* Navigation floating buttons */}
             <div className="fixed bottom-4 left-4 z-50">
                 <Button
                     variant="outline"
