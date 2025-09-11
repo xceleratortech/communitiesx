@@ -5,11 +5,51 @@ import { Button } from '@/components/ui/button';
 import { Download, X } from 'lucide-react';
 import { toast } from 'sonner';
 
+const PWA_DISMISSED_KEY = 'pwa-install-dismissed';
+const PWA_DISMISSED_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+// Check if user previously dismissed the prompt
+const wasDismissed = () => {
+    if (typeof window === 'undefined') return false;
+
+    const dismissedAt = localStorage.getItem(PWA_DISMISSED_KEY);
+    if (!dismissedAt) return false;
+
+    const dismissedTime = parseInt(dismissedAt, 10);
+    const now = Date.now();
+
+    // If dismissed more than 7 days ago, show again
+    return now - dismissedTime < PWA_DISMISSED_DURATION;
+};
+
+// Check if device is mobile
+const checkIsMobile = () => {
+    if (typeof window === 'undefined') return false;
+
+    // Check for mobile user agent
+    const isMobileUA =
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+            navigator.userAgent,
+        );
+
+    // Check for touch capability and small screen
+    const isTouchDevice =
+        'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth <= 768;
+
+    return isMobileUA || (isTouchDevice && isSmallScreen);
+};
+
 export function PWAInstaller() {
     const [deferredPrompt, setDeferredPrompt] =
         useState<BeforeInstallPromptEvent | null>(null);
     const [isInstalled, setIsInstalled] = useState(false);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+    const [isMobile, setIsMobile] = useState(() => {
+        // Initialize mobile state safely for SSR
+        if (typeof window === 'undefined') return false;
+        return checkIsMobile();
+    });
 
     useEffect(() => {
         // Check if app is already installed
@@ -32,10 +72,6 @@ export function PWAInstaller() {
                 try {
                     const registration =
                         await navigator.serviceWorker.register('/sw.js');
-                    console.log(
-                        'Service Worker registered successfully:',
-                        registration,
-                    );
                 } catch (error) {
                     console.error('Service Worker registration failed:', error);
                 }
@@ -44,6 +80,11 @@ export function PWAInstaller() {
 
         // Listen for beforeinstallprompt event
         const handleBeforeInstallPrompt = (e: Event) => {
+            // Only show on mobile devices and if not previously dismissed
+            if (!isMobile || wasDismissed()) {
+                return;
+            }
+
             e.preventDefault();
             setDeferredPrompt(e as BeforeInstallPromptEvent);
             setShowInstallPrompt(true);
@@ -79,14 +120,17 @@ export function PWAInstaller() {
         if (!deferredPrompt) return;
 
         try {
+            // Show the install prompt
             await deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
 
             if (outcome === 'accepted') {
-                console.log('User accepted the install prompt');
-            } else {
-                console.log('User dismissed the install prompt');
+                toast.success('Installing Community-X...');
             }
+
+            // Clear the deferred prompt after use
+            setDeferredPrompt(null);
+            setShowInstallPrompt(false);
         } catch (error) {
             console.error('Error during installation:', error);
             toast.error('Failed to install the app');
@@ -94,11 +138,22 @@ export function PWAInstaller() {
     };
 
     const handleDismiss = () => {
+        // Store dismissal timestamp in localStorage
+        try {
+            localStorage.setItem(PWA_DISMISSED_KEY, Date.now().toString());
+        } catch (error) {
+            console.error('Failed to write to localStorage:', error);
+        }
         setShowInstallPrompt(false);
+        toast.info("Install prompt dismissed. We'll ask again in 7 days.");
     };
 
-    // Don't show if already installed or no prompt available
-    if (isInstalled || !showInstallPrompt || !deferredPrompt) {
+    // Don't show if:
+    // - Already installed
+    // - Not mobile device
+    // - Previously dismissed (within 7 days)
+    // - No prompt available
+    if (isInstalled || !isMobile || !showInstallPrompt || !deferredPrompt) {
         return null;
     }
 
