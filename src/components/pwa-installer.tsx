@@ -45,12 +45,13 @@ export function PWAInstaller() {
         useState<BeforeInstallPromptEvent | null>(null);
     const [isInstalled, setIsInstalled] = useState(false);
     const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
+    const [isMobile, setIsMobile] = useState(() => {
+        // Initialize mobile state safely for SSR
+        if (typeof window === 'undefined') return false;
+        return checkIsMobile();
+    });
 
     useEffect(() => {
-        // Check if device is mobile
-        setIsMobile(checkIsMobile());
-
         // Check if app is already installed
         const checkInstalled = () => {
             if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -113,7 +114,7 @@ export function PWAInstaller() {
             );
             window.removeEventListener('appinstalled', handleAppInstalled);
         };
-    }, [isMobile]);
+    }, []);
 
     const handleInstall = async () => {
         if (!deferredPrompt) return;
