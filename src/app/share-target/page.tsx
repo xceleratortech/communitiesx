@@ -248,7 +248,7 @@ export default function ShareTargetPage() {
                 </div>
 
                 {/* Progress Indicator */}
-                <div className="mb-8 flex items-start justify-center space-x-6">
+                <div className="mb-8 flex items-start justify-center space-x-4">
                     <div
                         className={`flex flex-col items-center space-y-2 ${currentStep === 'communities' ? 'text-primary' : currentStep === 'content' || currentStep === 'creating' || currentStep === 'success' ? 'text-green-600' : 'text-muted-foreground'}`}
                     >
