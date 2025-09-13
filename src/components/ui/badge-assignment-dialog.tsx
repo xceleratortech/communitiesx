@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -34,12 +35,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Loader2, Plus, X } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
-const assignmentFormSchema = z.object({
+const singleAssignmentFormSchema = z.object({
     userId: z.string().min(1, 'Please select a user'),
     note: z.string().optional(),
 });
 
-type AssignmentFormData = z.infer<typeof assignmentFormSchema>;
+const bulkAssignmentFormSchema = z.object({
+    note: z.string().optional(),
+});
+
+type SingleAssignmentFormData = z.infer<typeof singleAssignmentFormSchema>;
+type BulkAssignmentFormData = z.infer<typeof bulkAssignmentFormSchema>;
 
 interface User {
     id: string;
@@ -79,7 +85,8 @@ interface BadgeAssignmentDialogProps {
     onOpenChange: (open: boolean) => void;
     badge: BadgeData;
     users: User[];
-    onAssign: (data: AssignmentFormData) => Promise<void>;
+    onAssign: (data: SingleAssignmentFormData) => Promise<void>;
+    onAssignBulk: (data: { userIds: string[]; note?: string }) => Promise<void>;
     onUnassign: (userId: string) => Promise<void>;
     isSubmitting?: boolean;
 }
@@ -90,15 +97,26 @@ export function BadgeAssignmentDialog({
     badge,
     users,
     onAssign,
+    onAssignBulk,
     onUnassign,
     isSubmitting = false,
 }: BadgeAssignmentDialogProps) {
-    const [mode, setMode] = useState<'assign' | 'manage'>('manage');
+    const [mode, setMode] = useState<'assign' | 'assignBulk' | 'manage'>(
+        'manage',
+    );
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
 
-    const form = useForm<AssignmentFormData>({
-        resolver: zodResolver(assignmentFormSchema),
+    const singleForm = useForm<SingleAssignmentFormData>({
+        resolver: zodResolver(singleAssignmentFormSchema),
         defaultValues: {
             userId: '',
+            note: '',
+        },
+    });
+
+    const bulkForm = useForm<BulkAssignmentFormData>({
+        resolver: zodResolver(bulkAssignmentFormSchema),
+        defaultValues: {
             note: '',
         },
     });
@@ -110,10 +128,24 @@ export function BadgeAssignmentDialog({
         (user) => !assignedUserIds.has(user.id),
     );
 
-    const handleAssign = async (data: AssignmentFormData) => {
+    const handleAssign = async (data: SingleAssignmentFormData) => {
         try {
             await onAssign(data);
-            form.reset();
+            singleForm.reset();
+            setMode('manage');
+        } catch (error) {
+            // Error handling is done in the parent component
+        }
+    };
+
+    const handleAssignBulk = async (data: BulkAssignmentFormData) => {
+        try {
+            await onAssignBulk({
+                userIds: selectedUserIds,
+                note: data.note,
+            });
+            setSelectedUserIds([]);
+            bulkForm.reset();
             setMode('manage');
         } catch (error) {
             // Error handling is done in the parent component
@@ -125,6 +157,22 @@ export function BadgeAssignmentDialog({
             await onUnassign(userId);
         } catch (error) {
             // Error handling is done in the parent component
+        }
+    };
+
+    const handleUserSelect = (userId: string, checked: boolean) => {
+        if (checked) {
+            setSelectedUserIds((prev) => [...prev, userId]);
+        } else {
+            setSelectedUserIds((prev) => prev.filter((id) => id !== userId));
+        }
+    };
+
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            setSelectedUserIds(availableUsers.map((user) => user.id));
+        } else {
+            setSelectedUserIds([]);
         }
     };
 
@@ -158,14 +206,26 @@ export function BadgeAssignmentDialog({
                                     {badge.assignments?.length || 0})
                                 </h3>
                                 {availableUsers.length > 0 && (
-                                    <Button
-                                        onClick={() => setMode('assign')}
-                                        size="sm"
-                                        variant="outline"
-                                    >
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Assign Badge
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            onClick={() =>
+                                                setMode('assignBulk')
+                                            }
+                                            size="sm"
+                                            variant="outline"
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Assign to Multiple
+                                        </Button>
+                                        <Button
+                                            onClick={() => setMode('assign')}
+                                            size="sm"
+                                            variant="outline"
+                                        >
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Assign to One
+                                        </Button>
+                                    </div>
                                 )}
                             </div>
 
@@ -239,20 +299,172 @@ export function BadgeAssignmentDialog({
                                             yet.
                                         </p>
                                         {availableUsers.length > 0 && (
-                                            <Button
-                                                onClick={() =>
-                                                    setMode('assign')
-                                                }
-                                                variant="outline"
-                                                className="mt-3"
-                                            >
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Assign Badge
-                                            </Button>
+                                            <div className="mt-3 flex gap-2">
+                                                <Button
+                                                    onClick={() =>
+                                                        setMode('assignBulk')
+                                                    }
+                                                    variant="outline"
+                                                >
+                                                    <Plus className="mr-2 h-4 w-4" />
+                                                    Assign to Multiple
+                                                </Button>
+                                                <Button
+                                                    onClick={() =>
+                                                        setMode('assign')
+                                                    }
+                                                    variant="outline"
+                                                >
+                                                    <Plus className="mr-2 h-4 w-4" />
+                                                    Assign to One
+                                                </Button>
+                                            </div>
                                         )}
                                     </div>
                                 )}
                             </ScrollArea>
+                        </div>
+                    ) : mode === 'assignBulk' ? (
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-medium">
+                                    Assign Badge to Multiple Users
+                                </h3>
+                                <Button
+                                    onClick={() => setMode('manage')}
+                                    size="sm"
+                                    variant="ghost"
+                                >
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="select-all"
+                                            checked={
+                                                selectedUserIds.length ===
+                                                    availableUsers.length &&
+                                                availableUsers.length > 0
+                                            }
+                                            onCheckedChange={handleSelectAll}
+                                        />
+                                        <label
+                                            htmlFor="select-all"
+                                            className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                        >
+                                            Select All ({selectedUserIds.length}
+                                            /{availableUsers.length})
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <ScrollArea className="h-[300px] w-full">
+                                    <div className="space-y-2">
+                                        {availableUsers.map((user) => (
+                                            <div
+                                                key={user.id}
+                                                className="flex items-center space-x-3 rounded-lg border p-3"
+                                            >
+                                                <Checkbox
+                                                    id={`user-${user.id}`}
+                                                    checked={selectedUserIds.includes(
+                                                        user.id,
+                                                    )}
+                                                    onCheckedChange={(
+                                                        checked,
+                                                    ) =>
+                                                        handleUserSelect(
+                                                            user.id,
+                                                            checked as boolean,
+                                                        )
+                                                    }
+                                                />
+                                                <Avatar className="h-8 w-8">
+                                                    <AvatarImage
+                                                        src={
+                                                            user.image ||
+                                                            undefined
+                                                        }
+                                                    />
+                                                    <AvatarFallback>
+                                                        {user.name?.[0] ||
+                                                            user.email[0]}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="flex-1">
+                                                    <p className="font-medium">
+                                                        {user.name ||
+                                                            user.email}
+                                                    </p>
+                                                    <p className="text-muted-foreground text-sm">
+                                                        {user.email}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </ScrollArea>
+
+                                <Form {...bulkForm}>
+                                    <form
+                                        onSubmit={bulkForm.handleSubmit(
+                                            handleAssignBulk,
+                                        )}
+                                        className="space-y-4"
+                                    >
+                                        <FormField
+                                            control={bulkForm.control}
+                                            name="note"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>
+                                                        Note (Optional)
+                                                    </FormLabel>
+                                                    <FormControl>
+                                                        <Textarea
+                                                            placeholder="Add a note about why this badge is being assigned..."
+                                                            {...field}
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+
+                                        <div className="flex gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    setMode('manage')
+                                                }
+                                                disabled={isSubmitting}
+                                            >
+                                                Cancel
+                                            </Button>
+                                            <Button
+                                                type="submit"
+                                                disabled={
+                                                    isSubmitting ||
+                                                    selectedUserIds.length === 0
+                                                }
+                                            >
+                                                {isSubmitting && (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                )}
+                                                Assign to{' '}
+                                                {selectedUserIds.length} User
+                                                {selectedUserIds.length !== 1
+                                                    ? 's'
+                                                    : ''}
+                                            </Button>
+                                        </div>
+                                    </form>
+                                </Form>
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -269,13 +481,15 @@ export function BadgeAssignmentDialog({
                                 </Button>
                             </div>
 
-                            <Form {...form}>
+                            <Form {...singleForm}>
                                 <form
-                                    onSubmit={form.handleSubmit(handleAssign)}
+                                    onSubmit={singleForm.handleSubmit(
+                                        handleAssign,
+                                    )}
                                     className="space-y-4"
                                 >
                                     <FormField
-                                        control={form.control}
+                                        control={singleForm.control}
                                         name="userId"
                                         render={({ field }) => (
                                             <FormItem>
@@ -335,7 +549,7 @@ export function BadgeAssignmentDialog({
                                     />
 
                                     <FormField
-                                        control={form.control}
+                                        control={singleForm.control}
                                         name="note"
                                         render={({ field }) => (
                                             <FormItem>
