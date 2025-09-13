@@ -86,8 +86,12 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
             );
             refetchBadges();
         },
-        onError: (error: any) => {
-            toast.error(error.message || 'Failed to assign badge to users');
+        onError: (error: unknown) => {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to assign badge to users';
+            toast.error(message);
         },
     });
 

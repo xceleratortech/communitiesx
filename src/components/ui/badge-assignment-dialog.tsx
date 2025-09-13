@@ -104,7 +104,9 @@ export function BadgeAssignmentDialog({
     const [mode, setMode] = useState<'assign' | 'assignBulk' | 'manage'>(
         'manage',
     );
-    const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+    const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(
+        new Set(),
+    );
 
     const singleForm = useForm<SingleAssignmentFormData>({
         resolver: zodResolver(singleAssignmentFormSchema),
@@ -141,10 +143,10 @@ export function BadgeAssignmentDialog({
     const handleAssignBulk = async (data: BulkAssignmentFormData) => {
         try {
             await onAssignBulk({
-                userIds: selectedUserIds,
+                userIds: Array.from(selectedUserIds),
                 note: data.note,
             });
-            setSelectedUserIds([]);
+            setSelectedUserIds(new Set());
             bulkForm.reset();
             setMode('manage');
         } catch (error) {
@@ -161,19 +163,48 @@ export function BadgeAssignmentDialog({
     };
 
     const handleUserSelect = (userId: string, checked: boolean) => {
-        if (checked) {
-            setSelectedUserIds((prev) => [...prev, userId]);
-        } else {
-            setSelectedUserIds((prev) => prev.filter((id) => id !== userId));
-        }
+        setSelectedUserIds((prev) => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(userId);
+            } else {
+                newSet.delete(userId);
+            }
+            return newSet;
+        });
     };
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
-            setSelectedUserIds(availableUsers.map((user) => user.id));
+            setSelectedUserIds(new Set(availableUsers.map((user) => user.id)));
         } else {
-            setSelectedUserIds([]);
+            setSelectedUserIds(new Set());
         }
+    };
+
+    const renderAssignmentButtons = (additionalClassName = '') => {
+        if (availableUsers.length === 0) return null;
+
+        return (
+            <div className={`flex gap-2 ${additionalClassName}`}>
+                <Button
+                    onClick={() => setMode('assignBulk')}
+                    size="sm"
+                    variant="outline"
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Assign to Multiple
+                </Button>
+                <Button
+                    onClick={() => setMode('assign')}
+                    size="sm"
+                    variant="outline"
+                >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Assign to One
+                </Button>
+            </div>
+        );
     };
 
     return (
@@ -205,28 +236,7 @@ export function BadgeAssignmentDialog({
                                     Assigned Users (
                                     {badge.assignments?.length || 0})
                                 </h3>
-                                {availableUsers.length > 0 && (
-                                    <div className="flex gap-2">
-                                        <Button
-                                            onClick={() =>
-                                                setMode('assignBulk')
-                                            }
-                                            size="sm"
-                                            variant="outline"
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Assign to Multiple
-                                        </Button>
-                                        <Button
-                                            onClick={() => setMode('assign')}
-                                            size="sm"
-                                            variant="outline"
-                                        >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Assign to One
-                                        </Button>
-                                    </div>
-                                )}
+                                {renderAssignmentButtons()}
                             </div>
 
                             <ScrollArea className="h-[300px] w-full">
@@ -298,28 +308,7 @@ export function BadgeAssignmentDialog({
                                             No users have this badge assigned
                                             yet.
                                         </p>
-                                        {availableUsers.length > 0 && (
-                                            <div className="mt-3 flex gap-2">
-                                                <Button
-                                                    onClick={() =>
-                                                        setMode('assignBulk')
-                                                    }
-                                                    variant="outline"
-                                                >
-                                                    <Plus className="mr-2 h-4 w-4" />
-                                                    Assign to Multiple
-                                                </Button>
-                                                <Button
-                                                    onClick={() =>
-                                                        setMode('assign')
-                                                    }
-                                                    variant="outline"
-                                                >
-                                                    <Plus className="mr-2 h-4 w-4" />
-                                                    Assign to One
-                                                </Button>
-                                            </div>
-                                        )}
+                                        {renderAssignmentButtons()}
                                     </div>
                                 )}
                             </ScrollArea>
@@ -345,7 +334,7 @@ export function BadgeAssignmentDialog({
                                         <Checkbox
                                             id="select-all"
                                             checked={
-                                                selectedUserIds.length ===
+                                                selectedUserIds.size ===
                                                     availableUsers.length &&
                                                 availableUsers.length > 0
                                             }
@@ -355,8 +344,8 @@ export function BadgeAssignmentDialog({
                                             htmlFor="select-all"
                                             className="text-sm leading-none font-medium peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                         >
-                                            Select All ({selectedUserIds.length}
-                                            /{availableUsers.length})
+                                            Select All ({selectedUserIds.size}/
+                                            {availableUsers.length})
                                         </label>
                                     </div>
                                 </div>
@@ -370,7 +359,7 @@ export function BadgeAssignmentDialog({
                                             >
                                                 <Checkbox
                                                     id={`user-${user.id}`}
-                                                    checked={selectedUserIds.includes(
+                                                    checked={selectedUserIds.has(
                                                         user.id,
                                                     )}
                                                     onCheckedChange={(
@@ -449,15 +438,15 @@ export function BadgeAssignmentDialog({
                                                 type="submit"
                                                 disabled={
                                                     isSubmitting ||
-                                                    selectedUserIds.length === 0
+                                                    selectedUserIds.size === 0
                                                 }
                                             >
                                                 {isSubmitting && (
                                                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                                 )}
-                                                Assign to{' '}
-                                                {selectedUserIds.length} User
-                                                {selectedUserIds.length !== 1
+                                                Assign to {selectedUserIds.size}{' '}
+                                                User
+                                                {selectedUserIds.size !== 1
                                                     ? 's'
                                                     : ''}
                                             </Button>
