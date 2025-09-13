@@ -79,6 +79,22 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
         },
     });
 
+    const assignBadgeBulkMutation = trpc.badges.assignBadgeBulk.useMutation({
+        onSuccess: (assignments) => {
+            toast.success(
+                `Badge assigned to ${assignments.length} users successfully`,
+            );
+            refetchBadges();
+        },
+        onError: (error: unknown) => {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to assign badge to users';
+            toast.error(message);
+        },
+    });
+
     const unassignBadgeMutation = trpc.badges.unassignBadge.useMutation({
         onSuccess: () => {
             toast.success('Badge unassigned successfully');
@@ -114,6 +130,17 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
     }) => {
         if (!managingBadge) return;
         await assignBadgeMutation.mutateAsync({
+            badgeId: managingBadge.id,
+            ...data,
+        });
+    };
+
+    const handleAssignBadgeBulk = async (data: {
+        userIds: string[];
+        note?: string;
+    }) => {
+        if (!managingBadge) return;
+        await assignBadgeBulkMutation.mutateAsync({
             badgeId: managingBadge.id,
             ...data,
         });
@@ -213,9 +240,11 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
                     badge={managingBadge}
                     users={users}
                     onAssign={handleAssignBadge}
+                    onAssignBulk={handleAssignBadgeBulk}
                     onUnassign={handleUnassignBadge}
                     isSubmitting={
                         assignBadgeMutation.isPending ||
+                        assignBadgeBulkMutation.isPending ||
                         unassignBadgeMutation.isPending
                     }
                 />
