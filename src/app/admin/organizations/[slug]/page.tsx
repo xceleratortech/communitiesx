@@ -35,6 +35,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { InviteOrgEmailDialog } from '@/components/invite-org-email-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
@@ -53,6 +54,7 @@ export default function AdminOrganizationDetailPage() {
     const params = useParams();
     const router = useRouter();
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [isBulkInviteDialogOpen, setIsBulkInviteDialogOpen] = useState(false);
 
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
@@ -369,13 +371,23 @@ export default function AdminOrganizationDetailPage() {
                                         this organization.
                                     </CardDescription>
                                 </div>
-                                <InviteUserDialog
-                                    orgs={[
-                                        { id: orgData.id, name: orgData.name },
-                                    ]}
-                                >
-                                    <Button>Invite Member</Button>
-                                </InviteUserDialog>
+                                <div className="flex gap-2">
+                                    {/* <InviteUserDialog
+                                        orgs={[
+                                            { id: orgData.id, name: orgData.name },
+                                        ]}
+                                    >
+                                        <Button>Invite Member</Button>
+                                    </InviteUserDialog> */}
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            setIsBulkInviteDialogOpen(true)
+                                        }
+                                    >
+                                        Invite Member
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -505,6 +517,14 @@ export default function AdminOrganizationDetailPage() {
                     <BadgeManagement orgId={orgData.id} />
                 </TabsContent>
             </Tabs>
+
+            <InviteOrgEmailDialog
+                open={isBulkInviteDialogOpen}
+                onOpenChange={setIsBulkInviteDialogOpen}
+                orgId={orgData.id}
+                orgName={orgData.name}
+                isAdmin={true}
+            />
         </div>
     );
 }

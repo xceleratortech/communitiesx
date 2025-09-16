@@ -454,6 +454,138 @@ export const badgesRouter = router({
             }
         }),
 
+    // Assign badge to multiple users
+    assignBadgeBulk: authProcedure
+        .input(
+            z.object({
+                badgeId: z.number(),
+                userIds: z
+                    .array(z.string())
+                    .min(1, 'At least one user must be selected'),
+                note: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                const result = await db.transaction(async (tx) => {
+                    // Get the badge to check permissions
+                    const badge = await tx.query.userBadges.findFirst({
+                        where: eq(userBadges.id, input.badgeId),
+                    });
+
+                    if (!badge) {
+                        throw new TRPCError({
+                            code: 'NOT_FOUND',
+                            message: 'Badge not found',
+                        });
+                    }
+
+                    // Check user permissions (same logic as before)
+                    const currentUser = await tx.query.users.findFirst({
+                        where: eq(users.id, ctx.session.user.id),
+                        columns: { orgId: true, appRole: true },
+                    });
+
+                    const isSuperAdmin = currentUser?.appRole === 'admin';
+
+                    if (
+                        !isSuperAdmin &&
+                        (!currentUser || currentUser.orgId !== badge.orgId)
+                    ) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'You can only assign badges for your own organization',
+                        });
+                    }
+
+                    const hasPermission = await checkUserPermission(
+                        ctx.session.user.id,
+                        'org',
+                        'assign_badge',
+                    );
+
+                    if (!hasPermission && !isSuperAdmin) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'Insufficient permissions to assign badges',
+                        });
+                    }
+
+                    // Validate all target users within the transaction
+                    const targetUsers = await tx.query.users.findMany({
+                        where: inArray(users.id, input.userIds),
+                        columns: { id: true, orgId: true },
+                    });
+
+                    if (targetUsers.length !== input.userIds.length) {
+                        throw new TRPCError({
+                            code: 'NOT_FOUND',
+                            message: 'One or more users not found',
+                        });
+                    }
+
+                    const invalidUsers = targetUsers.filter(
+                        (user) => user.orgId !== badge.orgId,
+                    );
+                    if (invalidUsers.length > 0) {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message:
+                                'One or more users are not in the same organization as the badge',
+                        });
+                    }
+
+                    // Check for existing assignments within the transaction
+                    const existingAssignments =
+                        await tx.query.userBadgeAssignments.findMany({
+                            where: and(
+                                eq(userBadgeAssignments.badgeId, input.badgeId),
+                                inArray(
+                                    userBadgeAssignments.userId,
+                                    input.userIds,
+                                ),
+                            ),
+                        });
+
+                    if (existingAssignments.length > 0) {
+                        const existingUserIds = existingAssignments.map(
+                            (assignment) => assignment.userId,
+                        );
+                        throw new TRPCError({
+                            code: 'CONFLICT',
+                            message: `Badge is already assigned to users: ${existingUserIds.join(', ')}`,
+                        });
+                    }
+
+                    // Insert all assignments atomically
+                    const assignments = await tx
+                        .insert(userBadgeAssignments)
+                        .values(
+                            input.userIds.map((userId) => ({
+                                badgeId: input.badgeId,
+                                userId,
+                                assignedBy: ctx.session.user.id,
+                                note: input.note,
+                            })),
+                        )
+                        .returning();
+
+                    return assignments;
+                });
+
+                return result;
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error bulk assigning badge:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to assign badge to users',
+                });
+            }
+        }),
+
     // Unassign badge from user
     unassignBadge: authProcedure
         .input(
