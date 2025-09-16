@@ -1039,92 +1039,91 @@ export const organizationsRouter = router({
                     });
                 }
 
-                const results: Array<{
-                    email: string;
-                    success: boolean;
-                    error?: string;
-                }> = [];
+                const results = await Promise.all(
+                    input.emails.map(async (email) => {
+                        try {
+                            // Check if user already exists
+                            const existingUser = await db.query.users.findFirst(
+                                {
+                                    where: eq(users.email, email),
+                                },
+                            );
 
-                for (const email of input.emails) {
-                    try {
-                        // Check if user already exists
-                        const existingUser = await db.query.users.findFirst({
-                            where: eq(users.email, email),
-                        });
-
-                        if (existingUser) {
-                            if (existingUser.orgId === input.orgId) {
-                                results.push({
-                                    email,
-                                    success: false,
-                                    error: 'User already exists in this organization',
-                                });
-                                continue;
-                            } else if (existingUser.orgId) {
-                                results.push({
-                                    email,
-                                    success: false,
-                                    error: 'User already belongs to another organization',
-                                });
-                                continue;
+                            if (existingUser) {
+                                if (existingUser.orgId === input.orgId) {
+                                    return {
+                                        email,
+                                        success: false,
+                                        error: 'User already exists in this organization',
+                                    };
+                                } else if (existingUser.orgId) {
+                                    return {
+                                        email,
+                                        success: false,
+                                        error: 'User already belongs to another organization',
+                                    };
+                                }
                             }
+
+                            // Generate invite token
+                            const inviteToken = crypto
+                                .randomBytes(32)
+                                .toString('hex');
+                            const now = new Date();
+                            const expiresAt = new Date();
+                            expiresAt.setDate(expiresAt.getDate() + 7);
+
+                            // Store invite in verifications table
+                            await db.insert(verifications).values({
+                                id: nanoid(),
+                                identifier: email,
+                                value: JSON.stringify({
+                                    token: inviteToken,
+                                    orgId: input.orgId,
+                                    role: input.role,
+                                    appRole: 'user',
+                                }),
+                                expiresAt,
+                                createdAt: now,
+                                updatedAt: now,
+                            });
+
+                            // Send the invite email
+                            const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${email}`;
+
+                            // Determine the sender name to use
+                            const senderName = input.senderName || org.name;
+
+                            const invitationEmail = createInvitationEmail(
+                                senderName,
+                                inviteUrl,
+                                input.role,
+                                false, // Not a super admin invite
+                            );
+
+                            await sendEmail({
+                                to: email,
+                                subject: invitationEmail.subject,
+                                html: invitationEmail.html,
+                            });
+
+                            return {
+                                email,
+                                success: true,
+                            };
+                        } catch (emailError) {
+                            console.error(
+                                `Error inviting ${email}:`,
+                                emailError,
+                            );
+                            return {
+                                email,
+                                success: false,
+                                error: 'Failed to send invitation email',
+                            };
                         }
-
-                        // Generate invite token
-                        const inviteToken = crypto
-                            .randomBytes(32)
-                            .toString('hex');
-                        const now = new Date();
-                        const expiresAt = new Date();
-                        expiresAt.setDate(expiresAt.getDate() + 7);
-
-                        // Store invite in verifications table
-                        await db.insert(verifications).values({
-                            id: nanoid(),
-                            identifier: email,
-                            value: JSON.stringify({
-                                token: inviteToken,
-                                orgId: input.orgId,
-                                role: input.role,
-                                appRole: 'user',
-                            }),
-                            expiresAt,
-                            createdAt: now,
-                            updatedAt: now,
-                        });
-
-                        // Send the invite email
-                        const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${email}`;
-
-                        // Determine the sender name to use
-                        const senderName = input.senderName || org.name;
-
-                        const invitationEmail = createInvitationEmail(
-                            senderName,
-                            inviteUrl,
-                            input.role,
-                            false, // Not a super admin invite
-                        );
-
-                        await sendEmail({
-                            to: email,
-                            subject: invitationEmail.subject,
-                            html: invitationEmail.html,
-                        });
-
-                        results.push({
-                            email,
-                            success: true,
-                        });
-                    } catch (emailError) {
-                        console.error(`Error inviting ${email}:`, emailError);
-                        results.push({
-                            email,
-                            success: false,
-                            error: 'Failed to send invitation email',
-                        });
-                    }
-                }
+                    }),
+                );
 
                 const successCount = results.filter((r) => r.success).length;
                 const failureCount = results.filter((r) => !r.success).length;
