@@ -75,6 +75,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { InviteOrgEmailDialog } from '@/components/invite-org-email-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { BadgeManagement } from '@/components/badge-management';
 import {
@@ -201,6 +202,13 @@ export default function AdminDashboard() {
         name: '',
         slug: '',
     });
+
+    // State for bulk invite dialog
+    const [isBulkInviteDialogOpen, setIsBulkInviteDialogOpen] = useState(false);
+    const [isOrgSelectionDialogOpen, setIsOrgSelectionDialogOpen] =
+        useState(false);
+    const [selectedOrgForBulkInvite, setSelectedOrgForBulkInvite] =
+        useState<string>('');
 
     // For direct email verification
     const [verifyEmail, setVerifyEmail] = useState('');
@@ -509,9 +517,9 @@ export default function AdminDashboard() {
                 <TabsContent value="users">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
                                 <CardTitle>User Management</CardTitle>
-                                <div className="space-x-2">
+                                <div className="flex flex-col space-y-2 space-x-2 sm:flex-row sm:space-y-0 sm:space-x-2">
                                     <Dialog
                                         open={isCreateUserDialogOpen}
                                         onOpenChange={(open) => {
@@ -1351,6 +1359,14 @@ export default function AdminDashboard() {
                                             </Tabs>
                                         </DialogContent>
                                     </Dialog>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            setIsOrgSelectionDialogOpen(true)
+                                        }
+                                    >
+                                        Invite User
+                                    </Button>
                                 </div>
                             </div>
                             <CardDescription>
@@ -1837,14 +1853,9 @@ export default function AdminDashboard() {
                 <TabsContent value="organizations">
                     <Card>
                         <CardHeader>
-                            <div className="flex items-center justify-between">
+                            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-0">
                                 <CardTitle>Organization Management</CardTitle>
                                 <div className="flex gap-2">
-                                    <InviteUserDialog orgs={orgs ?? []}>
-                                        <Button variant="outline">
-                                            Invite User
-                                        </Button>
-                                    </InviteUserDialog>
                                     <Dialog
                                         open={isCreateOrgDialogOpen}
                                         onOpenChange={setIsCreateOrgDialogOpen}
@@ -2217,6 +2228,89 @@ export default function AdminDashboard() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Organization Selection Dialog */}
+            <Dialog
+                open={isOrgSelectionDialogOpen}
+                onOpenChange={(isOpen) => {
+                    setIsOrgSelectionDialogOpen(isOpen);
+                    if (!isOpen) {
+                        setSelectedOrgForBulkInvite('');
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Bulk Invite Users</DialogTitle>
+                        <DialogDescription>
+                            Select an organization and send bulk email
+                            invitations.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="bulk-invite-org">
+                                Organization
+                            </Label>
+                            <Select
+                                value={selectedOrgForBulkInvite}
+                                onValueChange={setSelectedOrgForBulkInvite}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select organization" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {orgs?.map((org) => (
+                                        <SelectItem key={org.id} value={org.id}>
+                                            {org.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsOrgSelectionDialogOpen(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={() => {
+                                if (selectedOrgForBulkInvite) {
+                                    setIsOrgSelectionDialogOpen(false);
+                                    setIsBulkInviteDialogOpen(true);
+                                }
+                            }}
+                            disabled={!selectedOrgForBulkInvite}
+                        >
+                            Continue
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Actual Bulk Invite Dialog */}
+            {selectedOrgForBulkInvite && (
+                <InviteOrgEmailDialog
+                    open={isBulkInviteDialogOpen}
+                    onOpenChange={(isOpen) => {
+                        setIsBulkInviteDialogOpen(isOpen);
+                        if (!isOpen) {
+                            setSelectedOrgForBulkInvite('');
+                        }
+                    }}
+                    orgId={selectedOrgForBulkInvite}
+                    orgName={
+                        orgs?.find((org) => org.id === selectedOrgForBulkInvite)
+                            ?.name || ''
+                    }
+                    isAdmin={true}
+                />
+            )}
         </div>
     );
 }

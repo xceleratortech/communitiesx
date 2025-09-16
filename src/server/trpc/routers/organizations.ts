@@ -38,14 +38,20 @@ import {
     notificationPreferences,
     postTags,
     tags,
+    verifications,
 } from '@/server/db/schema';
 import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
 import { SQL } from 'drizzle-orm';
 import { sendEmail } from '@/lib/email';
-import { createWelcomeEmail } from '@/lib/email-templates';
+import {
+    createWelcomeEmail,
+    createInvitationEmail,
+} from '@/lib/email-templates';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -978,6 +984,164 @@ export const organizationsRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create user',
+                });
+            }
+        }),
+
+    // Bulk invite users to organization
+    inviteUsersByEmail: authProcedure
+        .input(
+            z.object({
+                orgId: z.string(),
+                emails: z.array(z.string().email()),
+                role: z.enum(['admin', 'user']).default('user'),
+                senderName: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Get the current user's details
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, role: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Check if user is super admin or org admin of the target organization
+                const isSuperAdmin = currentUser.appRole === 'admin';
+                const isOrgAdmin =
+                    currentUser.role === 'admin' &&
+                    currentUser.orgId === input.orgId;
+
+                if (!isSuperAdmin && !isOrgAdmin) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to invite users to this organization',
+                    });
+                }
+
+                // Verify the organization exists
+                const org = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, input.orgId),
+                });
+
+                if (!org) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Organization not found',
+                    });
+                }
+
+                const results: Array<{
+                    email: string;
+                    success: boolean;
+                    error?: string;
+                }> = [];
+
+                for (const email of input.emails) {
+                    try {
+                        // Check if user already exists
+                        const existingUser = await db.query.users.findFirst({
+                            where: eq(users.email, email),
+                        });
+
+                        if (existingUser) {
+                            if (existingUser.orgId === input.orgId) {
+                                results.push({
+                                    email,
+                                    success: false,
+                                    error: 'User already exists in this organization',
+                                });
+                                continue;
+                            } else if (existingUser.orgId) {
+                                results.push({
+                                    email,
+                                    success: false,
+                                    error: 'User already belongs to another organization',
+                                });
+                                continue;
+                            }
+                        }
+
+                        // Generate invite token
+                        const inviteToken = crypto
+                            .randomBytes(32)
+                            .toString('hex');
+                        const now = new Date();
+                        const expiresAt = new Date();
+                        expiresAt.setDate(expiresAt.getDate() + 7);
+
+                        // Store invite in verifications table
+                        await db.insert(verifications).values({
+                            id: nanoid(),
+                            identifier: email,
+                            value: JSON.stringify({
+                                token: inviteToken,
+                                orgId: input.orgId,
+                                role: input.role,
+                                appRole: 'user',
+                            }),
+                            expiresAt,
+                            createdAt: now,
+                            updatedAt: now,
+                        });
+
+                        // Send the invite email
+                        const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${email}`;
+
+                        // Determine the sender name to use
+                        const senderName = input.senderName || org.name;
+
+                        const invitationEmail = createInvitationEmail(
+                            senderName,
+                            inviteUrl,
+                            input.role,
+                            false, // Not a super admin invite
+                        );
+
+                        await sendEmail({
+                            to: email,
+                            subject: invitationEmail.subject,
+                            html: invitationEmail.html,
+                        });
+
+                        results.push({
+                            email,
+                            success: true,
+                        });
+                    } catch (emailError) {
+                        console.error(`Error inviting ${email}:`, emailError);
+                        results.push({
+                            email,
+                            success: false,
+                            error: 'Failed to send invitation email',
+                        });
+                    }
+                }
+
+                const successCount = results.filter((r) => r.success).length;
+                const failureCount = results.filter((r) => !r.success).length;
+
+                return {
+                    success: true,
+                    message: `Successfully sent ${successCount} invitation(s). ${failureCount} failed.`,
+                    results,
+                    successCount,
+                    failureCount,
+                };
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error in bulk invite:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to send invitations',
                 });
             }
         }),
