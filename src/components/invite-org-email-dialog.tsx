@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { Mail, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { inferProcedureOutput } from '@trpc/server';
 import { AppRouter } from '@/server/trpc/routers';
+import { debounce } from 'lodash';
 
 interface InviteOrgEmailDialogProps {
     open: boolean;
@@ -72,6 +73,34 @@ export function InviteOrgEmailDialog({
             },
         });
 
+    const debouncedBulkEmailsChange = useCallback(
+        debounce((value: string) => {
+            // Your existing parsing and validation logic here...
+            // Parse and validate emails
+            const emails = value
+                .split(/[\s,;]+/)
+                .map((e) => e.trim())
+                .filter((e) => e);
+
+            const valid: string[] = [];
+            const invalid: string[] = [];
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            emails.forEach((email) => {
+                if (emailRegex.test(email)) {
+                    valid.push(email);
+                } else if (email) {
+                    invalid.push(email);
+                }
+            });
+
+            setParsedEmails(valid);
+            setInvalidEmails(invalid);
+        }, 300), // 300ms delay
+        [],
+    );
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -104,28 +133,7 @@ export function InviteOrgEmailDialog({
 
     const handleBulkEmailsChange = (value: string) => {
         setBulkEmails(value);
-
-        // Parse and validate emails
-        const emails = value
-            .split(/[\s,;]+/)
-            .map((e) => e.trim())
-            .filter((e) => e);
-
-        const valid: string[] = [];
-        const invalid: string[] = [];
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        emails.forEach((email) => {
-            if (emailRegex.test(email)) {
-                valid.push(email);
-            } else if (email) {
-                invalid.push(email);
-            }
-        });
-
-        setParsedEmails(valid);
-        setInvalidEmails(invalid);
+        debouncedBulkEmailsChange(value);
     };
 
     const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
