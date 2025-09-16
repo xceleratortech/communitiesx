@@ -63,9 +63,7 @@ export function InviteOrgEmailDialog({
     const inviteUserMutation =
         trpc.organizations.inviteUsersByEmail.useMutation({
             onSuccess: (data) => {
-                toast.success(
-                    `Invitation${form.email ? '' : 's'} sent successfully`,
-                );
+                toast.success(data.message);
                 handleReset();
                 onOpenChange(false);
             },

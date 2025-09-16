@@ -65,9 +65,7 @@ export function InviteEmailDialog({
     const inviteUserMutation = trpc.community.inviteUsersByEmail.useMutation({
         onSuccess: (data) => {
             toast.success(
-                data.success
-                    ? `Invited ${data.count} user${data.count === 1 ? '' : 's'} successfully`
-                    : 'Some invitations may have failed',
+                `Invitation${form.email ? '' : 's'} sent successfully`,
             );
             handleReset();
             onOpenChange(false);
