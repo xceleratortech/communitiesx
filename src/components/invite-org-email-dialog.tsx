@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, useCallback } from 'react';
-import debounce from 'lodash/debounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,31 +27,31 @@ import { trpc } from '@/providers/trpc-provider';
 import { Mail, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { inferProcedureOutput } from '@trpc/server';
 import { AppRouter } from '@/server/trpc/routers';
-import { validatePostCreationMinRole } from '@/lib/utils';
+import { debounce } from 'lodash';
 
-interface InviteEmailDialogProps {
+interface InviteOrgEmailDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    communityId: number;
-    communityName: string;
+    orgId: string;
+    orgName: string;
     isAdmin: boolean;
 }
 
-type InviteEmailOutput = inferProcedureOutput<
-    AppRouter['community']['inviteUsersByEmail']
+type InviteOrgEmailOutput = inferProcedureOutput<
+    AppRouter['organizations']['inviteUsersByEmail']
 >;
 
-export function InviteEmailDialog({
+export function InviteOrgEmailDialog({
     open,
     onOpenChange,
-    communityId,
-    communityName,
+    orgId,
+    orgName,
     isAdmin,
-}: InviteEmailDialogProps) {
+}: InviteOrgEmailDialogProps) {
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
     const [form, setForm] = useState({
         email: '',
-        role: validatePostCreationMinRole('member'),
+        role: 'user' as 'admin' | 'user',
         senderName: '',
     });
 
@@ -62,52 +61,21 @@ export function InviteEmailDialog({
     const [isPreviewMode, setIsPreviewMode] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const inviteUserMutation = trpc.community.inviteUsersByEmail.useMutation({
-        onSuccess: (data) => {
-            toast.success(
-                `Invitation${form.email ? '' : 's'} sent successfully`,
-            );
-            handleReset();
-            onOpenChange(false);
-        },
-        onError: (error) => {
-            toast.error(error.message || 'Failed to send invitations');
-        },
-    });
+    const inviteUserMutation =
+        trpc.organizations.inviteUsersByEmail.useMutation({
+            onSuccess: (data) => {
+                toast.success(data.message);
+                handleReset();
+                onOpenChange(false);
+            },
+            onError: (error) => {
+                toast.error(error.message || 'Failed to send invitations');
+            },
+        });
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (activeTab === 'single') {
-            if (!form.email) {
-                toast.error('Please enter an email address');
-                return;
-            }
-
-            inviteUserMutation.mutate({
-                communityId,
-                emails: [form.email],
-                role: form.role,
-                senderName: form.senderName.trim() || undefined,
-            });
-        } else {
-            if (parsedEmails.length === 0) {
-                toast.error('Please enter at least one valid email address');
-                return;
-            }
-
-            inviteUserMutation.mutate({
-                communityId,
-                emails: parsedEmails,
-                role: form.role,
-                senderName: form.senderName.trim() || undefined,
-            });
-        }
-    };
-
-    // Debounced email parsing and validation function
-    const debouncedEmailParsing = useCallback(
+    const debouncedBulkEmailsChange = useCallback(
         debounce((value: string) => {
+            // Your existing parsing and validation logic here...
             // Parse and validate emails
             const emails = value
                 .split(/[\s,;]+/)
@@ -133,9 +101,39 @@ export function InviteEmailDialog({
         [],
     );
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (activeTab === 'single') {
+            if (!form.email) {
+                toast.error('Please enter an email address');
+                return;
+            }
+
+            inviteUserMutation.mutate({
+                orgId,
+                emails: [form.email],
+                role: form.role,
+                senderName: form.senderName.trim() || undefined,
+            });
+        } else {
+            if (parsedEmails.length === 0) {
+                toast.error('Please enter at least one valid email address');
+                return;
+            }
+
+            inviteUserMutation.mutate({
+                orgId,
+                emails: parsedEmails,
+                role: form.role,
+                senderName: form.senderName.trim() || undefined,
+            });
+        }
+    };
+
     const handleBulkEmailsChange = (value: string) => {
-        setBulkEmails(value); // Update the textarea immediately for responsiveness
-        debouncedEmailParsing(value); // Debounce the expensive parsing logic
+        setBulkEmails(value);
+        debouncedBulkEmailsChange(value);
     };
 
     const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -158,7 +156,7 @@ export function InviteEmailDialog({
     const handleReset = () => {
         setForm({
             email: '',
-            role: 'member',
+            role: 'user',
             senderName: '',
         });
         setBulkEmails('');
@@ -182,7 +180,7 @@ export function InviteEmailDialog({
                 <DialogHeader>
                     <DialogTitle>Invite Members</DialogTitle>
                     <DialogDescription>
-                        Send email invitations to join {communityName}
+                        Send email invitations to join {orgName}
                     </DialogDescription>
                     <DialogClose className="absolute top-4 right-4" />
                 </DialogHeader>
@@ -237,10 +235,7 @@ export function InviteEmailDialog({
                                     onValueChange={(role) =>
                                         setForm({
                                             ...form,
-                                            role: role as
-                                                | 'member'
-                                                | 'moderator'
-                                                | 'admin',
+                                            role: role as 'admin' | 'user',
                                         })
                                     }
                                     disabled={!isAdmin}
@@ -252,14 +247,9 @@ export function InviteEmailDialog({
                                         <SelectValue placeholder="Select a role" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="member">
-                                            Member
+                                        <SelectItem value="user">
+                                            User
                                         </SelectItem>
-                                        {isAdmin && (
-                                            <SelectItem value="moderator">
-                                                Moderator
-                                            </SelectItem>
-                                        )}
                                         {isAdmin && (
                                             <SelectItem value="admin">
                                                 Admin
@@ -271,8 +261,7 @@ export function InviteEmailDialog({
 
                             {!isAdmin && (
                                 <p className="text-muted-foreground text-center text-xs">
-                                    Only admins can invite moderators and admin
-                                    users
+                                    Only admins can invite admin users
                                 </p>
                             )}
 
@@ -298,7 +287,7 @@ export function InviteEmailDialog({
                                 />
                             </div>
                             <p className="text-muted-foreground text-center text-xs">
-                                Leave empty to use default community name
+                                Leave empty to use default organization name
                             </p>
 
                             <div className="rounded-md border border-blue-100 bg-blue-50 p-3">
