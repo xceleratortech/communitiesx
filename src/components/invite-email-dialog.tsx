@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useCallback } from 'react';
+import debounce from 'lodash/debounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -63,9 +64,21 @@ export function InviteEmailDialog({
 
     const inviteUserMutation = trpc.community.inviteUsersByEmail.useMutation({
         onSuccess: (data) => {
-            toast.success(
-                `Invitation${form.email ? '' : 's'} sent successfully`,
-            );
+            const successCount = data.count;
+            const totalEmails = data.results.length;
+
+            if (successCount === totalEmails) {
+                toast.success(
+                    `${successCount} invitation${successCount !== 1 ? 's' : ''} sent successfully`,
+                );
+            } else if (successCount > 0) {
+                toast.success(
+                    `${successCount} of ${totalEmails} invitations sent successfully`,
+                );
+            } else {
+                toast.error('No invitations were sent');
+            }
+
             handleReset();
             onOpenChange(false);
         },
@@ -104,30 +117,37 @@ export function InviteEmailDialog({
         }
     };
 
+    // Debounced email parsing and validation function
+    const debouncedEmailParsing = useCallback(
+        debounce((value: string) => {
+            // Parse and validate emails
+            const emails = value
+                .split(/[\s,;]+/)
+                .map((e) => e.trim())
+                .filter((e) => e);
+
+            const valid: string[] = [];
+            const invalid: string[] = [];
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            emails.forEach((email) => {
+                if (emailRegex.test(email)) {
+                    valid.push(email);
+                } else if (email) {
+                    invalid.push(email);
+                }
+            });
+
+            setParsedEmails(valid);
+            setInvalidEmails(invalid);
+        }, 300), // 300ms delay
+        [],
+    );
+
     const handleBulkEmailsChange = (value: string) => {
-        setBulkEmails(value);
-
-        // Parse and validate emails
-        const emails = value
-            .split(/[\s,;]+/)
-            .map((e) => e.trim())
-            .filter((e) => e);
-
-        const valid: string[] = [];
-        const invalid: string[] = [];
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        emails.forEach((email) => {
-            if (emailRegex.test(email)) {
-                valid.push(email);
-            } else if (email) {
-                invalid.push(email);
-            }
-        });
-
-        setParsedEmails(valid);
-        setInvalidEmails(invalid);
+        setBulkEmails(value); // Update the textarea immediately for responsiveness
+        debouncedEmailParsing(value); // Debounce the expensive parsing logic
     };
 
     const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {

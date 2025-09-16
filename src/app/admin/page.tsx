@@ -271,6 +271,11 @@ export default function AdminDashboard() {
             enabled: !!session,
         });
 
+    const selectedOrg = React.useMemo(
+        () => orgs?.find((org) => org.id === selectedOrgForBulkInvite),
+        [orgs, selectedOrgForBulkInvite],
+    );
+
     const { data: organizations, isLoading: isLoadingInitial } =
         trpc.admin.getAllOrganizations.useQuery(undefined, {
             enabled: !searchTerm,
@@ -2294,7 +2299,7 @@ export default function AdminDashboard() {
             </Dialog>
 
             {/* Actual Bulk Invite Dialog */}
-            {selectedOrgForBulkInvite && (
+            {selectedOrg && (
                 <InviteOrgEmailDialog
                     open={isBulkInviteDialogOpen}
                     onOpenChange={(isOpen) => {
@@ -2303,11 +2308,8 @@ export default function AdminDashboard() {
                             setSelectedOrgForBulkInvite('');
                         }
                     }}
-                    orgId={selectedOrgForBulkInvite}
-                    orgName={
-                        orgs?.find((org) => org.id === selectedOrgForBulkInvite)
-                            ?.name || ''
-                    }
+                    orgId={selectedOrg.id}
+                    orgName={selectedOrg.name}
                     isAdmin={true}
                 />
             )}
