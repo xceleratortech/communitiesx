@@ -41,7 +41,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { InviteOrgEmailDialog } from '@/components/invite-org-email-dialog';
 import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
@@ -100,6 +100,9 @@ export default function OrganizationCommunitiesPage() {
         role: 'user' as 'admin' | 'user',
     });
     const [isCreatingUser, setIsCreatingUser] = useState(false);
+
+    // State for bulk invite dialog
+    const [isBulkInviteDialogOpen, setIsBulkInviteDialogOpen] = useState(false);
 
     // CSV validation rules for organization members
     const csvValidationRules: CsvValidationRule[] = [
@@ -519,11 +522,21 @@ export default function OrganizationCommunitiesPage() {
                             </div>
                             <div className="flex flex-col gap-2">
                                 {canInviteMembers && (
-                                    <InviteUserDialog orgs={[orgData]}>
-                                        <Button variant="default">
+                                    <div className="flex gap-2">
+                                        {/* <InviteUserDialog orgs={[orgData]}>
+                                            <Button variant="default">
+                                                Invite Member
+                                            </Button>
+                                        </InviteUserDialog> */}
+                                        <Button
+                                            variant="outline"
+                                            onClick={() =>
+                                                setIsBulkInviteDialogOpen(true)
+                                            }
+                                        >
                                             Invite Member
                                         </Button>
-                                    </InviteUserDialog>
+                                    </div>
                                 )}
                                 {canCreateUsers && (
                                     <Dialog
@@ -965,6 +978,7 @@ export default function OrganizationCommunitiesPage() {
                                                                                                 {
                                                                                                     user.email
                                                                                                 }
+
                                                                                                 )
                                                                                             </span>
                                                                                             <span className="rounded bg-green-100 px-2 py-1 text-xs text-green-800">
@@ -1047,6 +1061,7 @@ export default function OrganizationCommunitiesPage() {
                                                                                                         .row
                                                                                                         .email
                                                                                                 }
+
                                                                                                 )
                                                                                             </span>
                                                                                             <span className="rounded bg-red-100 px-2 py-1 text-xs text-red-800">
@@ -1595,6 +1610,14 @@ export default function OrganizationCommunitiesPage() {
                     )}
                 </div>
             </Tabs>
+
+            <InviteOrgEmailDialog
+                open={isBulkInviteDialogOpen}
+                onOpenChange={setIsBulkInviteDialogOpen}
+                orgId={orgData.id}
+                orgName={orgData.name}
+                isAdmin={canManageMembers}
+            />
         </div>
     );
 }
