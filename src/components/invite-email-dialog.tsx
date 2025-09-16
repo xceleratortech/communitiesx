@@ -64,21 +64,11 @@ export function InviteEmailDialog({
 
     const inviteUserMutation = trpc.community.inviteUsersByEmail.useMutation({
         onSuccess: (data) => {
-            const successCount = data.count;
-            const totalEmails = data.results.length;
-
-            if (successCount === totalEmails) {
-                toast.success(
-                    `${successCount} invitation${successCount !== 1 ? 's' : ''} sent successfully`,
-                );
-            } else if (successCount > 0) {
-                toast.success(
-                    `${successCount} of ${totalEmails} invitations sent successfully`,
-                );
-            } else {
-                toast.error('No invitations were sent');
-            }
-
+            toast.success(
+                data.success
+                    ? `Invited ${data.count} user${data.count === 1 ? '' : 's'} successfully`
+                    : 'Some invitations may have failed',
+            );
             handleReset();
             onOpenChange(false);
         },
