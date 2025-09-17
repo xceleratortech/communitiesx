@@ -1,11 +1,76 @@
 export function createVerificationEmail(url: string) {
     return {
-        subject: 'Verify your email address',
+        subject: 'Verify Your Email Address: CommunityX Platform',
         html: `
-      <h1>Verify your email address</h1>
-      <p>Click the link below to verify your email address:</p>
-      <a href="${url}">${url}</a>
-    `,
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Email Verification</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Header Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Verify your new email address</h1>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Content Section -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <h1 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Hello,</h1>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            We have received a request to update the email address associated with your Xcelerator CommunityX Platform account.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            To complete this update, please verify your new email address by clicking the link below:
+                                        </p>
+                                        
+                                        <div style="text-align: left; margin: 30px 0;">
+                                            <a href="${url}" 
+                                               style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                                Verify Email Address
+                                            </a>
+                                        </div>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            If you did not request this change, please disregard this message. Your account will remain unchanged and secure.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            For any assistance, contact us at <a href="mailto:support@xcelerator.co.in" style="color: #625A96;">support@xcelerator.co.in</a>.
+                                        </p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Sincerely,<br>Xcelerator Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `,
     };
 }
 
@@ -13,18 +78,66 @@ export function createResetPasswordEmail(url: string) {
     return {
         subject: 'Reset your password',
         html: `
-            <div class="header">
-                <!-- Real Xcelerator logo image -->
-                <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
-                alt="Xcelerator Logo" 
-                class="logo" 
-                style="max-width: 200px; height: auto; margin-bottom: 20px; display: block;  border: 0; outline: none; text-decoration: none;"
-                width="200"
-                height="auto">
-            </div>
-        <h2>Reset your password for  <span style="color:rgb(27, 51, 105);">CommunityX</span></h2>
-        <p>Click the link below to reset your password:</p>
-        <a href="${url}">${url}</a>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Reset Password</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Header Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Reset your password</h1>
+                                        <p style="margin: 15px 0 0; font-size: 20px;">Click the link below to reset your password:</p>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Content Section -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <p style="margin-bottom: 25px;">Click the link below to reset your password:</p>
+                                        <div style="text-align: left; margin: 30px 0;">
+                                            <a href="${url}" 
+                                               style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                                Reset Password
+                                            </a>
+                                        </div>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            If you did not request this change, please disregard this message. Your account will remain unchanged and secure.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            For any assistance, contact us at <a href="mailto:support@xcelerator.co.in" style="color: #625A96;">support@xcelerator.co.in</a>.
+                                        </p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Sincerely,<br>Xcelerator Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
         `,
     };
 }
@@ -42,13 +155,83 @@ export function createChangeEmailVerification(url: string) {
 
 export function createDeleteAccountEmail(url: string) {
     return {
-        subject: 'Confirm account deletion',
+        subject: 'Confirm Account Deletion: CommunityX Platform',
         html: `
-      <h1>Confirm account deletion</h1>
-      <p>Click the link below to confirm your account deletion:</p>
-      <a href="${url}">${url}</a>
-      <p>This action cannot be undone.</p>
-    `,
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Account Deletion Confirmation</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Header Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Confirm account deletion</h1>
+                                    </td>
+                                </tr>
+                                
+                                <!-- Content Section -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <h1 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Hello,</h1>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            We have received a request to delete your account on the Xcelerator CommunityX Platform account.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            If you wish to proceed, please confirm by clicking the link below:
+                                        </p>
+                                        
+                                        <div style="text-align: left; margin: 30px 0;">
+                                            <a href="${url}" 
+                                               style="display: inline-block; padding: 15px 30px; background-color: #dc2626; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                                Confirm Account Deletion
+                                            </a>
+                                        </div>
+                                        
+                                        <div style="background-color: #fef2f2; border: 1px solid #fca5a5; border-radius: 6px; padding: 15px; margin: 20px 0;">
+                                            <p style="color: #dc2626; margin: 0; font-size: 14px; font-weight: bold;">
+                                                Important: This action is permanent and cannot be undone. All associated data will be deleted.
+                                            </p>
+                                        </div>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            If you did not request this change, please ignore this email. Your account will remain active and secure.
+                                        </p>
+                                        
+                                        <p style="margin-bottom: 20px;">
+                                            For assistance, contact us at <a href="mailto:support@xcelerator.co.in" style="color: #625A96;">support@xcelerator.co.in</a>.
+                                        </p>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Sincerely,<br>Xcelerator Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+        `,
     };
 }
 
@@ -79,12 +262,14 @@ export function createOTPEmail(
                 width="200"
                 height="auto">
                 </div>
-                    <h1 style="color:rgb(28, 40, 66); margin: 0;">CommunityX</h1>
-                    <p style="color: #6b7280; margin: 10px 0 0 0;">Your ${typeLabel} Code</p>
-                </div>
-                
+
+                <tr>
+                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                        <h1 align="center" style="margin: 0; font-size: 30px; font-weight: bold;">Your ${typeLabel} Code</h1>
+                    </td>
+                </tr>
                 <div style="background-color: #f8fafc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 30px;">
-                    <h2 style="color:rgb(37, 54, 79); margin: 0 0 20px 0;">${typeLabel} Code</h2>
+                    <h2 style="color:rgb(37, 54, 79); margin: 0 0 20px 0;"> OTP to ${typeLabel}</h2>
                     <div style="background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 6px; padding: 20px; display: inline-block; margin: 0 auto;">
                         <span style="font-size: 32px; font-weight: bold; color: #2563eb; letter-spacing: 8px; font-family: 'Courier New', monospace;">${otp}</span>
                     </div>
