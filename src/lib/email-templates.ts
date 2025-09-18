@@ -28,7 +28,7 @@ export function createVerificationEmail(url: string) {
                                 <!-- Header Section -->
                                 <tr>
                                     <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
-                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Verify your new email address</h1>
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Verify your email address</h1>
                                     </td>
                                 </tr>
                                 
@@ -42,7 +42,7 @@ export function createVerificationEmail(url: string) {
                                         </p>
                                         
                                         <p style="margin-bottom: 20px;">
-                                            To complete this update, please verify your new email address by clicking the link below:
+                                            To complete this, please verify your email address by clicking the link below:
                                         </p>
                                         
                                         <div style="text-align: left; margin: 30px 0;">
@@ -251,44 +251,70 @@ export function createOTPEmail(
     return {
         subject: `Your ${typeLabel} Code - CommunityX`,
         html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <div style="text-align: center; margin-bottom: 30px;">
-                <div class="header">
-                <!-- Real Xcelerator logo image -->
-                <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
-                alt="Xcelerator Logo" 
-                class="logo" 
-                style="max-width: 200px; height: auto; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto; border: 0; outline: none; text-decoration: none;"
-                width="200"
-                height="auto">
-                </div>
-
-                <tr>
-                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
-                        <h1 align="center" style="margin: 0; font-size: 30px; font-weight: bold;">Your ${typeLabel} Code</h1>
-                    </td>
-                </tr>
-                <div style="background-color: #f8fafc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 30px;">
-                    <h2 style="color:rgb(37, 54, 79); margin: 0 0 20px 0;"> OTP to ${typeLabel}</h2>
-                    <div style="background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 6px; padding: 20px; display: inline-block; margin: 0 auto;">
-                        <span style="font-size: 32px; font-weight: bold; color: #2563eb; letter-spacing: 8px; font-family: 'Courier New', monospace;">${otp}</span>
-                    </div>
-                    <p style="color: #6b7280; margin: 20px 0 0 0; font-size: 14px;">
-                        This code will expire in 5 minutes
-                    </p>
-                </div>
-                
-                <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
-                    <p style="color: #92400e; margin: 0; font-size: 14px;">
-                        <strong>Security Notice:</strong> Never share this code with anyone. CommunityX will never ask for your verification code.
-                    </p>
-                </div>
-                
-                <div style="text-align: center; color: #6b7280; font-size: 12px;">
-                    <p>If you didn't request this code, please ignore this email.</p>
-                    <p>This email was sent to ${email}</p>
-                </div>
-            </div>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>OTP Verification</title>
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+                <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                    <tr>
+                        <td align="center" style="padding: 30px 15px;">
+                            <!-- Main Container -->
+                            <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                                
+                                <!-- Header with Xcelerator Logo -->
+                                <tr>
+                                    <td style="padding: 20px; text-align: center;">
+                                        <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                             alt="Xcelerator Logo" 
+                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Header Section -->
+                                <tr>
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: center; padding: 40px;">
+                                        <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Your ${typeLabel} Code</h1>
+                                    </td>
+                                </tr>
+                                
+                                <!-- OTP Section -->
+                                <tr>
+                                    <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                        <div style="background-color: #f8fafc; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 30px;">
+                                            <h2 style="color: #25364f; margin: 0 0 20px 0; font-size: 20px;">OTP to ${typeLabel}</h2>
+                                            <div style="background-color: #ffffff; border: 2px solid #e5e7eb; border-radius: 6px; padding: 20px; display: inline-block; margin: 0 auto;">
+                                                <span style="font-size: 32px; font-weight: bold; color: #2563eb; letter-spacing: 8px; font-family: 'Courier New', monospace;">${otp}</span>
+                                            </div>
+                                            <p style="color: #6b7280; margin: 20px 0 0 0; font-size: 14px;">
+                                                This code will expire in 5 minutes
+                                            </p>
+                                        </div>
+                                        
+                                        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 15px; margin-bottom: 20px;">
+                                            <p style="color: #92400e; margin: 0; font-size: 14px;">
+                                                <strong>Security Notice:</strong> Never share this code with anyone. CommunityX will never ask for your verification code.
+                                            </p>
+                                        </div>
+                                        
+                                        <div style="text-align: center; color: #6b7280; font-size: 12px;">
+                                            <p style="margin: 5px 0;">If you didn't request this code, please ignore this email.</p>
+                                            <p style="margin: 5px 0;">This email was sent to ${email}</p>
+                                        </div>
+                                        
+                                        <p style="font-weight: bold; margin-top: 30px;">Sincerely,<br>Xcelerator Team</p>
+                                    </td>
+                                </tr>
+                                
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
         `,
     };
 }
