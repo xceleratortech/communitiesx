@@ -918,6 +918,564 @@ export const communityRouter = router({
             }
         }),
 
+    // Get posts from communities where the user is an active MEMBER only
+    getMemberCommunityPosts: authProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(10),
+                offset: z.number().default(0),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+                dateFilter: z
+                    .object({
+                        type: z
+                            .enum(['all', 'today', 'week', 'month', 'custom'])
+                            .default('all'),
+                        startDate: z.date().optional(),
+                        endDate: z.date().optional(),
+                    })
+                    .optional()
+                    .default({ type: 'all' }),
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            try {
+                const { limit, offset, sort, dateFilter } = input;
+                const userId = ctx.session.user.id;
+
+                // Helper function to create date filter conditions
+                const createDateFilter = () => {
+                    if (dateFilter.type === 'all') {
+                        return undefined;
+                    }
+
+                    const now = new Date();
+                    let startDate: Date;
+                    let endDate: Date = now;
+
+                    switch (dateFilter.type) {
+                        case 'today':
+                            startDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                            );
+                            endDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                                23,
+                                59,
+                                59,
+                                999,
+                            );
+                            break;
+                        case 'week':
+                            startDate = new Date(
+                                now.getTime() - 7 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'month':
+                            startDate = new Date(
+                                now.getTime() - 30 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'custom':
+                            if (dateFilter.startDate && dateFilter.endDate) {
+                                startDate = dateFilter.startDate;
+                                endDate = dateFilter.endDate;
+                            } else {
+                                return undefined;
+                            }
+                            break;
+                        default:
+                            return undefined;
+                    }
+
+                    return and(
+                        gte(posts.createdAt, startDate),
+                        lte(posts.createdAt, endDate),
+                    );
+                };
+
+                const dateFilterCondition = createDateFilter();
+
+                // Get active memberships where the user is a MEMBER
+                const userMemberships =
+                    await db.query.communityMembers.findMany({
+                        where: and(
+                            eq(communityMembers.userId, userId),
+                            eq(communityMembers.status, 'active'),
+                            eq(communityMembers.membershipType, 'member'),
+                        ),
+                    });
+
+                const memberCommunityIds = userMemberships.map(
+                    (membership) => membership.communityId,
+                );
+
+                // If user is not a member of any communities, return empty list
+                if (memberCommunityIds.length === 0) {
+                    return {
+                        posts: [],
+                        nextOffset: null,
+                        hasNextPage: false,
+                        totalCount: 0,
+                    };
+                }
+
+                // Base conditions
+                const baseWhereConditions = [
+                    eq(posts.isDeleted, false),
+                    inArray(posts.communityId, memberCommunityIds),
+                ];
+
+                if (dateFilterCondition) {
+                    baseWhereConditions.push(dateFilterCondition);
+                }
+
+                const combinedWhere = and(...baseWhereConditions);
+
+                // Order by clause
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
+                // Execute queries
+                const [totalCountResult, paginatedDbPosts] = await Promise.all([
+                    db
+                        .select({ count: sql<number>`count(*)` })
+                        .from(posts)
+                        .where(combinedWhere),
+                    db.query.posts.findMany({
+                        where: combinedWhere,
+                        orderBy: [orderByClause],
+                        limit,
+                        offset,
+                        with: {
+                            author: {
+                                with: { organization: true },
+                            },
+                            community: true,
+                            comments: true,
+                            postTags: { with: { tag: true } },
+                        },
+                    }),
+                ]);
+
+                const totalCount = totalCountResult[0]?.count || 0;
+
+                const postsWithSource = paginatedDbPosts.map((post) => ({
+                    ...post,
+                    tags: post.postTags.map((pt) => pt.tag),
+                    source: {
+                        type: 'community' as const,
+                        communityId: post.communityId ?? undefined,
+                        reason: `Because you are a member of ${post.community?.name}`,
+                    },
+                }));
+
+                const hasNextPage = offset + limit < totalCount;
+                const nextOffset = hasNextPage ? offset + limit : null;
+
+                return {
+                    posts: postsWithSource,
+                    nextOffset,
+                    hasNextPage,
+                    totalCount,
+                };
+            } catch (error) {
+                console.error('Error fetching member community posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch posts',
+                });
+            }
+        }),
+
+    // Get posts for "For me" tab - includes public community posts even if not joined/followed
+    getForMePosts: authProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(10),
+                offset: z.number().default(0),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+                dateFilter: z
+                    .object({
+                        type: z
+                            .enum(['all', 'today', 'week', 'month', 'custom'])
+                            .default('all'),
+                        startDate: z.date().optional(),
+                        endDate: z.date().optional(),
+                    })
+                    .optional()
+                    .default({ type: 'all' }),
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            try {
+                const { limit, offset, sort, dateFilter } = input;
+                const userId = ctx.session.user.id;
+
+                // Helper function to create date filter conditions
+                const createDateFilter = () => {
+                    if (dateFilter.type === 'all') {
+                        return undefined;
+                    }
+
+                    const now = new Date();
+                    let startDate: Date;
+                    let endDate: Date = now;
+
+                    switch (dateFilter.type) {
+                        case 'today':
+                            startDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                            );
+                            endDate = new Date(
+                                now.getFullYear(),
+                                now.getMonth(),
+                                now.getDate(),
+                                23,
+                                59,
+                                59,
+                                999,
+                            );
+                            break;
+                        case 'week':
+                            startDate = new Date(
+                                now.getTime() - 7 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'month':
+                            startDate = new Date(
+                                now.getTime() - 30 * 24 * 60 * 60 * 1000,
+                            );
+                            break;
+                        case 'custom':
+                            if (dateFilter.startDate && dateFilter.endDate) {
+                                startDate = dateFilter.startDate;
+                                endDate = dateFilter.endDate;
+                            } else {
+                                return undefined;
+                            }
+                            break;
+                        default:
+                            return undefined;
+                    }
+
+                    return and(
+                        gte(posts.createdAt, startDate),
+                        lte(posts.createdAt, endDate),
+                    );
+                };
+
+                const dateFilterCondition = createDateFilter();
+
+                // Check if user is SuperAdmin
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, userId),
+                    columns: {
+                        role: true,
+                        orgId: true,
+                    },
+                });
+
+                // If SuperAdmin, get posts from ALL communities and organizations
+                if (isSuperAdmin(ctx.session)) {
+                    const whereClause = dateFilterCondition
+                        ? and(eq(posts.isDeleted, false), dateFilterCondition)
+                        : eq(posts.isDeleted, false);
+
+                    // For comment count sorting, we need to fetch posts with comment counts
+                    let orderByClause;
+                    if (sort === 'most-commented') {
+                        orderByClause = sql`(
+                            SELECT COUNT(*) FROM comments c 
+                            WHERE c.post_id = posts.id AND c.is_deleted = false
+                        ) DESC`;
+                    } else {
+                        orderByClause =
+                            sort === 'latest'
+                                ? desc(posts.createdAt)
+                                : asc(posts.createdAt);
+                    }
+
+                    // Fetch total count and paginated posts in parallel for efficiency
+                    const [totalCountResult, paginatedDbPosts] =
+                        await Promise.all([
+                            db
+                                .select({ count: sql<number>`count(*)` })
+                                .from(posts)
+                                .where(whereClause),
+                            db.query.posts.findMany({
+                                where: whereClause,
+                                orderBy: [orderByClause],
+                                limit,
+                                offset,
+                                with: {
+                                    author: {
+                                        with: {
+                                            organization: true,
+                                        },
+                                    },
+                                    community: true,
+                                    comments: true,
+                                    postTags: {
+                                        with: {
+                                            tag: true,
+                                        },
+                                    },
+                                },
+                            }),
+                        ]);
+
+                    const totalCount = totalCountResult[0]?.count || 0;
+
+                    // Add source information to the paginated posts
+                    const postsWithSource = paginatedDbPosts.map((post) => ({
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag),
+                        source: {
+                            type: post.communityId ? 'community' : 'org',
+                            orgId: post.orgId,
+                            communityId: post.communityId
+                                ? post.communityId
+                                : undefined,
+                            reason: post.communityId
+                                ? `SuperAdmin access to ${post.community?.name || 'community'}`
+                                : `SuperAdmin access to organization`,
+                        },
+                    }));
+
+                    const hasNextPage = offset + limit < totalCount;
+                    const nextOffset = hasNextPage ? offset + limit : null;
+
+                    return {
+                        posts: postsWithSource,
+                        nextOffset,
+                        hasNextPage,
+                        totalCount,
+                    };
+                }
+
+                // Get user's org ID
+                const orgId = user?.orgId;
+
+                if (!orgId) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User does not have an organization.',
+                    });
+                }
+
+                // Get all communities where the user is a member or follower
+                const userMemberships =
+                    await db.query.communityMembers.findMany({
+                        where: and(
+                            eq(communityMembers.userId, userId),
+                            eq(communityMembers.status, 'active'),
+                        ),
+                        with: {
+                            community: true,
+                        },
+                    });
+
+                // --- ORG ADMIN OVERRIDE ---
+                // If user is org admin, also get communities from their org
+                let additionalCommunityIds: number[] = [];
+                if (user?.orgId) {
+                    if (user.role === 'admin') {
+                        additionalCommunityIds = await getCommunityIdsForOrg(
+                            user.orgId,
+                        );
+                    }
+                }
+
+                // Get ALL public communities (for "For me" tab)
+                const publicCommunities = await db.query.communities.findMany({
+                    where: eq(communities.type, 'public'),
+                    columns: {
+                        id: true,
+                    },
+                });
+
+                const publicCommunityIds = publicCommunities.map((c) => c.id);
+
+                // Create a map of community ID to membership type for quick lookup
+                const communityMembershipMap = new Map();
+                userMemberships.forEach((membership) => {
+                    communityMembershipMap.set(
+                        membership.communityId,
+                        membership.membershipType,
+                    );
+                });
+
+                // Extract community IDs from memberships
+                const membershipCommunityIds = userMemberships.map(
+                    (membership) => membership.communityId,
+                );
+
+                // Combine membership communities with org admin communities and public communities
+                const allCommunityIds = [
+                    ...new Set([
+                        ...membershipCommunityIds,
+                        ...additionalCommunityIds,
+                        ...publicCommunityIds, // Include all public communities
+                    ]),
+                ];
+
+                // Build a single WHERE clause that covers both org posts and community posts
+                const baseWhereConditions = [eq(posts.isDeleted, false)];
+
+                if (dateFilterCondition) {
+                    baseWhereConditions.push(dateFilterCondition);
+                }
+
+                // Create OR condition for org posts OR community posts
+                const orgCondition = and(
+                    eq(posts.orgId, orgId),
+                    isNull(posts.communityId),
+                );
+
+                const communityCondition =
+                    allCommunityIds.length > 0
+                        ? inArray(posts.communityId, allCommunityIds)
+                        : sql`false`; // If no communities, this condition will never match
+
+                const combinedWhere = and(
+                    ...baseWhereConditions,
+                    or(orgCondition, communityCondition),
+                );
+
+                // Build ORDER BY clause
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
+                // Get organization name for source information
+                const organization = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, orgId),
+                });
+                const orgName = organization?.name || 'your organization';
+
+                // Execute single query with proper pagination and sorting
+                const [totalCountResult, paginatedDbPosts] = await Promise.all([
+                    // Get total count
+                    db
+                        .select({ count: sql<number>`count(*)` })
+                        .from(posts)
+                        .where(combinedWhere),
+                    // Get paginated posts with all relations
+                    db.query.posts.findMany({
+                        where: combinedWhere,
+                        orderBy: [orderByClause],
+                        limit,
+                        offset,
+                        with: {
+                            author: {
+                                with: {
+                                    organization: true,
+                                },
+                            },
+                            community: true,
+                            comments: true,
+                            postTags: {
+                                with: {
+                                    tag: true,
+                                },
+                            },
+                        },
+                    }),
+                ]);
+
+                const totalCount = totalCountResult[0]?.count || 0;
+
+                // Add source information to posts
+                const postsWithSource = paginatedDbPosts.map((post) => {
+                    const isOrgPost = post.orgId === orgId && !post.communityId;
+                    const membershipType = post.communityId
+                        ? communityMembershipMap.get(post.communityId)
+                        : null;
+
+                    // Check if this is a public community post where user is not a member
+                    const isPublicCommunityPost =
+                        post.communityId &&
+                        publicCommunityIds.includes(post.communityId) &&
+                        !membershipType;
+
+                    return {
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag), // Transform postTags to tags
+                        source: isOrgPost
+                            ? {
+                                  type: 'org' as const,
+                                  orgId,
+                                  reason: `Because you are part of ${orgName}`,
+                              }
+                            : isPublicCommunityPost
+                              ? {
+                                    type: 'community' as const,
+                                    communityId: post.communityId
+                                        ? post.communityId
+                                        : undefined,
+                                    reason: `Public community: ${post.community?.name}`,
+                                }
+                              : {
+                                    type: 'community' as const,
+                                    communityId: post.communityId
+                                        ? post.communityId
+                                        : undefined,
+                                    reason:
+                                        membershipType === 'member'
+                                            ? `Because you are a member of ${post.community?.name}`
+                                            : `Because you are following ${post.community?.name}`,
+                                },
+                    } as PostWithSource;
+                });
+
+                // Check if there are more results
+                const hasNextPage = offset + limit < totalCount;
+                const nextOffset = hasNextPage ? offset + limit : null;
+
+                return {
+                    posts: postsWithSource,
+                    nextOffset,
+                    hasNextPage,
+                    totalCount,
+                };
+            } catch (error) {
+                console.error('Error fetching for me posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch posts',
+                });
+            }
+        }),
+
     // Get a single post with its comments
     getPost: authProcedure
         .input(

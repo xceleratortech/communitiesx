@@ -739,6 +739,7 @@ export default function CommunityDetailPage() {
         !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
     const isAdmin = !!userMembership && userMembership.role === 'admin';
+    const canInteract = isMember || isOrgAdminForCommunityCheck || isSuperAdmin;
 
     return (
         <div className="container mx-auto py-6">
@@ -783,6 +784,7 @@ export default function CommunityDetailPage() {
                     community={community}
                     isLoading={isLoading}
                     isMember={isMember}
+                    canInteract={canInteract}
                     canCreatePost={canCreatePost}
                     filteredPosts={filteredPosts}
                     showMyPosts={showMyPosts}

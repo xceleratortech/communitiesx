@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils';
 import NextTopLoader from 'nextjs-toploader';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
-import { Navbar } from '@/components/navbar';
+import { LeftSidebar } from '@/components/left-sidebar';
+import { Topbar } from '@/components/topbar';
 import { Toaster } from '@/components/ui/sonner';
 import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import { PWAInstaller } from '@/components/pwa-installer';
@@ -86,14 +87,21 @@ export default function RootLayout({
                 >
                     <TRPCProvider>
                         {/* <ChatProvider> */}
-                        <Navbar />
-                        <ProfileCompletionGuard>
-                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                                <NextTopLoader />
-                                <main>{children}</main>
-                                <Toaster />
+                        <div className="flex h-screen">
+                            <div className="hidden md:block">
+                                <LeftSidebar />
                             </div>
-                        </ProfileCompletionGuard>
+                            <div className="flex-1 overflow-auto">
+                                <ProfileCompletionGuard>
+                                    <Topbar />
+                                    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                        <NextTopLoader />
+                                        <main>{children}</main>
+                                        <Toaster />
+                                    </div>
+                                </ProfileCompletionGuard>
+                            </div>
+                        </div>
                         {/* <ChatContainer />
                         </ChatProvider> */}
                     </TRPCProvider>

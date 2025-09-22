@@ -34,6 +34,9 @@ import { Input } from '@/components/ui/input';
 import { SafeHtml } from '@/lib/sanitize';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { DateFilterState } from '@/components/date-filter';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import { Search } from 'lucide-react';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -177,6 +180,11 @@ export default function PostsPage() {
     // Sort state
     const [sortOption, setSortOption] = useState<SortOption>('latest');
 
+    // Tab state
+    const [activeTab, setActiveTab] = useState<'for-me' | 'from-communities'>(
+        'for-me',
+    );
+
     // Fixed search state - separate input value from search term
     const [searchInputValue, setSearchInputValue] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
@@ -226,13 +234,41 @@ export default function PostsPage() {
         );
     };
 
-    // Use the new getAllRelevantPosts query that includes both org and community posts
-    const postsQuery = trpc.community.getAllRelevantPosts.useQuery({
+    const canInteractWithPost = (post: PostDisplay) => {
+        if (!session) return false;
+
+        // For org posts, user can always interact
+        if (!post.communityId) return true;
+
+        // For community posts, check if user is a member or follower
+        // If it's a public community post where user is not a member, they can't interact
+        if (post.source?.reason?.includes('Public community:')) {
+            return false;
+        }
+
+        // For other community posts, user can interact
+        return true;
+    };
+
+    // Use different queries based on active tab
+    const forMePostsQuery = trpc.community.getForMePosts.useQuery({
         limit: 10,
         offset: 0,
         sort: sortOption,
         dateFilter: activeFilters.dateFilter,
     });
+
+    const fromCommunitiesPostsQuery =
+        trpc.community.getMemberCommunityPosts.useQuery({
+            limit: 10,
+            offset: 0,
+            sort: sortOption,
+            dateFilter: activeFilters.dateFilter,
+        });
+
+    // Use the appropriate query based on active tab
+    const postsQuery =
+        activeTab === 'for-me' ? forMePostsQuery : fromCommunitiesPostsQuery;
 
     // Function to fetch more posts
     const fetchNextPage = useCallback(async () => {
@@ -240,7 +276,11 @@ export default function PostsPage() {
 
         setIsFetchingNextPage(true);
         try {
-            const data = await utils.community.getAllRelevantPosts.fetch({
+            const queryToUse =
+                activeTab === 'for-me'
+                    ? 'getForMePosts'
+                    : 'getMemberCommunityPosts';
+            const data = await utils.community[queryToUse].fetch({
                 limit: 10,
                 offset: offset,
                 sort: sortOption,
@@ -283,6 +323,8 @@ export default function PostsPage() {
         isFetchingNextPage,
         offset,
         sortOption,
+        activeTab,
+        utils.community.getForMePosts,
         utils.community.getAllRelevantPosts,
         utils.community.getPostLikeCounts,
         utils.community.getUserReactions,
@@ -406,21 +448,14 @@ export default function PostsPage() {
         utils.community.getUserReactions.refetch();
     }, [utils.community.getUserReactions]);
 
-    // Update posts when the initial posts query data changes
+    // Reset and update posts when tab or query data changes
     useEffect(() => {
         if (postsQuery.data) {
-            // Only update posts if we don't have any posts yet or if the data is significantly different
-            setPosts((prevPosts) => {
-                if (prevPosts.length === 0) {
-                    return postsQuery.data.posts;
-                }
-                return prevPosts;
-            });
+            setPosts(postsQuery.data.posts);
             setOffset(postsQuery.data.posts.length);
             setHasNextPage(postsQuery.data.hasNextPage);
             setTotalCount(postsQuery.data.totalCount);
 
-            // Immediately refetch like data when posts are loaded
             if (postsQuery.data.posts.length > 0) {
                 refetchLikeCounts();
                 if (session) {
@@ -428,7 +463,29 @@ export default function PostsPage() {
                 }
             }
         }
-    }, [postsQuery.data, session, refetchLikeCounts, refetchUserReactions]);
+    }, [
+        activeTab,
+        postsQuery.data,
+        session,
+        refetchLikeCounts,
+        refetchUserReactions,
+    ]);
+
+    // Clear list and invalidate when switching tabs
+    useEffect(() => {
+        setPosts([]);
+        setOffset(0);
+        setHasNextPage(true);
+        if (activeTab === 'for-me') {
+            utils.community.getForMePosts.invalidate();
+        } else {
+            utils.community.getMemberCommunityPosts.invalidate();
+        }
+    }, [
+        activeTab,
+        utils.community.getForMePosts,
+        utils.community.getMemberCommunityPosts,
+    ]);
 
     const deletePostMutation = trpc.community.deletePost.useMutation({
         onSuccess: () => {
@@ -437,9 +494,41 @@ export default function PostsPage() {
             setOffset(0);
             setHasNextPage(true);
             // Invalidate the posts query to refresh the list
-            utils.community.getAllRelevantPosts.invalidate();
+            if (activeTab === 'for-me') {
+                utils.community.getForMePosts.invalidate();
+            } else {
+                utils.community.getMemberCommunityPosts.invalidate();
+            }
         },
     });
+
+    // Join community from feed (for public community posts)
+    const [joiningCommunityId, setJoiningCommunityId] = useState<number | null>(
+        null,
+    );
+    const joinCommunityMutation = trpc.communities.joinCommunity.useMutation({
+        onSuccess: (result) => {
+            setJoiningCommunityId(null);
+            toast.success(
+                result.status === 'approved'
+                    ? "You've joined the community!"
+                    : 'Join request sent! Waiting for admin approval.',
+            );
+            // Refresh feeds
+            utils.community.getForMePosts.invalidate();
+            utils.community.getMemberCommunityPosts.invalidate();
+        },
+        onError: (error) => {
+            setJoiningCommunityId(null);
+            toast.error(error.message || 'Failed to join community');
+        },
+    });
+
+    const handleJoinCommunity = (communityId: number) => {
+        if (joiningCommunityId) return;
+        setJoiningCommunityId(communityId);
+        joinCommunityMutation.mutate({ communityId });
+    };
 
     const handleDeletePost = async (postId: number, e: React.MouseEvent) => {
         e.preventDefault();
@@ -673,7 +762,7 @@ export default function PostsPage() {
                         className="block"
                         style={{ textDecoration: 'none' }}
                     >
-                        <Card className="relative gap-2 py-2 transition-shadow hover:shadow-md">
+                        <Card className="relative gap-2 overflow-hidden p-0 transition-shadow hover:shadow-md">
                             {/* Source info at top with community or org info */}
                             {post.source ? (
                                 <div className="border-b px-4 pt-0.5 pb-1.5">
@@ -850,35 +939,96 @@ export default function PostsPage() {
                                             ).toLocaleDateString()}
                                         </span>
                                         <div className="ml-4 flex flex-row items-center space-x-2">
-                                            {/* Like button - visible for everyone; disabled if not logged in */}
-                                            <div
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                }}
-                                            >
-                                                <LikeButton
-                                                    postId={post.id}
-                                                    initialLikeCount={
-                                                        post.likeCount || 0
-                                                    }
-                                                    initialIsLiked={
-                                                        post.isLiked || false
-                                                    }
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    disabled={!session}
-                                                />
-                                            </div>
-                                            <button
-                                                className="text-muted-foreground flex items-center text-xs"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    router.push(
-                                                        `/posts/${post.id}`,
+                                            {/* Like display with enhanced format */}
+                                            {post.source?.reason?.startsWith(
+                                                'Public community',
+                                            ) ? (
+                                                // For public community posts when not a member, only show count if any
+                                                (post.likeCount ?? 0) > 0 ? (
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {post.likeCount ?? 0}{' '}
+                                                        {(post.likeCount ??
+                                                            0) === 1
+                                                            ? 'person'
+                                                            : 'people'}{' '}
+                                                        liked this
+                                                    </span>
+                                                ) : null
+                                            ) : (
+                                                // For interactive posts, show enhanced like display
+                                                (() => {
+                                                    const likeCountNum =
+                                                        post.likeCount ?? 0;
+                                                    const isLiked =
+                                                        post.isLiked ?? false;
+                                                    return (
+                                                        <div className="flex items-center text-xs">
+                                                            {likeCountNum >
+                                                                0 && (
+                                                                <span className="text-muted-foreground mr-2 text-xs">
+                                                                    {isLiked
+                                                                        ? likeCountNum ===
+                                                                          1
+                                                                            ? 'You liked this'
+                                                                            : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
+                                                                        : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`}
+                                                                </span>
+                                                            )}
+
+                                                            <div
+                                                                onClick={(
+                                                                    e,
+                                                                ) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                }}
+                                                            >
+                                                                <LikeButton
+                                                                    postId={
+                                                                        post.id
+                                                                    }
+                                                                    initialLikeCount={
+                                                                        likeCountNum
+                                                                    }
+                                                                    initialIsLiked={
+                                                                        isLiked
+                                                                    }
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    disabled={
+                                                                        !session ||
+                                                                        !canInteractWithPost(
+                                                                            post,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
+                                                        </div>
                                                     );
+                                                })()
+                                            )}
+                                            <button
+                                                className={`flex items-center text-xs ${
+                                                    canInteractWithPost(post)
+                                                        ? 'text-muted-foreground'
+                                                        : 'text-muted-foreground/50 cursor-not-allowed'
+                                                }`}
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    if (
+                                                        canInteractWithPost(
+                                                            post,
+                                                        )
+                                                    ) {
+                                                        router.push(
+                                                            `/posts/${post.id}`,
+                                                        );
+                                                    }
                                                 }}
+                                                disabled={
+                                                    !canInteractWithPost(post)
+                                                }
                                             >
                                                 <MessageSquare className="mr-1 h-3 w-3" />
                                                 {Array.isArray(post.comments)
@@ -947,6 +1097,34 @@ export default function PostsPage() {
                                     }
                                 </div>
                             </div>
+                            {/* CTA for public community posts when user is not a member/follower */}
+                            {post.community &&
+                                post.source?.reason?.startsWith(
+                                    'Public community:',
+                                ) && (
+                                    <div className="border-t">
+                                        <Button
+                                            className="w-full rounded-none border-0"
+                                            variant="secondary"
+                                            disabled={
+                                                joiningCommunityId ===
+                                                    post.community.id ||
+                                                joinCommunityMutation.isPending
+                                            }
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                if (post.community?.id) {
+                                                    handleJoinCommunity(
+                                                        post.community.id,
+                                                    );
+                                                }
+                                            }}
+                                        >
+                                            Join Community
+                                        </Button>
+                                    </div>
+                                )}
                         </Card>
                     </Link>
                 ))}
@@ -1006,7 +1184,11 @@ export default function PostsPage() {
         setOffset(0);
         setHasNextPage(true);
         // Invalidate both the posts query and search query to refresh with new sort
-        utils.community.getAllRelevantPosts.invalidate();
+        if (activeTab === 'for-me') {
+            utils.community.getForMePosts.invalidate();
+        } else {
+            utils.community.getMemberCommunityPosts.invalidate();
+        }
         utils.community.searchRelevantPost.invalidate();
     };
 
@@ -1018,147 +1200,309 @@ export default function PostsPage() {
         setOffset(0);
         setHasNextPage(true);
         // Invalidate queries to refresh with new date filter
-        utils.community.getAllRelevantPosts.invalidate();
+        if (activeTab === 'for-me') {
+            utils.community.getForMePosts.invalidate();
+        } else {
+            utils.community.getAllRelevantPosts.invalidate();
+        }
         utils.community.searchRelevantPost.invalidate();
     };
 
     return (
         <div className="py-4">
             <div className="mb-4">
-                {/* Header with filter and sort */}
-                <div className="mb-4 flex flex-row items-center gap-2">
-                    <div className="min-w-[180px] flex-1">
-                        <Input
-                            type="text"
-                            placeholder="Search posts..."
-                            className="w-full"
-                            value={searchInputValue}
-                            onChange={(e) =>
-                                handleSearchInputChange(e.target.value)
-                            }
-                        />
-                    </div>
-                    <div className="flex-shrink-0">
-                        <SortSelect
-                            value={sortOption}
-                            onValueChange={handleSortChange}
-                        />
-                    </div>
-                    <div className="flex-shrink-0">
-                        <PostsFilter
-                            userCommunities={userCommunities.map((c) => ({
-                                ...c,
-                                userRole: c.userRole as
-                                    | 'admin'
-                                    | 'moderator'
-                                    | 'member'
-                                    | 'follower'
-                                    | undefined,
-                            }))}
-                            availableTags={availableTags}
-                            onFilterChange={handleFilterChange}
-                            onDateFilterChange={handleDateFilterChange}
-                            isLoading={isLoading}
-                        />
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex flex-col gap-4 md:flex-row">
-                {/* Main content area */}
-                <div className="flex-1">{renderPosts()}</div>
-
-                {/* Right sidebar */}
-                <div className="w-full shrink-0 md:w-80 lg:w-96">
-                    <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
-                        {/* Your Communities Section */}
-                        {userCommunities.length > 0 && (
-                            <div className="overflow-hidden rounded-md border">
-                                <div className="bg-muted/50 px-4 py-3">
-                                    <span className="font-medium">
-                                        Your Community
-                                    </span>
+                {/* Header with tabs and search */}
+                <div className="mb-4">
+                    <Tabs
+                        value={activeTab}
+                        onValueChange={(value) =>
+                            setActiveTab(value as 'for-me' | 'from-communities')
+                        }
+                    >
+                        {/* Constrain header to post column width (subtract right sidebar on md+/lg+) */}
+                        <div className="md:mr-auto md:max-w-[calc(100%-20rem)] lg:max-w-[calc(100%-24rem)]">
+                            <TabsList className="grid w-full grid-cols-2">
+                                <TabsTrigger value="for-me">For me</TabsTrigger>
+                                <TabsTrigger value="from-communities">
+                                    From my Communities
+                                </TabsTrigger>
+                            </TabsList>
+                            {/* Filters below tabs, in one row, constrained to post column */}
+                            <div className="mt-2 flex w-full flex-wrap items-center gap-2">
+                                <div className="min-w-0 flex-1 md:basis-1/3">
+                                    <div className="relative">
+                                        <Input
+                                            type="text"
+                                            placeholder="Search..."
+                                            className="w-full pr-9"
+                                            value={searchInputValue}
+                                            onChange={(e) =>
+                                                handleSearchInputChange(
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                        <Search className="text-muted-foreground absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2" />
+                                    </div>
                                 </div>
-                                {userCommunitiesQuery.isLoading ? (
-                                    <div className="p-4">
-                                        <div className="space-y-3">
-                                            {[1, 2, 3].map((i) => (
-                                                <div
-                                                    key={i}
-                                                    className="flex items-center space-x-3"
-                                                >
-                                                    <Skeleton className="h-8 w-8 rounded-full" />
-                                                    <Skeleton className="h-4 w-40" />
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="p-2">
-                                        {userCommunities.map((community) => (
-                                            <Link
-                                                key={community.id}
-                                                href={`/communities/${community.slug}`}
-                                                className="hover:bg-accent flex items-center space-x-3 rounded-md p-2 transition-colors"
-                                            >
-                                                <Avatar className="h-8 w-8">
-                                                    <AvatarImage
-                                                        src={
-                                                            community.avatar ||
-                                                            undefined
-                                                        }
-                                                        alt={community.name}
-                                                    />
-                                                    <AvatarFallback className="bg-muted">
-                                                        {community.name
-                                                            .substring(0, 2)
-                                                            .toUpperCase()}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="text-sm font-medium">
-                                                        {community.name}
-                                                    </span>
-                                                    {(community.userRole ===
-                                                        'admin' ||
-                                                        community.userRole ===
-                                                            'moderator') && (
-                                                        <div
-                                                            className={`flex items-center rounded-full px-1.5 py-0.5 text-xs ${
-                                                                community.userRole ===
-                                                                'admin'
-                                                                    ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                                                                    : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                                                            }`}
-                                                            title={`You are a ${community.userRole}`}
-                                                        >
-                                                            <ShieldCheck className="mr-0.5 h-3 w-3" />
-                                                            {community.userRole ===
-                                                            'admin'
-                                                                ? 'Admin'
-                                                                : 'Mod'}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </Link>
-                                        ))}
-                                        <div className="mt-2 px-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="w-full bg-transparent"
-                                                asChild
-                                            >
-                                                <Link href="/communities">
-                                                    Browse Communities
-                                                </Link>
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
+                                <div className="md:basis-auto">
+                                    <SortSelect
+                                        value={sortOption}
+                                        onValueChange={handleSortChange}
+                                    />
+                                </div>
+                                <div className="md:basis-auto">
+                                    <PostsFilter
+                                        userCommunities={userCommunities.map(
+                                            (c) => ({
+                                                ...c,
+                                                userRole: c.userRole as
+                                                    | 'admin'
+                                                    | 'moderator'
+                                                    | 'member'
+                                                    | 'follower'
+                                                    | undefined,
+                                            }),
+                                        )}
+                                        availableTags={availableTags}
+                                        onFilterChange={handleFilterChange}
+                                        onDateFilterChange={
+                                            handleDateFilterChange
+                                        }
+                                        isLoading={isLoading}
+                                    />
+                                </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+
+                        <TabsContent value="for-me" className="mt-4">
+                            <div className="flex flex-col gap-4 md:flex-row">
+                                {/* Main content area */}
+                                <div className="flex-1">{renderPosts()}</div>
+
+                                {/* Right sidebar */}
+                                <div className="w-full shrink-0 md:w-80 lg:w-96">
+                                    <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
+                                        {/* Your Communities Section */}
+                                        {userCommunities.length > 0 && (
+                                            <div className="overflow-hidden rounded-md border">
+                                                <div className="bg-muted/50 px-4 py-3">
+                                                    <span className="font-medium">
+                                                        Your Community
+                                                    </span>
+                                                </div>
+                                                {userCommunitiesQuery.isLoading ? (
+                                                    <div className="p-4">
+                                                        <div className="space-y-3">
+                                                            {[1, 2, 3].map(
+                                                                (i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        className="flex items-center space-x-3"
+                                                                    >
+                                                                        <Skeleton className="h-8 w-8 rounded-full" />
+                                                                        <Skeleton className="h-4 w-40" />
+                                                                    </div>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-2">
+                                                        {userCommunities.map(
+                                                            (community) => (
+                                                                <Link
+                                                                    key={
+                                                                        community.id
+                                                                    }
+                                                                    href={`/communities/${community.slug}`}
+                                                                    className="hover:bg-accent flex items-center space-x-3 rounded-md p-2 transition-colors"
+                                                                >
+                                                                    <Avatar className="h-8 w-8">
+                                                                        <AvatarImage
+                                                                            src={
+                                                                                community.avatar ||
+                                                                                undefined
+                                                                            }
+                                                                            alt={
+                                                                                community.name
+                                                                            }
+                                                                        />
+                                                                        <AvatarFallback className="bg-muted">
+                                                                            {community.name
+                                                                                .substring(
+                                                                                    0,
+                                                                                    2,
+                                                                                )
+                                                                                .toUpperCase()}
+                                                                        </AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-sm font-medium">
+                                                                            {
+                                                                                community.name
+                                                                            }
+                                                                        </span>
+                                                                        {(community.userRole ===
+                                                                            'admin' ||
+                                                                            community.userRole ===
+                                                                                'moderator') && (
+                                                                            <div
+                                                                                className={`flex items-center rounded-full px-1.5 py-0.5 text-xs ${
+                                                                                    community.userRole ===
+                                                                                    'admin'
+                                                                                        ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                                                                                        : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                                                                }`}
+                                                                                title={`You are a ${community.userRole}`}
+                                                                            >
+                                                                                <ShieldCheck className="mr-0.5 h-3 w-3" />
+                                                                                {community.userRole ===
+                                                                                'admin'
+                                                                                    ? 'Admin'
+                                                                                    : 'Mod'}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </Link>
+                                                            ),
+                                                        )}
+                                                        <div className="mt-2 px-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="w-full bg-transparent"
+                                                                asChild
+                                                            >
+                                                                <Link href="/communities">
+                                                                    Browse
+                                                                    Communities
+                                                                </Link>
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+
+                        <TabsContent value="from-communities" className="mt-4">
+                            <div className="flex flex-col gap-4 md:flex-row">
+                                {/* Main content area */}
+                                <div className="flex-1">{renderPosts()}</div>
+
+                                {/* Right sidebar */}
+                                <div className="w-full shrink-0 md:w-80 lg:w-96">
+                                    <div className="scrollbar-thin scrollbar-thumb-rounded-md scrollbar-thumb-muted scrollbar-track-transparent sticky top-4 max-h-[calc(100vh-2rem)] space-y-4 overflow-y-auto pr-2">
+                                        {/* Your Communities Section */}
+                                        {userCommunities.length > 0 && (
+                                            <div className="overflow-hidden rounded-md border">
+                                                <div className="bg-muted/50 px-4 py-3">
+                                                    <span className="font-medium">
+                                                        Your Community
+                                                    </span>
+                                                </div>
+                                                {userCommunitiesQuery.isLoading ? (
+                                                    <div className="p-4">
+                                                        <div className="space-y-3">
+                                                            {[1, 2, 3].map(
+                                                                (i) => (
+                                                                    <div
+                                                                        key={i}
+                                                                        className="flex items-center space-x-3"
+                                                                    >
+                                                                        <Skeleton className="h-8 w-8 rounded-full" />
+                                                                        <Skeleton className="h-4 w-40" />
+                                                                    </div>
+                                                                ),
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-2">
+                                                        {userCommunities.map(
+                                                            (community) => (
+                                                                <Link
+                                                                    key={
+                                                                        community.id
+                                                                    }
+                                                                    href={`/communities/${community.slug}`}
+                                                                    className="hover:bg-accent flex items-center space-x-3 rounded-md p-2 transition-colors"
+                                                                >
+                                                                    <Avatar className="h-8 w-8">
+                                                                        <AvatarImage
+                                                                            src={
+                                                                                community.avatar ||
+                                                                                undefined
+                                                                            }
+                                                                            alt={
+                                                                                community.name
+                                                                            }
+                                                                        />
+                                                                        <AvatarFallback className="bg-muted">
+                                                                            {community.name
+                                                                                .substring(
+                                                                                    0,
+                                                                                    2,
+                                                                                )
+                                                                                .toUpperCase()}
+                                                                        </AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <span className="text-sm font-medium">
+                                                                            {
+                                                                                community.name
+                                                                            }
+                                                                        </span>
+                                                                        {(community.userRole ===
+                                                                            'admin' ||
+                                                                            community.userRole ===
+                                                                                'moderator') && (
+                                                                            <div
+                                                                                className={`flex items-center rounded-full px-1.5 py-0.5 text-xs ${
+                                                                                    community.userRole ===
+                                                                                    'admin'
+                                                                                        ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                                                                                        : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                                                                }`}
+                                                                                title={`You are a ${community.userRole}`}
+                                                                            >
+                                                                                <ShieldCheck className="mr-0.5 h-3 w-3" />
+                                                                                {community.userRole ===
+                                                                                'admin'
+                                                                                    ? 'Admin'
+                                                                                    : 'Mod'}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </Link>
+                                                            ),
+                                                        )}
+                                                        <div className="mt-2 px-2">
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="w-full bg-transparent"
+                                                                asChild
+                                                            >
+                                                                <Link href="/communities">
+                                                                    Browse
+                                                                    Communities
+                                                                </Link>
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
                 </div>
             </div>
         </div>
