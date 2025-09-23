@@ -8,7 +8,12 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ChevronDown, Clock, MessageSquare } from 'lucide-react';
+import {
+    ChevronDown,
+    Clock,
+    MessageSquare,
+    ArrowUpNarrowWide,
+} from 'lucide-react';
 
 export type SortOption = 'latest' | 'oldest' | 'most-commented';
 
@@ -51,26 +56,14 @@ export function SortSelect({
                 <Button
                     variant="outline"
                     size="sm"
-                    className={`min-w-[140px] justify-between ${className || ''}`}
+                    className={`w-auto min-w-0 justify-center sm:min-w-[100px] sm:justify-between ${className || ''}`}
                 >
                     <div className="flex items-center gap-2">
-                        {currentOption?.icon === MessageSquare ? (
-                            <MessageSquare className="h-4 w-4" />
-                        ) : (
-                            <Clock className="h-4 w-4" />
-                        )}
-                        <span className="hidden sm:inline">
-                            {currentOption?.label}
-                        </span>
-                        <span className="sm:hidden">
-                            {value === 'latest'
-                                ? 'Latest'
-                                : value === 'oldest'
-                                  ? 'Oldest'
-                                  : 'Most Commented'}
-                        </span>
+                        {/* Always show the arrow-up-narrow-wide icon */}
+                        <ArrowUpNarrowWide className="h-4 w-4" />
+                        <span className="hidden sm:inline">Sort</span>
                     </div>
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown className="hidden h-4 w-4 sm:inline" />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">

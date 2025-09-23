@@ -14,6 +14,7 @@ interface LikeButtonProps {
     size?: 'sm' | 'md' | 'lg';
     variant?: 'default' | 'ghost' | 'outline';
     disabled?: boolean;
+    showCount?: boolean;
 }
 
 export function LikeButton({
@@ -24,6 +25,7 @@ export function LikeButton({
     size = 'sm',
     variant = 'ghost',
     disabled = false,
+    showCount = true,
 }: LikeButtonProps) {
     const [isLiked, setIsLiked] = useState(initialIsLiked);
     const [likeCount, setLikeCount] = useState(initialLikeCount);
@@ -121,7 +123,7 @@ export function LikeButton({
                     )}
                 />
             </Button>
-            {likeCount > 0 && (
+            {showCount && likeCount > 0 && (
                 <span className="text-muted-foreground text-xs font-medium">
                     {likeCount}
                 </span>

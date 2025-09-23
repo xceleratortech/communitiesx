@@ -891,10 +891,10 @@ export const communityRouter = router({
                                   communityId: post.communityId
                                       ? post.communityId
                                       : undefined,
-                                  reason:
-                                      membershipType === 'member'
-                                          ? `Because you are a member of ${post.community?.name}`
-                                          : `Because you are following ${post.community?.name}`,
+                                  // Hide reason for members/followers; show interest-based copy
+                                  reason: membershipType
+                                      ? ''
+                                      : `Based on your interests`,
                               },
                     } as PostWithSource;
                 });
@@ -1081,7 +1081,8 @@ export const communityRouter = router({
                     source: {
                         type: 'community' as const,
                         communityId: post.communityId ?? undefined,
-                        reason: `Because you are a member of ${post.community?.name}`,
+                        // Member-only feed: do not show a reason label
+                        reason: '',
                     },
                 }));
 
@@ -1442,17 +1443,16 @@ export const communityRouter = router({
                                     communityId: post.communityId
                                         ? post.communityId
                                         : undefined,
-                                    reason: `Public community: ${post.community?.name}`,
+                                    // User isn't a member/follower; public community surfacing
+                                    reason: `Based on your interests`,
                                 }
                               : {
                                     type: 'community' as const,
                                     communityId: post.communityId
                                         ? post.communityId
                                         : undefined,
-                                    reason:
-                                        membershipType === 'member'
-                                            ? `Because you are a member of ${post.community?.name}`
-                                            : `Because you are following ${post.community?.name}`,
+                                    // Hide reason for members/followers
+                                    reason: '',
                                 },
                     } as PostWithSource;
                 });
