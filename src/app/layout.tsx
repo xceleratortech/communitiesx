@@ -10,6 +10,8 @@ import { Toaster } from '@/components/ui/sonner';
 import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import { PWAInstaller } from '@/components/pwa-installer';
 import Script from 'next/script';
+import { SentryUserProvider } from '@/providers/sentry-user-provider';
+
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -85,17 +87,19 @@ export default function RootLayout({
                     disableTransitionOnChange
                 >
                     <TRPCProvider>
-                        {/* <ChatProvider> */}
-                        <Navbar />
-                        <ProfileCompletionGuard>
-                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                                <NextTopLoader />
-                                <main>{children}</main>
-                                <Toaster />
-                            </div>
-                        </ProfileCompletionGuard>
-                        {/* <ChatContainer />
-                        </ChatProvider> */}
+                        <SentryUserProvider>
+                            {/* <ChatProvider> */}
+                            <Navbar />
+                            <ProfileCompletionGuard>
+                                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                    <NextTopLoader />
+                                    <main>{children}</main>
+                                    <Toaster />
+                                </div>
+                            </ProfileCompletionGuard>
+                            {/* <ChatContainer />
+                            </ChatProvider> */}
+                        </SentryUserProvider>
                     </TRPCProvider>
                 </ThemeProvider>
                 <PWAInstaller />
