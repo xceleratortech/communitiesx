@@ -13,6 +13,7 @@ import {
     tags,
     postTags,
     reactions,
+    savedPosts,
 } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
 import {
@@ -407,7 +408,7 @@ export const communityRouter = router({
         },
     ),
 
-    // Get posts from communities the user is a member of or following
+    // Get posts from communities the user is a member of
     // NOTE: This procedure now returns paginated results. Consider using getAllRelevantPosts
     // for more comprehensive post fetching with better pagination support.
     getRelevantPosts: authProcedure
@@ -476,7 +477,7 @@ export const communityRouter = router({
                         };
                     }
 
-                    // Get all communities where the user is a member or follower
+                    // Get all communities where the user is a member
                     const userCommunities =
                         await db.query.communityMembers.findMany({
                             where: and(
@@ -749,7 +750,7 @@ export const communityRouter = router({
                     });
                 }
 
-                // Get all communities where the user is a member or follower
+                // Get all communities where the user is a member
                 const userMemberships =
                     await db.query.communityMembers.findMany({
                         where: and(
@@ -891,7 +892,7 @@ export const communityRouter = router({
                                   communityId: post.communityId
                                       ? post.communityId
                                       : undefined,
-                                  // Hide reason for members/followers; show interest-based copy
+                                  // Hide reason for members; show interest-based copy
                                   reason: membershipType
                                       ? ''
                                       : `Based on your interests`,
@@ -1307,9 +1308,12 @@ export const communityRouter = router({
                     }
                 }
 
-                // Get ALL public communities (for "For me" tab)
+                // Get public communities from the user's org only (for "For me" tab)
                 const publicCommunities = await db.query.communities.findMany({
-                    where: eq(communities.type, 'public'),
+                    where: and(
+                        eq(communities.type, 'public'),
+                        eq(communities.orgId, orgId),
+                    ),
                     columns: {
                         id: true,
                     },
@@ -1355,7 +1359,10 @@ export const communityRouter = router({
 
                 const communityCondition =
                     allCommunityIds.length > 0
-                        ? inArray(posts.communityId, allCommunityIds)
+                        ? and(
+                              inArray(posts.communityId, allCommunityIds),
+                              eq(posts.orgId, orgId),
+                          )
                         : sql`false`; // If no communities, this condition will never match
 
                 const combinedWhere = and(
@@ -1505,7 +1512,7 @@ export const communityRouter = router({
                     postFromDb.communityId &&
                     postFromDb.community?.type === 'private'
                 ) {
-                    // Check if user is a member or follower of the community
+                    // Check if user is a member of the community
                     const membership =
                         await db.query.communityMembers.findFirst({
                             where: and(
@@ -1532,7 +1539,7 @@ export const communityRouter = router({
                         throw new TRPCError({
                             code: 'FORBIDDEN',
                             message:
-                                'You must be a member or follower of this community to view this post',
+                                'You must be a member of this community to view this post',
                         });
                     }
                 }
@@ -3277,6 +3284,193 @@ export const communityRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to unlike post',
+                });
+            }
+        }),
+
+    // Save a post (bookmark)
+    savePost: authProcedure
+        .input(z.object({ postId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            try {
+                const userId = ctx.session.user.id;
+                const { postId } = input;
+
+                await db
+                    .insert(savedPosts)
+                    .values({ userId, postId })
+                    .onConflictDoNothing();
+
+                return { success: true };
+            } catch (error) {
+                console.error('Error saving post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to save post',
+                });
+            }
+        }),
+
+    // Unsave a post (remove bookmark)
+    unsavePost: authProcedure
+        .input(z.object({ postId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            try {
+                const userId = ctx.session.user.id;
+                const { postId } = input;
+
+                await db
+                    .delete(savedPosts)
+                    .where(
+                        and(
+                            eq(savedPosts.userId, userId),
+                            eq(savedPosts.postId, postId),
+                        ),
+                    );
+
+                return { success: true };
+            } catch (error) {
+                console.error('Error unsaving post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to unsave post',
+                });
+            }
+        }),
+
+    // Get saved posts for current user (paginated, with same shape as feeds)
+    getSavedPosts: authProcedure
+        .input(
+            z.object({
+                limit: z.number().min(1).max(100).default(10),
+                offset: z.number().default(0),
+                sort: z
+                    .enum(['latest', 'oldest', 'most-commented'])
+                    .default('latest'),
+            }),
+        )
+        .query(async ({ ctx, input }) => {
+            try {
+                const { limit, offset, sort } = input;
+                const userId = ctx.session.user.id;
+
+                // Build ORDER BY clause
+                let orderByClause;
+                if (sort === 'most-commented') {
+                    orderByClause = sql`(
+                        SELECT COUNT(*) FROM comments c 
+                        WHERE c.post_id = posts.id AND c.is_deleted = false
+                    ) DESC`;
+                } else {
+                    orderByClause =
+                        sort === 'latest'
+                            ? desc(posts.createdAt)
+                            : asc(posts.createdAt);
+                }
+
+                // Total count
+                const totalCountResult = await db
+                    .select({ count: sql<number>`count(*)` })
+                    .from(savedPosts)
+                    .where(eq(savedPosts.userId, userId));
+                const totalCount = totalCountResult[0]?.count || 0;
+
+                // Paginated posts with relations
+                const saved = await db.query.savedPosts.findMany({
+                    where: eq(savedPosts.userId, userId),
+                    orderBy: desc(savedPosts.createdAt),
+                    limit,
+                    offset,
+                    with: {
+                        post: {
+                            with: {
+                                author: { with: { organization: true } },
+                                community: true,
+                                comments: true,
+                                postTags: { with: { tag: true } },
+                            },
+                        },
+                    },
+                });
+
+                // Map to post format and add simple source
+                const postsWithSource = saved
+                    .map((s) => s.post)
+                    .filter((p) => !!p && !p.isDeleted)
+                    .map((post) => ({
+                        ...post,
+                        tags: post.postTags.map((pt) => pt.tag),
+                        source: {
+                            type: post.communityId ? 'community' : 'org',
+                            orgId: post.orgId,
+                            communityId: post.communityId ?? undefined,
+                            reason: '',
+                        },
+                    }));
+
+                // Apply sort on the post list when needed (comments count already handled above only if fetching from posts table)
+                let sortedPosts = postsWithSource;
+                if (sort === 'latest') {
+                    sortedPosts = postsWithSource.sort(
+                        (a, b) =>
+                            new Date(b.createdAt).getTime() -
+                            new Date(a.createdAt).getTime(),
+                    );
+                } else if (sort === 'oldest') {
+                    sortedPosts = postsWithSource.sort(
+                        (a, b) =>
+                            new Date(a.createdAt).getTime() -
+                            new Date(b.createdAt).getTime(),
+                    );
+                }
+
+                const hasNextPage = offset + limit < totalCount;
+                const nextOffset = hasNextPage ? offset + limit : null;
+
+                return {
+                    posts: sortedPosts,
+                    nextOffset,
+                    hasNextPage,
+                    totalCount,
+                };
+            } catch (error) {
+                console.error('Error getting saved posts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to get saved posts',
+                });
+            }
+        }),
+
+    // Map of user saved posts for quick client toggles
+    getUserSavedMap: authProcedure
+        .input(z.object({ postIds: z.array(z.number()) }))
+        .query(async ({ ctx, input }) => {
+            try {
+                const userId = ctx.session.user.id;
+                if (input.postIds.length === 0)
+                    return {} as Record<number, boolean>;
+
+                const rows = await db
+                    .select({ postId: savedPosts.postId })
+                    .from(savedPosts)
+                    .where(
+                        and(
+                            eq(savedPosts.userId, userId),
+                            inArray(savedPosts.postId, input.postIds),
+                        ),
+                    );
+
+                const map: Record<number, boolean> = {};
+                rows.forEach((r) => {
+                    map[r.postId] = true;
+                });
+                return map;
+            } catch (error) {
+                console.error('Error getting saved map:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to get saved map',
                 });
             }
         }),

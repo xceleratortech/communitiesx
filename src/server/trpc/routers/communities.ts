@@ -332,12 +332,12 @@ export const communitiesRouter = router({
                 if (community.type === 'private' && ctx.session?.user) {
                     const userId = ctx.session.user.id;
 
-                    // Check if user is a member or follower
+                    // Check if user is a member
                     const membership = community.members.find(
                         (m) => m.userId === userId && m.status === 'active',
                     );
 
-                    // If user is not a member or follower, return the community without posts
+                    // If user is not a member, return the community without posts
                     if (!membership) {
                         return {
                             ...community,
@@ -352,11 +352,30 @@ export const communitiesRouter = router({
                     };
                 }
 
-                // Load posts with authors and tags
+                // For public communities: restrict posts to the viewer's org
+                if (community.type === 'public') {
+                    const viewerOrgId = (ctx.session?.user as any)?.orgId;
+                    if (!viewerOrgId) {
+                        // If user is not logged in or has no org, do not show any posts
+                        return {
+                            ...community,
+                            posts: [],
+                        };
+                    }
+                }
+
+                // Load posts with authors and tags (include org filter for public communities)
+                const viewerOrgId = (ctx.session?.user as any)?.orgId;
+                const orgFilter =
+                    community.type === 'public' && viewerOrgId
+                        ? [eq(posts.orgId, viewerOrgId)]
+                        : [];
+
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
                         eq(posts.isDeleted, false),
+                        ...orgFilter,
                     ),
                     with: {
                         author: true,
@@ -477,7 +496,7 @@ export const communitiesRouter = router({
                     if (user?.appRole === 'admin') {
                         // Continue to load posts normally
                     } else {
-                        // Check if user is a member or follower
+                        // Check if user is a member
                         const membership = community.members.find(
                             (m) => m.userId === userId && m.status === 'active',
                         );
@@ -493,7 +512,7 @@ export const communitiesRouter = router({
                             isOrgAdminForCommunity = user?.role === 'admin';
                         }
 
-                        // If user is not a member/follower and not org admin, hide posts
+                        // If user is not a member and not org admin, hide posts
                         if (!membership && !isOrgAdminForCommunity) {
                             return {
                                 ...community,
@@ -602,12 +621,32 @@ export const communitiesRouter = router({
                     }
                 }
 
-                // Load posts with authors, tags, and comments
+                // For public communities: restrict posts to the viewer's org
+                if (community.type === 'public') {
+                    const viewerOrgId = (ctx.session?.user as any)?.orgId;
+                    if (!viewerOrgId) {
+                        // If user is not logged in or has no org, do not show any posts
+                        return {
+                            ...community,
+                            orgId: community.orgId,
+                            posts: [],
+                        };
+                    }
+                }
+
+                const viewerOrgId = (ctx.session?.user as any)?.orgId;
+                const orgFilter =
+                    community.type === 'public' && viewerOrgId
+                        ? [eq(posts.orgId, viewerOrgId)]
+                        : [];
+
+                // Load posts with authors, tags, and comments (include org filter for public communities)
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
                         eq(posts.isDeleted, false),
                         ...dateFilterConditions,
+                        ...orgFilter,
                     ),
                     with: {
                         author: true,
@@ -677,82 +716,46 @@ export const communitiesRouter = router({
                         });
                     }
 
-                    // If they're a follower, and community is public, upgrade to member
-                    if (community.type === 'public') {
-                        const [updatedMembership] = await db
-                            .update(communityMembers)
-                            .set({
-                                membershipType: 'member',
-                                status: 'active',
-                                updatedAt: new Date(),
-                            })
-                            .where(
-                                and(
-                                    eq(
-                                        communityMembers.userId,
-                                        ctx.session.user.id,
-                                    ),
-                                    eq(
-                                        communityMembers.communityId,
-                                        input.communityId,
-                                    ),
+                    // Not a member: ensure a join request exists (no follower upgrade)
+                    const existingRequest =
+                        await db.query.communityMemberRequests.findFirst({
+                            where: and(
+                                eq(
+                                    communityMemberRequests.userId,
+                                    ctx.session.user.id,
                                 ),
-                            )
-                            .returning();
-
-                        return {
-                            status: 'approved',
-                            membership: updatedMembership,
-                        };
-                    } else {
-                        // For private communities, check if there's already a pending request
-                        const existingRequest =
-                            await db.query.communityMemberRequests.findFirst({
-                                where: and(
-                                    eq(
-                                        communityMemberRequests.userId,
-                                        ctx.session.user.id,
-                                    ),
-                                    eq(
-                                        communityMemberRequests.communityId,
-                                        input.communityId,
-                                    ),
-                                    eq(
-                                        communityMemberRequests.requestType,
-                                        'join',
-                                    ),
-                                    eq(
-                                        communityMemberRequests.status,
-                                        'pending',
-                                    ),
+                                eq(
+                                    communityMemberRequests.communityId,
+                                    input.communityId,
                                 ),
-                            });
+                                eq(communityMemberRequests.requestType, 'join'),
+                                eq(communityMemberRequests.status, 'pending'),
+                            ),
+                        });
 
-                        if (existingRequest) {
-                            throw new TRPCError({
-                                code: 'BAD_REQUEST',
-                                message:
-                                    'You already have a pending request to join this community',
-                            });
-                        }
-
-                        // Create a new join request
-                        const [newRequest] = await db
-                            .insert(communityMemberRequests)
-                            .values({
-                                userId: ctx.session.user.id,
-                                communityId: input.communityId,
-                                requestType: 'join',
-                                status: 'pending',
-                                requestedAt: new Date(),
-                            })
-                            .returning();
-
-                        return {
-                            status: 'pending',
-                            request: newRequest,
-                        };
+                    if (existingRequest) {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message:
+                                'You already have a pending request to join this community',
+                        });
                     }
+
+                    const [newRequest] = await db
+                        .insert(communityMemberRequests)
+                        .values({
+                            userId: ctx.session.user.id,
+                            communityId: input.communityId,
+                            requestType: 'join',
+                            status: 'pending',
+                            requestedAt: new Date(),
+                        })
+                        .returning();
+
+                    return {
+                        status: 'pending',
+                        request: newRequest,
+                    };
                 }
 
                 // For public communities, create a new membership directly
@@ -829,123 +832,6 @@ export const communitiesRouter = router({
             }
         }),
 
-    followCommunity: authProcedure
-        .input(z.object({ communityId: z.number() }))
-        .mutation(async ({ input, ctx }) => {
-            try {
-                // Check if the community exists
-                const community = await db.query.communities.findFirst({
-                    where: eq(communities.id, input.communityId),
-                });
-
-                if (!community) {
-                    throw new TRPCError({
-                        code: 'NOT_FOUND',
-                        message: 'Community not found',
-                    });
-                }
-
-                // Check if the user already has a relationship with this community
-                const existingMembership =
-                    await db.query.communityMembers.findFirst({
-                        where: and(
-                            eq(communityMembers.userId, ctx.session.user.id),
-                            eq(communityMembers.communityId, input.communityId),
-                        ),
-                    });
-
-                if (existingMembership) {
-                    if (existingMembership.membershipType === 'follower') {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message: 'You are already following this community',
-                        });
-                    }
-
-                    // If they're a member, don't allow downgrade to follower
-                    throw new TRPCError({
-                        code: 'BAD_REQUEST',
-                        message: 'You are already a member of this community',
-                    });
-                }
-
-                // For public communities, create a new follower relationship directly
-                if (community.type === 'public') {
-                    const [newMembership] = await db
-                        .insert(communityMembers)
-                        .values({
-                            userId: ctx.session.user.id,
-                            communityId: input.communityId,
-                            role: 'follower',
-                            membershipType: 'follower',
-                            status: 'active',
-                            joinedAt: new Date(),
-                            updatedAt: new Date(),
-                        })
-                        .returning();
-
-                    return {
-                        status: 'approved',
-                        membership: newMembership,
-                    };
-                } else {
-                    // For private communities, check if there's already a pending request
-                    const existingRequest =
-                        await db.query.communityMemberRequests.findFirst({
-                            where: and(
-                                eq(
-                                    communityMemberRequests.userId,
-                                    ctx.session.user.id,
-                                ),
-                                eq(
-                                    communityMemberRequests.communityId,
-                                    input.communityId,
-                                ),
-                                eq(
-                                    communityMemberRequests.requestType,
-                                    'follow',
-                                ),
-                                eq(communityMemberRequests.status, 'pending'),
-                            ),
-                        });
-
-                    if (existingRequest) {
-                        throw new TRPCError({
-                            code: 'BAD_REQUEST',
-                            message:
-                                'You already have a pending request to follow this community',
-                        });
-                    }
-
-                    // Create a new follow request
-                    const [newRequest] = await db
-                        .insert(communityMemberRequests)
-                        .values({
-                            userId: ctx.session.user.id,
-                            communityId: input.communityId,
-                            requestType: 'follow',
-                            status: 'pending',
-                            requestedAt: new Date(),
-                        })
-                        .returning();
-
-                    return {
-                        status: 'pending',
-                        request: newRequest,
-                    };
-                }
-            } catch (error) {
-                if (error instanceof TRPCError) {
-                    throw error;
-                }
-                console.error('Error following community:', error);
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to follow community',
-                });
-            }
-        }),
-
     leaveCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
@@ -998,49 +884,6 @@ export const communitiesRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to leave community',
-                });
-            }
-        }),
-
-    unfollowCommunity: authProcedure
-        .input(z.object({ communityId: z.number() }))
-        .mutation(async ({ input, ctx }) => {
-            try {
-                // Check if the user is following the community
-                const membership = await db.query.communityMembers.findFirst({
-                    where: and(
-                        eq(communityMembers.userId, ctx.session.user.id),
-                        eq(communityMembers.communityId, input.communityId),
-                        eq(communityMembers.membershipType, 'follower'),
-                    ),
-                });
-
-                if (!membership) {
-                    throw new TRPCError({
-                        code: 'BAD_REQUEST',
-                        message: 'You are not following this community',
-                    });
-                }
-
-                // Delete the membership
-                await db
-                    .delete(communityMembers)
-                    .where(
-                        and(
-                            eq(communityMembers.userId, ctx.session.user.id),
-                            eq(communityMembers.communityId, input.communityId),
-                        ),
-                    );
-
-                return { success: true };
-            } catch (error) {
-                if (error instanceof TRPCError) {
-                    throw error;
-                }
-                console.error('Error unfollowing community:', error);
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to unfollow community',
                 });
             }
         }),
@@ -1167,39 +1010,13 @@ export const communitiesRouter = router({
                         ),
                     });
 
-                if (existingMembership) {
-                    // Update existing membership if it exists (e.g., upgrade from follower to member)
-                    if (
-                        request.requestType === 'join' &&
-                        existingMembership.membershipType === 'follower'
-                    ) {
-                        await db
-                            .update(communityMembers)
-                            .set({
-                                membershipType: 'member',
-                                status: 'active',
-                                updatedAt: new Date(),
-                            })
-                            .where(
-                                and(
-                                    eq(communityMembers.userId, request.userId),
-                                    eq(
-                                        communityMembers.communityId,
-                                        request.communityId,
-                                    ),
-                                ),
-                            );
-                    }
-                } else {
+                if (!existingMembership) {
                     // Create a new membership
                     await db.insert(communityMembers).values({
                         userId: request.userId,
                         communityId: request.communityId,
                         role: 'member',
-                        membershipType:
-                            request.requestType === 'join'
-                                ? 'member'
-                                : 'follower',
+                        membershipType: 'member',
                         status: 'active',
                         joinedAt: new Date(),
                         updatedAt: new Date(),

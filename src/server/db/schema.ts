@@ -104,7 +104,7 @@ export const communityMemberRequests = pgTable('community_member_requests', {
     communityId: integer('community_id')
         .notNull()
         .references(() => communities.id, { onDelete: 'cascade' }),
-    requestType: text('request_type').notNull(), // 'join' | 'follow'
+    requestType: text('request_type').notNull(), // 'join'
     status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
     message: text('message'),
     requestedAt: timestamp('requested_at').notNull().defaultNow(),
@@ -209,6 +209,23 @@ export const reactions = pgTable(
             ),
         };
     },
+);
+
+// Saved posts (bookmarks)
+export const savedPosts = pgTable(
+    'saved_posts',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.userId, table.postId] }),
+    }),
 );
 
 // Define relations
@@ -316,6 +333,12 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     comments: many(comments),
     postTags: many(postTags),
     attachments: many(attachments), // was images
+}));
+
+// Saved posts relations
+export const savedPostsRelations = relations(savedPosts, ({ one }) => ({
+    user: one(users, { fields: [savedPosts.userId], references: [users.id] }),
+    post: one(posts, { fields: [savedPosts.postId], references: [posts.id] }),
 }));
 
 export const postTagsRelations = relations(postTags, ({ one }) => ({

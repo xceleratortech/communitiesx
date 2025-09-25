@@ -184,22 +184,6 @@ export function CommunityPopover({
                             </div>
 
                             <div className="flex items-center text-sm">
-                                <Users className="text-muted-foreground mr-2 h-4 w-4" />
-                                <span>
-                                    Followers:{' '}
-                                    <span className="font-medium">
-                                        {
-                                            communityData.members.filter(
-                                                (m) =>
-                                                    m.membershipType ===
-                                                    'follower',
-                                            ).length
-                                        }
-                                    </span>
-                                </span>
-                            </div>
-
-                            <div className="flex items-center text-sm">
                                 <FileText className="text-muted-foreground mr-2 h-4 w-4" />
                                 <span>
                                     Posts:{' '}

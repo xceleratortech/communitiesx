@@ -84,6 +84,7 @@ type PostDisplay = PostFromDb & {
     tags?: PostTag[]; // Add tags to the type
     likeCount?: number; // Add like count
     isLiked?: boolean; // Add user's like status
+    isSaved?: boolean; // Add user's saved status
 };
 
 // Relative time formatter for header timestamp
@@ -189,11 +190,6 @@ export default function PostsPage() {
     const [hasNextPage, setHasNextPage] = useState(true);
     const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
     const [totalCount, setTotalCount] = useState(0);
-
-    // State for collapsible sections
-    const [aboutOpen, setAboutOpen] = useState(true);
-    const [statsOpen, setStatsOpen] = useState(false);
-    const [adminsOpen, setAdminsOpen] = useState(false);
 
     // Filter state
     const [activeFilters, setActiveFilters] = useState<FilterState>({
@@ -452,18 +448,33 @@ export default function PostsPage() {
         },
     );
 
+    // Get user's saved status for all posts
+    const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
+        { postIds },
+        {
+            enabled: postIds.length > 0 && !!session,
+            staleTime: 0,
+            refetchOnWindowFocus: true,
+        },
+    );
+
     // Update posts with like data when like queries change
     useEffect(() => {
-        if (likeCountsQuery.data || userReactionsQuery.data) {
+        if (
+            likeCountsQuery.data ||
+            userReactionsQuery.data ||
+            userSavedMapQuery.data
+        ) {
             setPosts((prevPosts) =>
                 prevPosts.map((post) => ({
                     ...post,
                     likeCount: likeCountsQuery.data?.[post.id] ?? 0,
                     isLiked: userReactionsQuery.data?.[post.id] ?? false,
+                    isSaved: userSavedMapQuery.data?.[post.id] ?? false,
                 })),
             );
         }
-    }, [likeCountsQuery.data, userReactionsQuery.data]);
+    }, [likeCountsQuery.data, userReactionsQuery.data, userSavedMapQuery.data]);
 
     // Memoize refetch functions to prevent dependency array changes
     const refetchLikeCounts = useCallback(() => {
@@ -473,6 +484,10 @@ export default function PostsPage() {
     const refetchUserReactions = useCallback(() => {
         utils.community.getUserReactions.refetch();
     }, [utils.community.getUserReactions]);
+
+    const refetchSavedMap = useCallback(() => {
+        utils.community.getUserSavedMap.refetch();
+    }, [utils.community.getUserSavedMap]);
 
     // Reset and update posts when tab or query data changes
     useEffect(() => {
@@ -486,6 +501,7 @@ export default function PostsPage() {
                 refetchLikeCounts();
                 if (session) {
                     refetchUserReactions();
+                    refetchSavedMap();
                 }
             }
         }
@@ -495,6 +511,7 @@ export default function PostsPage() {
         session,
         refetchLikeCounts,
         refetchUserReactions,
+        refetchSavedMap,
     ]);
 
     // Clear list and invalidate when switching tabs
@@ -526,6 +543,30 @@ export default function PostsPage() {
                 utils.community.getMemberCommunityPosts.invalidate();
             }
         },
+    });
+
+    const savePostMutation = trpc.community.savePost.useMutation({
+        onSuccess: (_data, variables) => {
+            setPosts((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: true } : p,
+                ),
+            );
+            toast.success('Saved');
+        },
+        onError: () => toast.error('Failed to save'),
+    });
+
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onSuccess: (_data, variables) => {
+            setPosts((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: false } : p,
+                ),
+            );
+            toast.success('Removed from saved');
+        },
+        onError: () => toast.error('Failed to unsave'),
     });
 
     // Join community from feed (for public community posts)
@@ -738,7 +779,7 @@ export default function PostsPage() {
                                 activeFilters.showOrgOnly ||
                                 activeFilters.showMyPosts
                               ? 'No posts match your current filters.'
-                              : 'No posts found. Join or follow more communities to see posts here.'}
+                              : 'No posts found. Join more communities to see posts here.'}
                     </p>
                     {isSearching ? (
                         <Button
@@ -1066,10 +1107,8 @@ export default function PostsPage() {
                                                     variant="ghost"
                                                     disabled={!session}
                                                     showCount={false}
+                                                    showLabel={true}
                                                 />
-                                                <span className="hidden text-sm md:inline">
-                                                    Like
-                                                </span>
                                             </div>
                                             <Button
                                                 variant="ghost"
@@ -1095,11 +1134,25 @@ export default function PostsPage() {
                                                 onClick={(e) => {
                                                     e.preventDefault();
                                                     e.stopPropagation();
+                                                    if (!session) return;
+                                                    if (post.isSaved) {
+                                                        unsavePostMutation.mutate(
+                                                            { postId: post.id },
+                                                        );
+                                                    } else {
+                                                        savePostMutation.mutate(
+                                                            { postId: post.id },
+                                                        );
+                                                    }
                                                 }}
                                             >
-                                                <Bookmark className="h-4 w-4 md:mr-2" />
+                                                <Bookmark
+                                                    className={`h-4 w-4 md:mr-2 ${post.isSaved ? 'fill-current' : ''}`}
+                                                />
                                                 <span className="hidden md:inline">
-                                                    Save
+                                                    {post.isSaved
+                                                        ? 'Saved'
+                                                        : 'Save'}
                                                 </span>
                                             </Button>
                                             <div
@@ -1119,10 +1172,8 @@ export default function PostsPage() {
                                                     }`}
                                                     variant="ghost"
                                                     size="sm"
+                                                    showLabel={true}
                                                 />
-                                                <span className="hidden text-sm md:inline">
-                                                    Share
-                                                </span>
                                             </div>
                                         </div>
                                     </>

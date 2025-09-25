@@ -109,6 +109,18 @@ export default function CommunityDetailPage() {
         },
     );
 
+    // Normalize community typing to enforce member-only membershipType
+    const normalizedCommunity = useMemo(() => {
+        if (!community) return community;
+        return {
+            ...community,
+            members: community.members?.map((m: any) => ({
+                ...m,
+                membershipType: 'member' as const,
+            })),
+        };
+    }, [community]);
+
     const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
         session?.user,
         community?.orgId,
@@ -319,13 +331,7 @@ export default function CommunityDetailPage() {
                 req.requestType === 'join' && req.status === 'pending',
         ) || false;
 
-    const hasPendingFollowRequest =
-        userPendingRequests?.some(
-            (req: { requestType: string; status: string }) =>
-                req.requestType === 'follow' && req.status === 'pending',
-        ) || false;
-
-    // Join, follow, leave, unfollow mutations
+    // Join, leave, mutations
     const joinCommunityMutation = trpc.communities.joinCommunity.useMutation({
         onSuccess: (result) => {
             refetch();
@@ -343,26 +349,6 @@ export default function CommunityDetailPage() {
         },
     });
 
-    const followCommunityMutation =
-        trpc.communities.followCommunity.useMutation({
-            onSuccess: (result) => {
-                refetch();
-                if (result.status === 'approved') {
-                    toast.success("You're now following this community");
-                } else {
-                    toast.success(
-                        'Follow request sent! Waiting for admin approval.',
-                    );
-                }
-            },
-            onError: (error) => {
-                toast.error(error.message || 'Failed to follow community');
-            },
-            onSettled: () => {
-                setIsActionInProgress(false);
-            },
-        });
-
     const leaveCommunityMutation = trpc.communities.leaveCommunity.useMutation({
         onSuccess: () => {
             refetch();
@@ -375,20 +361,6 @@ export default function CommunityDetailPage() {
             setIsActionInProgress(false);
         },
     });
-
-    const unfollowCommunityMutation =
-        trpc.communities.unfollowCommunity.useMutation({
-            onSuccess: () => {
-                refetch();
-                toast.success("You've unfollowed the community");
-            },
-            onError: (error) => {
-                toast.error(error.message || 'Failed to unfollow community');
-            },
-            onSettled: () => {
-                setIsActionInProgress(false);
-            },
-        });
 
     // Approve/reject request mutations
     const approveRequestMutation = trpc.communities.approveRequest.useMutation({
@@ -504,12 +476,6 @@ export default function CommunityDetailPage() {
         joinCommunityMutation.mutate({ communityId: community.id });
     };
 
-    const handleFollowCommunity = () => {
-        if (!community || isActionInProgress) return;
-        setIsActionInProgress(true);
-        followCommunityMutation.mutate({ communityId: community.id });
-    };
-
     const handleLeaveCommunity = () => {
         if (!community || isActionInProgress) return;
         setIsLeaveCommunityDialogOpen(true);
@@ -520,12 +486,6 @@ export default function CommunityDetailPage() {
         setIsActionInProgress(true);
         leaveCommunityMutation.mutate({ communityId: community.id });
         setIsLeaveCommunityDialogOpen(false);
-    };
-
-    const handleUnfollowCommunity = () => {
-        if (!community || isActionInProgress) return;
-        setIsActionInProgress(true);
-        unfollowCommunityMutation.mutate({ communityId: community.id });
     };
 
     // Handle request approval/rejection
@@ -735,8 +695,6 @@ export default function CommunityDetailPage() {
         (!!userMembership && userMembership.membershipType === 'member') ||
         isOrgAdminForCommunityCheck ||
         isSuperAdmin;
-    const isFollower =
-        !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
     const isAdmin = !!userMembership && userMembership.role === 'admin';
     const canInteract = isMember || isOrgAdminForCommunityCheck || isSuperAdmin;
@@ -744,17 +702,13 @@ export default function CommunityDetailPage() {
     return (
         <div className="container mx-auto py-6">
             <CommunityBanner
-                community={community}
+                community={normalizedCommunity!}
                 isMember={isMember}
-                isFollower={isFollower}
                 isAdmin={isAdmin}
                 hasPendingJoinRequest={hasPendingJoinRequest}
-                hasPendingFollowRequest={hasPendingFollowRequest}
                 isActionInProgress={isActionInProgress}
                 onJoinCommunity={handleJoinCommunity}
-                onFollowCommunity={handleFollowCommunity}
                 onLeaveCommunity={handleLeaveCommunity}
-                onUnfollowCommunity={handleUnfollowCommunity}
             />
 
             {/* Add sort control above tabs */}
@@ -778,10 +732,10 @@ export default function CommunityDetailPage() {
                 canManageCommunityMembers={canManageCommunityMembers}
                 pendingRequestsCount={pendingRequests?.length || 0}
             >
-                <CommunityOverview community={community} />
+                <CommunityOverview community={normalizedCommunity!} />
 
                 <CommunityPosts
-                    community={community}
+                    community={normalizedCommunity!}
                     isLoading={isLoading}
                     isMember={isMember}
                     canInteract={canInteract}
@@ -802,14 +756,14 @@ export default function CommunityDetailPage() {
                 />
 
                 <CommunityTags
-                    community={community}
+                    community={normalizedCommunity!}
                     canCreateTag={canCreateTag}
                     canEditTag={canEditTag}
                     canDeleteTag={canDeleteTag}
                 />
 
                 <CommunityMembers
-                    community={community}
+                    community={normalizedCommunity!}
                     canManageCommunityMembers={canManageCommunityMembers}
                     canManageCommunityAdmins={canManageCommunityAdmins}
                     canRemoveCommunityAdmins={canRemoveCommunityAdmins}
