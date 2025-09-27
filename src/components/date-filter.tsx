@@ -138,7 +138,7 @@ export function DateFilter({
                 <DropdownMenuTrigger asChild>
                     <Button
                         variant="outline"
-                        className="h-9 border-dashed bg-transparent"
+                        className="h-8 border bg-transparent"
                         disabled={disabled}
                     >
                         <Clock className="mr-2 h-4 w-4" />

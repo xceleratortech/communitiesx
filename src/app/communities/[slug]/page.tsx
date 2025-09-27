@@ -713,7 +713,7 @@ export default function CommunityDetailPage() {
 
             {/* Add sort control above tabs */}
             {community && (
-                <div className="mb-4 flex justify-end">
+                <div className="mb-4 flex justify-end space-x-2">
                     <DateFilter
                         value={dateFilter}
                         onChange={setDateFilter}
