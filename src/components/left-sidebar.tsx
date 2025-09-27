@@ -62,6 +62,9 @@ export function LeftSidebar() {
 
     const isActive = (path: string) => {
         if (!pathname) return false;
+        if (path === '/communities') {
+            return pathname === '/communities';
+        }
         return pathname.startsWith(path);
     };
 
