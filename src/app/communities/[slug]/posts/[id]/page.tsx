@@ -18,6 +18,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isHtmlContentEmpty } from '@/lib/utils';
+import { ImageCarousel } from '@/components/ui/image-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 
 type User = {
     id: string;
@@ -41,6 +43,22 @@ type Post = {
         slug: string;
         type: 'public' | 'private';
     };
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
 };
 
 export default function CommunityPostPage() {
@@ -377,12 +395,36 @@ export default function CommunityPostPage() {
                             </span>
                         </div>
                     ) : (
-                        <SafeHtml
-                            html={postData.content}
-                            className="whitespace-pre-wrap"
-                        />
+                        <div>
+                            {postData.attachments &&
+                            postData.attachments.length > 0 ? (
+                                <SafeHtmlWithoutImages
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            ) : (
+                                <SafeHtml
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            )}
+                        </div>
                     )}
                 </div>
+
+                {/* Post images */}
+                {postData.attachments && postData.attachments.length > 0 && (
+                    <div className="mt-6">
+                        <ImageCarousel
+                            images={
+                                postData.attachments.filter(
+                                    (att) => att.type === 'image',
+                                )!
+                            }
+                            className="max-w-2xl"
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Comments Section */}

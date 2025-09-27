@@ -14,6 +14,7 @@ import {
     postTags,
     reactions,
     savedPosts,
+    attachments,
 } from '@/server/db/schema';
 import { TRPCError } from '@trpc/server';
 import {
@@ -86,6 +87,7 @@ type PostWithAuthorAndComments = PostType & {
     comments: CommentWithAuthor[];
     community?: typeof communities.$inferSelect | null;
     tags: (typeof tags.$inferSelect)[];
+    attachments: (typeof attachments.$inferSelect)[];
 };
 
 type PostWithSource = PostWithAuthor & {
@@ -707,6 +709,7 @@ export const communityRouter = router({
                                             tag: true,
                                         },
                                     },
+                                    attachments: true,
                                 },
                             }),
                         ]);
@@ -865,6 +868,7 @@ export const communityRouter = router({
                                     tag: true,
                                 },
                             },
+                            attachments: true,
                         },
                     }),
                 ]);
@@ -1070,6 +1074,7 @@ export const communityRouter = router({
                             community: true,
                             comments: true,
                             postTags: { with: { tag: true } },
+                            attachments: true,
                         },
                     }),
                 ]);
@@ -1242,6 +1247,7 @@ export const communityRouter = router({
                                             tag: true,
                                         },
                                     },
+                                    attachments: true,
                                 },
                             }),
                         ]);
@@ -1416,6 +1422,7 @@ export const communityRouter = router({
                                     tag: true,
                                 },
                             },
+                            attachments: true,
                         },
                     }),
                 ]);
@@ -1497,6 +1504,18 @@ export const communityRouter = router({
                     with: {
                         author: true,
                         community: true,
+                        attachments: true,
+                        comments: {
+                            with: {
+                                author: true,
+                            },
+                            orderBy: desc(comments.createdAt),
+                        },
+                        postTags: {
+                            with: {
+                                tag: true,
+                            },
+                        },
                     },
                 });
 
@@ -1575,12 +1594,14 @@ export const communityRouter = router({
 
                 // The Drizzle 'with' for comments is removed, so we manually add the structured comments.
                 const result: PostWithAuthorAndComments = {
-                    ...(postFromDb as PostWithAuthorAndComments),
+                    ...(postFromDb as unknown as PostWithAuthorAndComments),
                     comments: nestedComments.sort(
                         (a, b) =>
                             new Date(b.createdAt).getTime() -
                             new Date(a.createdAt).getTime(),
                     ), // Ensure top-level comments are sorted as before
+                    tags: postFromDb.postTags?.map((pt) => pt.tag) || [],
+                    attachments: postFromDb.attachments || [],
                 };
 
                 return result;
@@ -3085,6 +3106,7 @@ export const communityRouter = router({
                             tag: true,
                         },
                     },
+                    attachments: true,
                     comments: true, // Include comments for count
                 },
                 orderBy: orderByClause,
@@ -3388,6 +3410,7 @@ export const communityRouter = router({
                                 community: true,
                                 comments: true,
                                 postTags: { with: { tag: true } },
+                                attachments: true,
                             },
                         },
                     },

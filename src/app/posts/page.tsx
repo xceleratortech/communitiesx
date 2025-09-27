@@ -22,10 +22,8 @@ import { useRouter } from 'next/navigation';
 import type { posts, users, communities, comments } from '@/server/db/schema';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { CommunityPopover } from '@/components/ui/community-popover';
-import { OrganizationPopover } from '@/components/ui/organization-popover';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { CardDescription } from '@/components/ui/card';
 import { PostsFilter } from '@/components/post-filter';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
@@ -45,6 +43,10 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
+import { ImageCarousel } from '@/components/ui/image-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { HtmlImageCarousel } from '@/components/ui/html-image-carousel';
+import { useSavedPostsSync } from '@/hooks/use-saved-posts-sync';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -82,6 +84,22 @@ type PostDisplay = PostFromDb & {
     };
     comments?: CommentFromDb[]; // Properly typed comments array
     tags?: PostTag[]; // Add tags to the type
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>; // Add attachments to the type
     likeCount?: number; // Add like count
     isLiked?: boolean; // Add user's like status
     isSaved?: boolean; // Add user's saved status
@@ -184,6 +202,9 @@ export default function PostsPage() {
     const router = useRouter();
     const [isClient, setIsClient] = useState(false);
 
+    // Use the custom hook for cross-page synchronization
+    useSavedPostsSync();
+
     // State for infinite scrolling
     const [posts, setPosts] = useState<PostDisplay[]>([]);
     const [offset, setOffset] = useState(0);
@@ -222,6 +243,11 @@ export default function PostsPage() {
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     const { checkCommunityPermission } = usePermission();
+
+    // Set isClient to true after component mounts
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     const canEditPost = (post: PostDisplay) => {
         if (!session) return false;
@@ -273,20 +299,32 @@ export default function PostsPage() {
     };
 
     // Use different queries based on active tab
-    const forMePostsQuery = trpc.community.getForMePosts.useQuery({
-        limit: 10,
-        offset: 0,
-        sort: sortOption,
-        dateFilter: activeFilters.dateFilter,
-    });
-
-    const fromCommunitiesPostsQuery =
-        trpc.community.getMemberCommunityPosts.useQuery({
+    const forMePostsQuery = trpc.community.getForMePosts.useQuery(
+        {
             limit: 10,
             offset: 0,
             sort: sortOption,
             dateFilter: activeFilters.dateFilter,
-        });
+        },
+        {
+            staleTime: 30 * 1000, // Cache for 30 seconds
+            refetchOnWindowFocus: false, // Don't refetch on window focus
+        },
+    );
+
+    const fromCommunitiesPostsQuery =
+        trpc.community.getMemberCommunityPosts.useQuery(
+            {
+                limit: 10,
+                offset: 0,
+                sort: sortOption,
+                dateFilter: activeFilters.dateFilter,
+            },
+            {
+                staleTime: 30 * 1000, // Cache for 30 seconds
+                refetchOnWindowFocus: false, // Don't refetch on window focus
+            },
+        );
 
     // Use the appropriate query based on active tab
     const postsQuery =
@@ -429,10 +467,8 @@ export default function PostsPage() {
         { postIds },
         {
             enabled: postIds.length > 0,
-            staleTime: 0, // Always fetch fresh data
-            refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000, // More frequent polling to reflect others' likes
-            refetchIntervalInBackground: true, // Continue polling even when tab is not active
+            staleTime: 30 * 1000, // Cache for 30 seconds
+            refetchOnWindowFocus: false, // Only refetch on manual actions
         },
     );
 
@@ -441,10 +477,8 @@ export default function PostsPage() {
         { postIds },
         {
             enabled: postIds.length > 0 && !!session,
-            staleTime: 0, // Always fetch fresh data
-            refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000, // More frequent polling to reflect others' likes
-            refetchIntervalInBackground: true, // Continue polling even when tab is not active
+            staleTime: 30 * 1000, // Cache for 30 seconds
+            refetchOnWindowFocus: false, // Only refetch on manual actions
         },
     );
 
@@ -453,41 +487,35 @@ export default function PostsPage() {
         { postIds },
         {
             enabled: postIds.length > 0 && !!session,
-            staleTime: 0,
-            refetchOnWindowFocus: true,
+            staleTime: 60 * 1000, // Cache for 1 minute
+            refetchOnWindowFocus: false, // Only refetch on manual actions
         },
     );
 
-    // Update posts with like data when like queries change
+    // Update posts with like/saved data only when new values are present (avoid flicker)
     useEffect(() => {
-        if (
-            likeCountsQuery.data ||
-            userReactionsQuery.data ||
-            userSavedMapQuery.data
-        ) {
-            setPosts((prevPosts) =>
-                prevPosts.map((post) => ({
-                    ...post,
-                    likeCount: likeCountsQuery.data?.[post.id] ?? 0,
-                    isLiked: userReactionsQuery.data?.[post.id] ?? false,
-                    isSaved: userSavedMapQuery.data?.[post.id] ?? false,
-                })),
-            );
-        }
+        setPosts((prevPosts) =>
+            prevPosts.map((post) => {
+                const next = { ...post } as PostDisplay;
+                if (likeCountsQuery.data && post.id in likeCountsQuery.data) {
+                    next.likeCount = likeCountsQuery.data[post.id] ?? 0;
+                }
+                if (
+                    userReactionsQuery.data &&
+                    post.id in userReactionsQuery.data
+                ) {
+                    next.isLiked = userReactionsQuery.data[post.id] ?? false;
+                }
+                if (
+                    userSavedMapQuery.data &&
+                    post.id in userSavedMapQuery.data
+                ) {
+                    next.isSaved = userSavedMapQuery.data[post.id] ?? false;
+                }
+                return next;
+            }),
+        );
     }, [likeCountsQuery.data, userReactionsQuery.data, userSavedMapQuery.data]);
-
-    // Memoize refetch functions to prevent dependency array changes
-    const refetchLikeCounts = useCallback(() => {
-        utils.community.getPostLikeCounts.refetch();
-    }, [utils.community.getPostLikeCounts]);
-
-    const refetchUserReactions = useCallback(() => {
-        utils.community.getUserReactions.refetch();
-    }, [utils.community.getUserReactions]);
-
-    const refetchSavedMap = useCallback(() => {
-        utils.community.getUserSavedMap.refetch();
-    }, [utils.community.getUserSavedMap]);
 
     // Reset and update posts when tab or query data changes
     useEffect(() => {
@@ -496,23 +524,8 @@ export default function PostsPage() {
             setOffset(postsQuery.data.posts.length);
             setHasNextPage(postsQuery.data.hasNextPage);
             setTotalCount(postsQuery.data.totalCount);
-
-            if (postsQuery.data.posts.length > 0) {
-                refetchLikeCounts();
-                if (session) {
-                    refetchUserReactions();
-                    refetchSavedMap();
-                }
-            }
         }
-    }, [
-        activeTab,
-        postsQuery.data,
-        session,
-        refetchLikeCounts,
-        refetchUserReactions,
-        refetchSavedMap,
-    ]);
+    }, [activeTab, postsQuery.data]);
 
     // Clear list and invalidate when switching tabs
     useEffect(() => {
@@ -546,27 +559,53 @@ export default function PostsPage() {
     });
 
     const savePostMutation = trpc.community.savePost.useMutation({
-        onSuccess: (_data, variables) => {
+        onMutate: (variables) => {
+            // Optimistically update the UI
             setPosts((prev) =>
                 prev.map((p) =>
                     p.id === variables.postId ? { ...p, isSaved: true } : p,
                 ),
             );
+        },
+        onSuccess: (_data, variables) => {
+            // Invalidate saved posts query to update saved page
+            utils.community.getSavedPosts.invalidate();
             toast.success('Saved');
         },
-        onError: () => toast.error('Failed to save'),
-    });
-
-    const unsavePostMutation = trpc.community.unsavePost.useMutation({
-        onSuccess: (_data, variables) => {
+        onError: (_error, variables) => {
+            // Revert optimistic update on error
             setPosts((prev) =>
                 prev.map((p) =>
                     p.id === variables.postId ? { ...p, isSaved: false } : p,
                 ),
             );
+            toast.error('Failed to save');
+        },
+    });
+
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onMutate: (variables) => {
+            // Optimistically update the UI
+            setPosts((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: false } : p,
+                ),
+            );
+        },
+        onSuccess: (_data, variables) => {
+            // Invalidate saved posts query to update saved page
+            utils.community.getSavedPosts.invalidate();
             toast.success('Removed from saved');
         },
-        onError: () => toast.error('Failed to unsave'),
+        onError: (_error, variables) => {
+            // Revert optimistic update on error
+            setPosts((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: true } : p,
+                ),
+            );
+            toast.error('Failed to unsave');
+        },
     });
 
     // Join community from feed (for public community posts)
@@ -617,8 +656,7 @@ export default function PostsPage() {
         }
     };
 
-    const isLoading =
-        postsQuery.isLoading || (posts.length > 0 && !likeCountsQuery.data);
+    const isLoading = postsQuery.isLoading;
 
     const stats = statsQuery.data || {
         totalUsers: 0,
@@ -739,15 +777,17 @@ export default function PostsPage() {
     // Listen for search results
     useEffect(() => {
         if (searchTerm.length >= 2) {
-            setIsSearching(true);
             if (searchQuery.data) {
                 setSearchResults(searchQuery.data.posts);
+                setIsSearching(false); // Set to false when we have results
+            } else if (searchQuery.isLoading) {
+                setIsSearching(true); // Only set to true when actually loading
             }
         } else {
             setIsSearching(false);
             setSearchResults(null);
         }
-    }, [searchTerm, searchQuery.data]);
+    }, [searchTerm, searchQuery.data, searchQuery.isLoading]);
 
     // Clear search when input is cleared
     useEffect(() => {
@@ -763,8 +803,13 @@ export default function PostsPage() {
         isSearching && searchResults !== null ? searchResults : filteredPosts;
 
     const renderPosts = () => {
-        // Show loading skeleton during initial load or search
-        if (isLoading || (isSearching && searchQuery.isLoading)) {
+        // Show loading skeleton only during initial load, not during search or other operations
+        if (isLoading && posts.length === 0) {
+            return <PostSkeleton />;
+        }
+
+        // Show loading only for search if we're actively searching and have no results yet
+        if (isSearching && searchQuery.isLoading && !searchResults) {
             return <PostSkeleton />;
         }
 
@@ -1003,11 +1048,43 @@ export default function PostsPage() {
                                         </span>
                                     </div>
                                 ) : (
-                                    <div className="text-muted-foreground text-sm">
-                                        <SafeHtml
-                                            html={post.content}
-                                            className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                        />
+                                    <div className="space-y-3">
+                                        {/* Post description - truncated to 2 lines */}
+                                        <div className="text-muted-foreground text-sm">
+                                            {(post.attachments &&
+                                                post.attachments.length > 0) ||
+                                            post.content.includes('<img') ? (
+                                                <SafeHtmlWithoutImages
+                                                    html={post.content}
+                                                    className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
+                                                />
+                                            ) : (
+                                                <SafeHtml
+                                                    html={post.content}
+                                                    className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
+                                                />
+                                            )}
+                                        </div>
+
+                                        {/* Post images */}
+                                        {post.attachments &&
+                                        post.attachments.length > 0 ? (
+                                            <ImageCarousel
+                                                images={
+                                                    post.attachments.filter(
+                                                        (att) =>
+                                                            att.type ===
+                                                            'image',
+                                                    )!
+                                                }
+                                                className="w-full"
+                                            />
+                                        ) : post.content.includes('<img') ? (
+                                            <HtmlImageCarousel
+                                                htmlContent={post.content}
+                                                className="w-full"
+                                            />
+                                        ) : null}
                                     </div>
                                 )}
 

@@ -26,11 +26,15 @@ import {
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useSavedPostsSync } from '@/hooks/use-saved-posts-sync';
 
 export default function SavedPage() {
     const sessionData = useSession();
     const session = sessionData.data;
     const router = useRouter();
+
+    // Use the custom hook for cross-page synchronization
+    useSavedPostsSync();
 
     const [offset, setOffset] = useState(0);
     const [posts, setPosts] = useState<any[]>([]);
@@ -41,31 +45,45 @@ export default function SavedPage() {
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
 
-    const savedQuery = trpc.community.getSavedPosts.useQuery({
-        limit: 10,
-        offset: 0,
-        sort: 'latest',
-    });
+    const savedQuery = trpc.community.getSavedPosts.useQuery(
+        {
+            limit: 10,
+            offset: 0,
+            sort: 'latest',
+        },
+        {
+            // Enable background refetching without showing loading states
+            refetchOnWindowFocus: true,
+            refetchOnMount: true,
+            staleTime: 0, // Always consider data stale to allow background updates
+        },
+    );
 
     useEffect(() => {
         if (savedQuery.data) {
-            // Mark as saved by default and preserve any existing like/reaction state
-            setPosts((prev) => {
-                const withSaved = savedQuery.data!.posts.map((p) => {
-                    const existing = prev.find((x) => x.id === p.id);
-                    return {
-                        ...p,
-                        isSaved: true,
-                        // Preserve reaction state if already known to avoid flicker
-                        likeCount: existing?.likeCount ?? 0,
-                        isLiked: existing?.isLiked ?? false,
-                    };
-                });
-                return withSaved as any[];
+            // Only update if this is the initial load or if the data has actually changed
+            const newPosts = savedQuery.data.posts.map((p) => {
+                const existing = posts.find((x) => x.id === p.id);
+                return {
+                    ...p,
+                    isSaved: true,
+                    // Preserve reaction state if already known to avoid flicker
+                    likeCount: existing?.likeCount ?? 0,
+                    isLiked: existing?.isLiked ?? false,
+                };
             });
-            setOffset(savedQuery.data.posts.length);
-            setHasNextPage(savedQuery.data.hasNextPage);
-            setTotalCount(savedQuery.data.totalCount);
+
+            // Check if posts have actually changed to avoid unnecessary updates
+            const hasChanged =
+                posts.length !== newPosts.length ||
+                posts.some((post, index) => post.id !== newPosts[index]?.id);
+
+            if (hasChanged || posts.length === 0) {
+                setPosts(newPosts as any[]);
+                setOffset(savedQuery.data.posts.length);
+                setHasNextPage(savedQuery.data.hasNextPage);
+                setTotalCount(savedQuery.data.totalCount);
+            }
 
             // Immediately refresh like counts and reactions so likes show without manual refresh
             if (savedQuery.data.posts.length > 0) {
@@ -76,7 +94,7 @@ export default function SavedPage() {
                 }
             }
         }
-    }, [savedQuery.data]);
+    }, [savedQuery.data, posts.length]);
 
     // Refetch reactions and counts on window focus or when tab becomes visible
     useEffect(() => {
@@ -172,6 +190,8 @@ export default function SavedPage() {
                     p.id === variables.postId ? { ...p, isSaved: true } : p,
                 ),
             );
+            // Invalidate to ensure consistency across pages
+            utils.community.getSavedPosts.invalidate();
             toast.success('Saved');
         },
         onError: () => toast.error('Failed to save'),
@@ -179,6 +199,8 @@ export default function SavedPage() {
     const unsavePostMutation = trpc.community.unsavePost.useMutation({
         onSuccess: (_data, variables) => {
             setPosts((prev) => prev.filter((p) => p.id !== variables.postId));
+            // Invalidate to ensure consistency across pages
+            utils.community.getSavedPosts.invalidate();
             toast.success('Removed from saved');
         },
         onError: () => toast.error('Failed to unsave'),

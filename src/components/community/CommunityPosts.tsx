@@ -19,6 +19,8 @@ import { LikeButton } from '@/components/ui/like-button';
 import Link from 'next/link';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
+import { ImageCarousel } from '@/components/ui/image-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { DateFilter, type DateFilterState } from '@/components/date-filter';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
@@ -473,11 +475,45 @@ export function CommunityPosts({
                                                     </span>
                                                 </div>
                                             ) : (
-                                                <div className="text-muted-foreground text-sm">
-                                                    <SafeHtml
-                                                        html={post.content}
-                                                        className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                                    />
+                                                <div className="space-y-3">
+                                                    {/* Post description - truncated to 2 lines */}
+                                                    <div className="text-muted-foreground text-sm">
+                                                        {post.attachments &&
+                                                        post.attachments
+                                                            .length > 0 ? (
+                                                            <SafeHtmlWithoutImages
+                                                                html={
+                                                                    post.content
+                                                                }
+                                                                className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
+                                                            />
+                                                        ) : (
+                                                            <SafeHtml
+                                                                html={
+                                                                    post.content
+                                                                }
+                                                                className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
+                                                            />
+                                                        )}
+                                                    </div>
+
+                                                    {/* Post images */}
+                                                    {post.attachments &&
+                                                        post.attachments
+                                                            .length > 0 && (
+                                                            <ImageCarousel
+                                                                images={
+                                                                    post.attachments.filter(
+                                                                        (
+                                                                            att: any,
+                                                                        ) =>
+                                                                            att.type ===
+                                                                            'image',
+                                                                    ) as any
+                                                                }
+                                                                className="max-w-xs"
+                                                            />
+                                                        )}
                                                 </div>
                                             )}
 

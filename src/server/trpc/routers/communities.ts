@@ -384,6 +384,7 @@ export const communitiesRouter = router({
                                 tag: true,
                             },
                         },
+                        attachments: true,
                     },
                     orderBy: desc(posts.createdAt),
                 });
@@ -656,6 +657,7 @@ export const communitiesRouter = router({
                             },
                         },
                         comments: true, // <-- include comments
+                        attachments: true,
                     },
                     orderBy: orderByClause,
                 });

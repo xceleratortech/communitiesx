@@ -58,7 +58,6 @@ export function LikeButton({
         },
         onSuccess: (data) => {
             setLikeCount(data.likeCount);
-            utils.community.getPostLikeCounts.invalidate();
         },
         onError: (_error, _variables, context) => {
             if (context?.previousState) {
@@ -75,7 +74,9 @@ export function LikeButton({
         },
         onSuccess: (data) => {
             setLikeCount(data.likeCount);
-            utils.community.getPostLikeCounts.invalidate();
+            // Remove invalidations to prevent loading states
+            // utils.community.getPostLikeCounts.invalidate();
+            // utils.community.getUserReactions.invalidate();
         },
         onError: () => {
             setIsLiked(true);
