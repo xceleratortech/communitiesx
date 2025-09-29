@@ -86,6 +86,29 @@ export function getRelativeTime(date: Date): string {
 }
 
 /**
+ * Formats a date input into a human-readable relative time string
+ * @param dateInput - The date to format (string, number, or Date)
+ * @returns A string like "Just now", "2 minutes ago", "3 hours ago", etc.
+ */
+export function formatRelativeTime(dateInput: string | number | Date): string {
+    const date = new Date(dateInput);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+    const years = Math.floor(months / 12);
+    return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/**
  * Validates and normalizes community role values to ensure they are safe
  * @param role - The role value to validate
  * @param validRoles - Array of valid role values

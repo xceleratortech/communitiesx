@@ -34,6 +34,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 import { CommunityPopover } from '@/components/ui/community-popover';
+import { formatRelativeTime } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface CommunityPostsProps {
     community: any;
@@ -81,6 +83,57 @@ export function CommunityPosts({
     const [postsWithLikes, setPostsWithLikes] = useState<any[]>([]);
     const utils = trpc.useUtils();
 
+    // Save/unsave mutations
+    const savePostMutation = trpc.community.savePost.useMutation({
+        onMutate: (variables) => {
+            // Optimistically update the UI
+            setPostsWithLikes((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: true } : p,
+                ),
+            );
+        },
+        onSuccess: (_data, variables) => {
+            // Invalidate saved posts query to update saved page
+            utils.community.getSavedPosts.invalidate();
+            toast.success('Saved');
+        },
+        onError: (_error, variables) => {
+            // Revert optimistic update on error
+            setPostsWithLikes((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: false } : p,
+                ),
+            );
+            toast.error('Failed to save');
+        },
+    });
+
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onMutate: (variables) => {
+            // Optimistically update the UI
+            setPostsWithLikes((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: false } : p,
+                ),
+            );
+        },
+        onSuccess: (_data, variables) => {
+            // Invalidate saved posts query to update saved page
+            utils.community.getSavedPosts.invalidate();
+            toast.success('Removed from saved');
+        },
+        onError: (_error, variables) => {
+            // Revert optimistic update on error
+            setPostsWithLikes((prev) =>
+                prev.map((p) =>
+                    p.id === variables.postId ? { ...p, isSaved: true } : p,
+                ),
+            );
+            toast.error('Failed to unsave');
+        },
+    });
+
     // Get like counts for all posts
     const postIds = useMemo(
         () => filteredPosts.map((post) => post.id),
@@ -109,20 +162,40 @@ export function CommunityPosts({
         },
     );
 
-    // Update posts with like data when like queries change
+    // Get user's saved status for all posts
+    const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
+        { postIds },
+        {
+            enabled: postIds.length > 0 && !!session,
+            staleTime: 60 * 1000, // Cache for 1 minute
+            refetchOnWindowFocus: false, // Only refetch on manual actions
+        },
+    );
+
+    // Update posts with like and saved data when queries change
     useEffect(() => {
-        if (likeCountsQuery.data || userReactionsQuery.data) {
+        if (
+            likeCountsQuery.data ||
+            userReactionsQuery.data ||
+            userSavedMapQuery.data
+        ) {
             setPostsWithLikes(
                 filteredPosts.map((post) => ({
                     ...post,
                     likeCount: likeCountsQuery.data?.[post.id] ?? 0,
                     isLiked: userReactionsQuery.data?.[post.id] ?? false,
+                    isSaved: userSavedMapQuery.data?.[post.id] ?? false,
                 })),
             );
         } else {
             setPostsWithLikes(filteredPosts);
         }
-    }, [filteredPosts, likeCountsQuery.data, userReactionsQuery.data]);
+    }, [
+        filteredPosts,
+        likeCountsQuery.data,
+        userReactionsQuery.data,
+        userSavedMapQuery.data,
+    ]);
 
     // Memoize refetch functions to prevent dependency array changes
     const refetchLikeCounts = useCallback(() => {
@@ -150,26 +223,6 @@ export function CommunityPosts({
     // Check if we're still loading like data
     const isLikeDataLoading =
         postsWithLikes.length > 0 && !likeCountsQuery.data;
-
-    // Relative time formatter (kept local to this component)
-    const formatRelativeTime = (dateInput: string | number | Date) => {
-        const date = new Date(dateInput);
-        const now = new Date();
-        const diffMs = now.getTime() - date.getTime();
-        const seconds = Math.floor(diffMs / 1000);
-        if (seconds < 60) return 'Just now';
-        const minutes = Math.floor(seconds / 60);
-        if (minutes < 60)
-            return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-        const hours = Math.floor(minutes / 60);
-        if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-        const days = Math.floor(hours / 24);
-        if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
-        const months = Math.floor(days / 30);
-        if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
-        const years = Math.floor(months / 12);
-        return `${years} year${years === 1 ? '' : 's'} ago`;
-    };
 
     return (
         <TabsContent value="posts" className="mt-0 space-y-6">
@@ -658,11 +711,32 @@ export function CommunityPosts({
                                                             onClick={(e) => {
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
+                                                                if (!session)
+                                                                    return;
+                                                                if (
+                                                                    post.isSaved
+                                                                ) {
+                                                                    unsavePostMutation.mutate(
+                                                                        {
+                                                                            postId: post.id,
+                                                                        },
+                                                                    );
+                                                                } else {
+                                                                    savePostMutation.mutate(
+                                                                        {
+                                                                            postId: post.id,
+                                                                        },
+                                                                    );
+                                                                }
                                                             }}
                                                         >
-                                                            <Bookmark className="h-4 w-4 md:mr-2" />
+                                                            <Bookmark
+                                                                className={`h-4 w-4 md:mr-2 ${post.isSaved ? 'fill-current' : ''}`}
+                                                            />
                                                             <span className="hidden md:inline">
-                                                                Save
+                                                                {post.isSaved
+                                                                    ? 'Saved'
+                                                                    : 'Save'}
                                                             </span>
                                                         </Button>
                                                         <div

@@ -47,6 +47,7 @@ import { ImageCarousel } from '@/components/ui/image-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { HtmlImageCarousel } from '@/components/ui/html-image-carousel';
 import { useSavedPostsSync } from '@/hooks/use-saved-posts-sync';
+import { formatRelativeTime } from '@/lib/utils';
 
 // Updated Post type to match the backend and include all fields from posts schema
 // and correctly typed author from users schema
@@ -66,7 +67,7 @@ type PostTag = {
     color?: string;
 };
 
-type PostDisplay = PostFromDb & {
+export type PostDisplay = PostFromDb & {
     author:
         | (UserFromDb & {
               organization?: {
@@ -104,25 +105,6 @@ type PostDisplay = PostFromDb & {
     isLiked?: boolean; // Add user's like status
     isSaved?: boolean; // Add user's saved status
 };
-
-// Relative time formatter for header timestamp
-function formatRelativeTime(dateInput: string | number | Date): string {
-    const date = new Date(dateInput);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const seconds = Math.floor(diffMs / 1000);
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
-    const months = Math.floor(days / 30);
-    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
-    const years = Math.floor(months / 12);
-    return `${years} year${years === 1 ? '' : 's'} ago`;
-}
 
 // Filter state type
 type FilterState = {
@@ -195,6 +177,12 @@ function getInitials(name: string): string {
     }
     return (words[0][0] + words[1][0]).toUpperCase();
 }
+
+// Utility function to prevent event propagation
+const preventEventPropagation = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+};
 
 export default function PostsPage() {
     const sessionData = useSession();
@@ -948,10 +936,9 @@ export default function PostsPage() {
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8 rounded-full"
-                                                    onClick={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                    }}
+                                                    onClick={
+                                                        preventEventPropagation
+                                                    }
                                                 >
                                                     <Ellipsis className="h-4 w-4" />
                                                 </Button>
@@ -965,8 +952,9 @@ export default function PostsPage() {
                                                 {post.author?.id && (
                                                     <DropdownMenuItem
                                                         onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
+                                                            preventEventPropagation(
+                                                                e,
+                                                            );
                                                             router.push(
                                                                 `/userProfile-details/${post.author!.id}`,
                                                             );
@@ -978,8 +966,9 @@ export default function PostsPage() {
                                                 {post.community?.slug && (
                                                     <DropdownMenuItem
                                                         onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
+                                                            preventEventPropagation(
+                                                                e,
+                                                            );
                                                             router.push(
                                                                 `/communities/${post.community!.slug}`,
                                                             );
@@ -995,8 +984,9 @@ export default function PostsPage() {
                                                 {canEditPost(post) && (
                                                     <DropdownMenuItem
                                                         onClick={(e) => {
-                                                            e.preventDefault();
-                                                            e.stopPropagation();
+                                                            preventEventPropagation(
+                                                                e,
+                                                            );
                                                             router.push(
                                                                 post.community
                                                                     ? `/communities/${post.community.slug}/posts/${post.id}/edit`
@@ -1070,13 +1060,10 @@ export default function PostsPage() {
                                         {post.attachments &&
                                         post.attachments.length > 0 ? (
                                             <ImageCarousel
-                                                images={
-                                                    post.attachments.filter(
-                                                        (att) =>
-                                                            att.type ===
-                                                            'image',
-                                                    )!
-                                                }
+                                                images={post.attachments.filter(
+                                                    (att) =>
+                                                        att.type === 'image',
+                                                )}
                                                 className="w-full"
                                             />
                                         ) : post.content.includes('<img') ? (
@@ -1167,10 +1154,9 @@ export default function PostsPage() {
                                         <div className="mb-1 grid grid-cols-4">
                                             <div
                                                 className="col-span-1 flex items-center justify-center gap-0 md:gap-2"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                }}
+                                                onClick={
+                                                    preventEventPropagation
+                                                }
                                             >
                                                 <LikeButton
                                                     postId={post.id}
@@ -1192,8 +1178,7 @@ export default function PostsPage() {
                                                 size="sm"
                                                 className="col-span-1 justify-center"
                                                 onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
+                                                    preventEventPropagation(e);
                                                     router.push(
                                                         `/posts/${post.id}`,
                                                     );
@@ -1209,8 +1194,7 @@ export default function PostsPage() {
                                                 size="sm"
                                                 className="col-span-1 justify-center"
                                                 onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
+                                                    preventEventPropagation(e);
                                                     if (!session) return;
                                                     if (post.isSaved) {
                                                         unsavePostMutation.mutate(
@@ -1234,10 +1218,9 @@ export default function PostsPage() {
                                             </Button>
                                             <div
                                                 className="col-span-1 flex items-center justify-center"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                }}
+                                                onClick={
+                                                    preventEventPropagation
+                                                }
                                             >
                                                 <ShareButton
                                                     title={post.title}
@@ -1270,8 +1253,7 @@ export default function PostsPage() {
                                                 joinCommunityMutation.isPending
                                             }
                                             onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
+                                                preventEventPropagation(e);
                                                 if (post.community?.id) {
                                                     handleJoinCommunity(
                                                         post.community.id,

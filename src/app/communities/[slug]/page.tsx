@@ -24,6 +24,7 @@ import {
 } from '@/components/community';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { DateFilter, type DateFilterState } from '@/components/date-filter';
+import { CommunityMember } from '@/types/community';
 
 export default function CommunityDetailPage() {
     const params = useParams();
@@ -114,7 +115,7 @@ export default function CommunityDetailPage() {
         if (!community) return community;
         return {
             ...community,
-            members: community.members?.map((m: any) => ({
+            members: community.members?.map((m) => ({
                 ...m,
                 membershipType: 'member' as const,
             })),

@@ -416,11 +416,9 @@ export default function CommunityPostPage() {
                 {postData.attachments && postData.attachments.length > 0 && (
                     <div className="mt-6">
                         <ImageCarousel
-                            images={
-                                postData.attachments.filter(
-                                    (att) => att.type === 'image',
-                                )!
-                            }
+                            images={postData.attachments.filter(
+                                (att) => att.type === 'image',
+                            )}
                             className="max-w-2xl"
                         />
                     </div>

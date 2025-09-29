@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useSavedPostsSync } from '@/hooks/use-saved-posts-sync';
+import { PostDisplay } from '../posts/page';
 
 export default function SavedPage() {
     const sessionData = useSession();
@@ -37,7 +38,7 @@ export default function SavedPage() {
     useSavedPostsSync();
 
     const [offset, setOffset] = useState(0);
-    const [posts, setPosts] = useState<any[]>([]);
+    const [posts, setPosts] = useState<PostDisplay[]>([]);
     const [hasNextPage, setHasNextPage] = useState(true);
     const [isFetchingNextPage, setIsFetchingNextPage] = useState(false);
     const [totalCount, setTotalCount] = useState(0);
