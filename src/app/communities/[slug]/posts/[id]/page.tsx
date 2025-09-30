@@ -7,7 +7,16 @@ import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Edit, Trash2, ArrowLeft, Home, Users } from 'lucide-react';
+import {
+    Edit,
+    Trash2,
+    ArrowLeft,
+    Home,
+    Users,
+    Share2,
+    Bookmark,
+    BookmarkCheck,
+} from 'lucide-react';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
@@ -20,6 +29,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isHtmlContentEmpty } from '@/lib/utils';
 import { ImageCarousel } from '@/components/ui/image-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { LikeButton } from '@/components/ui/like-button';
+import { toast } from 'sonner';
 
 type User = {
     id: string;
@@ -99,6 +110,71 @@ export default function CommunityPostPage() {
             enabled: !!session,
         },
     );
+    // Like count, reaction and saved status for this single post
+    const likeCountsQuery = trpc.community.getPostLikeCounts.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userReactionsQuery = trpc.community.getUserReactions.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+
+    const savePostMutation = trpc.community.savePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Saved');
+        },
+        onError: () => toast.error('Failed to save'),
+    });
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Removed from saved');
+        },
+        onError: () => toast.error('Failed to unsave'),
+    });
+
+    const likeCount = likeCountsQuery.data?.[postId] ?? 0;
+    const isLiked = (userReactionsQuery.data?.[postId] ?? false) as boolean;
+    const isSaved = (userSavedMapQuery.data?.[postId] ?? false) as boolean;
+
+    const handleToggleSave = () => {
+        if (!session) return;
+        if (isSaved) {
+            unsavePostMutation.mutate({ postId });
+        } else {
+            savePostMutation.mutate({ postId });
+        }
+    };
+
+    const shareUrl =
+        typeof window !== 'undefined'
+            ? `${window.location.origin}/communities/${communitySlug}/posts/${postId}`
+            : '';
+
+    const handleShare = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: post?.title || 'Post',
+                    text: post?.title || 'Check this out',
+                    url: shareUrl,
+                });
+            } else {
+                await navigator.clipboard.writeText(shareUrl);
+                toast.success('Link copied to clipboard');
+            }
+        } catch (e) {
+            // User cancelled or sharing failed
+        }
+    };
 
     // Fetch community data for context
     const { data: community } = trpc.communities.getBySlug.useQuery(
@@ -424,6 +500,61 @@ export default function CommunityPostPage() {
                     </div>
                 )}
             </div>
+
+            {/* Like count and comments summary */}
+            <div className="mt-2 flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                    {likeCount > 0
+                        ? isLiked
+                            ? likeCount === 1
+                                ? 'You liked this'
+                                : `You & ${likeCount - 1} ${likeCount - 1 === 1 ? 'other' : 'others'} liked this`
+                            : `${likeCount} ${likeCount === 1 ? 'person' : 'people'} liked this`
+                        : ''}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                    {Array.isArray(postData.comments)
+                        ? postData.comments.length
+                        : 0}{' '}
+                    Comments
+                </span>
+            </div>
+
+            {/* Actions: Like, Save, Share */}
+            {!postData.isDeleted && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <LikeButton
+                        postId={postId}
+                        initialLikeCount={likeCount}
+                        initialIsLiked={isLiked}
+                        size="sm"
+                        variant="ghost"
+                        showCount={false}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleToggleSave}
+                        disabled={
+                            savePostMutation.isPending ||
+                            unsavePostMutation.isPending
+                        }
+                    >
+                        {isSaved ? (
+                            <span className="flex items-center gap-2">
+                                <BookmarkCheck className="h-4 w-4" /> Saved
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-2">
+                                <Bookmark className="h-4 w-4" /> Save
+                            </span>
+                        )}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleShare}>
+                        <Share2 className="mr-2 h-4 w-4" /> Share
+                    </Button>
+                </div>
+            )}
 
             {/* Comments Section */}
             <div className="mb-8">

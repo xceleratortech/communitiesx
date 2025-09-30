@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { CommunityPopover } from '@/components/ui/community-popover';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
+import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
 
 interface CommunityPostsProps {
     community: any;
@@ -81,6 +82,9 @@ export function CommunityPosts({
     const sessionData = useSession();
     const session = sessionData.data;
     const [postsWithLikes, setPostsWithLikes] = useState<any[]>([]);
+    const [expandedCommentPostIds, setExpandedCommentPostIds] = useState<
+        Set<number>
+    >(new Set());
     const utils = trpc.useUtils();
 
     // Save/unsave mutations
@@ -683,9 +687,6 @@ export function CommunityPosts({
                                                                     false
                                                                 }
                                                             />
-                                                            <span className="hidden text-sm md:inline">
-                                                                Like
-                                                            </span>
                                                         </div>
                                                         <Button
                                                             variant="ghost"
@@ -694,8 +695,27 @@ export function CommunityPosts({
                                                             onClick={(e) => {
                                                                 e.preventDefault();
                                                                 e.stopPropagation();
-                                                                router.push(
-                                                                    `/communities/${community.slug}/posts/${post.id}`,
+                                                                setExpandedCommentPostIds(
+                                                                    (prev) => {
+                                                                        const next =
+                                                                            new Set(
+                                                                                prev,
+                                                                            );
+                                                                        if (
+                                                                            next.has(
+                                                                                post.id,
+                                                                            )
+                                                                        ) {
+                                                                            next.delete(
+                                                                                post.id,
+                                                                            );
+                                                                        } else {
+                                                                            next.add(
+                                                                                post.id,
+                                                                            );
+                                                                        }
+                                                                        return next;
+                                                                    },
                                                                 );
                                                             }}
                                                         >
@@ -755,12 +775,24 @@ export function CommunityPosts({
                                                                 variant="ghost"
                                                                 size="sm"
                                                             />
-                                                            <span className="hidden text-sm md:inline">
-                                                                Share
-                                                            </span>
                                                         </div>
                                                     </div>
                                                 </>
+                                            )}
+
+                                            {/* Inline comments preview */}
+                                            {expandedCommentPostIds.has(
+                                                post.id,
+                                            ) && (
+                                                <div className="px-2 pt-1 pb-2">
+                                                    <InlineCommentsPreview
+                                                        postId={post.id}
+                                                        communitySlug={
+                                                            community.slug
+                                                        }
+                                                        session={session}
+                                                    />
+                                                </div>
                                             )}
                                         </div>
                                     </Card>

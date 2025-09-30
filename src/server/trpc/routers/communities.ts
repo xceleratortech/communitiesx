@@ -1456,6 +1456,58 @@ export const communitiesRouter = router({
             }
         }),
 
+    // Cancel user's own pending request
+    cancelPendingRequest: authProcedure
+        .input(z.object({ requestId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Get the request details
+                const request =
+                    await db.query.communityMemberRequests.findFirst({
+                        where: eq(communityMemberRequests.id, input.requestId),
+                    });
+
+                if (!request) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Request not found',
+                    });
+                }
+
+                // Check if the request belongs to the current user
+                if (request.userId !== ctx.session.user.id) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'You can only cancel your own requests',
+                    });
+                }
+
+                // Check if the request is still pending
+                if (request.status !== 'pending') {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This request has already been processed',
+                    });
+                }
+
+                // Delete the request
+                await db
+                    .delete(communityMemberRequests)
+                    .where(eq(communityMemberRequests.id, input.requestId));
+
+                return { success: true };
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error canceling pending request:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to cancel request',
+                });
+            }
+        }),
+
     getUserCommunities: authProcedure.query(async ({ ctx }) => {
         try {
             // Get all communities where the user is a member or follower
