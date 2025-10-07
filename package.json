@@ -70,6 +70,8 @@
         "dompurify": "^3.2.6",
         "dotenv": "^16.5.0",
         "drizzle-orm": "^0.44.4",
+        "embla-carousel": "^8.6.0",
+        "embla-carousel-react": "^8.6.0",
         "framer-motion": "^12.12.1",
         "import-in-the-middle": "^1.14.2",
         "lodash": "^4.17.21",

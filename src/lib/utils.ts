@@ -31,6 +31,12 @@ export function isOrgAdminForCommunity(
 export function isHtmlContentEmpty(html: string): boolean {
     if (!html || html.trim() === '') return true;
 
+    // If contains media (images or our video placeholders), treat as non-empty
+    const hasImage = /<img\b[^>]*src=/i.test(html);
+    const hasVideoPlaceholder = /\[VIDEO:[^\]]+\]/i.test(html);
+    const hasYouTubeEmbed = /data-youtube-video/i.test(html);
+    if (hasImage || hasVideoPlaceholder || hasYouTubeEmbed) return false;
+
     // Remove HTML tags and check if the remaining text is empty
     const textContent = html.replace(/<[^>]*>/g, '').trim();
     if (textContent === '') return true;

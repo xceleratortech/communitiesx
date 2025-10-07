@@ -3,6 +3,7 @@ import { router, publicProcedure, authProcedure } from '../trpc';
 import {
     posts,
     comments,
+    commentHelpfulVotes,
     users,
     orgs,
     communities,
@@ -107,7 +108,7 @@ export const communityRouter = router({
         .input(
             z.object({
                 title: z.string().min(1).max(200),
-                content: z.string().min(1),
+                content: z.string(),
                 communityId: z.number().nullable().optional(),
                 orgId: z.string().optional().nullable(), // Add orgId as optional/nullable
                 tagIds: z.array(z.number()).optional(),
@@ -256,6 +257,35 @@ export const communityRouter = router({
                         }
                     }
 
+                    // Determine if there are any recent, unlinked attachments from this user
+                    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                    const baseAttachmentConds = [
+                        eq(attachments.uploadedBy, ctx.session?.user?.id ?? ''),
+                        isNull(attachments.postId),
+                        gte(attachments.createdAt, oneHourAgo),
+                    ];
+                    if (input.communityId) {
+                        baseAttachmentConds.push(
+                            eq(attachments.communityId, input.communityId),
+                        );
+                    }
+                    const pendingAttachments =
+                        await db.query.attachments.findMany({
+                            where: and(...baseAttachmentConds),
+                        });
+
+                    // Allow media-only posts if there are pending attachments
+                    const textOnlyContent = (input.content || '')
+                        .replace(/<[^>]*>/g, '')
+                        .trim();
+                    if (!textOnlyContent && pendingAttachments.length === 0) {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message:
+                                'Post must have text content or at least one image/video.',
+                        });
+                    }
+
                     // Use a transaction to create post and link tags
                     const result = await db.transaction(async (tx) => {
                         // Determine the orgId for the post
@@ -310,6 +340,12 @@ export const communityRouter = router({
 
                             await tx.insert(postTags).values(postTagValues);
                         }
+
+                        // Link any pending attachments to this new post
+                        await tx
+                            .update(attachments)
+                            .set({ postId: post.id, updatedAt: new Date() })
+                            .where(and(...baseAttachmentConds));
 
                         return post;
                     });
@@ -3574,6 +3610,172 @@ export const communityRouter = router({
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to get post like counts',
+                });
+            }
+        }),
+
+    // Get helpful vote counts for comments
+    getCommentHelpfulCounts: publicProcedure
+        .input(z.object({ commentIds: z.array(z.number()) }))
+        .query(async ({ input }) => {
+            try {
+                if (input.commentIds.length === 0) {
+                    return {};
+                }
+
+                const helpfulCounts = await db
+                    .select({
+                        commentId: commentHelpfulVotes.commentId,
+                        count: count(),
+                    })
+                    .from(commentHelpfulVotes)
+                    .where(
+                        inArray(
+                            commentHelpfulVotes.commentId,
+                            input.commentIds,
+                        ),
+                    )
+                    .groupBy(commentHelpfulVotes.commentId);
+
+                // Convert to a map for easy lookup
+                const countMap: Record<number, number> = {};
+                helpfulCounts.forEach(({ commentId, count }) => {
+                    countMap[commentId] = count;
+                });
+
+                return countMap;
+            } catch (error) {
+                console.error('Error getting comment helpful counts:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to get comment helpful counts',
+                });
+            }
+        }),
+
+    // Get user's helpful votes for comments
+    getUserHelpfulVotes: publicProcedure
+        .input(z.object({ commentIds: z.array(z.number()) }))
+        .query(async ({ input, ctx }) => {
+            try {
+                if (input.commentIds.length === 0 || !ctx.session?.user?.id) {
+                    return {};
+                }
+
+                const userVotes = await db
+                    .select({
+                        commentId: commentHelpfulVotes.commentId,
+                    })
+                    .from(commentHelpfulVotes)
+                    .where(
+                        and(
+                            eq(commentHelpfulVotes.userId, ctx.session.user.id),
+                            inArray(
+                                commentHelpfulVotes.commentId,
+                                input.commentIds,
+                            ),
+                        ),
+                    );
+
+                // Convert to a map for easy lookup
+                const voteMap: Record<number, boolean> = {};
+                userVotes.forEach(({ commentId }) => {
+                    voteMap[commentId] = true;
+                });
+
+                return voteMap;
+            } catch (error) {
+                console.error('Error getting user helpful votes:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to get user helpful votes',
+                });
+            }
+        }),
+
+    // Toggle helpful vote for a comment
+    toggleCommentHelpful: authProcedure
+        .input(z.object({ commentId: z.number() }))
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Check if comment exists
+                const comment = await db.query.comments.findFirst({
+                    where: eq(comments.id, input.commentId),
+                });
+
+                if (!comment) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Comment not found',
+                    });
+                }
+
+                // Check if user already voted
+                const existingVote =
+                    await db.query.commentHelpfulVotes.findFirst({
+                        where: and(
+                            eq(commentHelpfulVotes.commentId, input.commentId),
+                            eq(commentHelpfulVotes.userId, ctx.session.user.id),
+                        ),
+                    });
+
+                if (existingVote) {
+                    // Remove the vote
+                    await db
+                        .delete(commentHelpfulVotes)
+                        .where(
+                            and(
+                                eq(
+                                    commentHelpfulVotes.commentId,
+                                    input.commentId,
+                                ),
+                                eq(
+                                    commentHelpfulVotes.userId,
+                                    ctx.session.user.id,
+                                ),
+                            ),
+                        );
+
+                    // Get new count
+                    const newCount = await db
+                        .select({ count: count() })
+                        .from(commentHelpfulVotes)
+                        .where(
+                            eq(commentHelpfulVotes.commentId, input.commentId),
+                        );
+
+                    return {
+                        helpfulCount: newCount[0]?.count || 0,
+                        isHelpful: false,
+                    };
+                } else {
+                    // Add the vote
+                    await db.insert(commentHelpfulVotes).values({
+                        commentId: input.commentId,
+                        userId: ctx.session.user.id,
+                    });
+
+                    // Get new count
+                    const newCount = await db
+                        .select({ count: count() })
+                        .from(commentHelpfulVotes)
+                        .where(
+                            eq(commentHelpfulVotes.commentId, input.commentId),
+                        );
+
+                    return {
+                        helpfulCount: newCount[0]?.count || 0,
+                        isHelpful: true,
+                    };
+                }
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error toggling comment helpful vote:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to toggle helpful vote',
                 });
             }
         }),

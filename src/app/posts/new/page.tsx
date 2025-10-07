@@ -50,6 +50,7 @@ function NewPostForm() {
     const { data: session } = useSession();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [hasMedia, setHasMedia] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
 
@@ -252,7 +253,7 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || isHtmlContentEmpty(content)) {
+        if (!title.trim() || (isHtmlContentEmpty(content) && !hasMedia)) {
             return;
         }
 
@@ -300,6 +301,7 @@ function NewPostForm() {
                         placeholder="Write your post content here..."
                         communityId={communityId || undefined}
                         communitySlug={communitySlug || undefined}
+                        onMediaChange={(v) => setHasMedia(v)}
                     />
                 </div>
 
@@ -395,7 +397,7 @@ function NewPostForm() {
                     disabled={
                         createPost.isPending ||
                         !title.trim() ||
-                        isHtmlContentEmpty(content)
+                        (isHtmlContentEmpty(content) && !hasMedia)
                     }
                     className="w-full"
                 >

@@ -1,14 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { trpc } from '@/providers/trpc-provider';
 import { Button } from '@/components/ui/button';
 import { SafeHtml } from '@/lib/sanitize';
 import TipTapEditor from '@/components/TipTapEditor';
 import { isHtmlContentEmpty } from '@/lib/utils';
-import { Minus, Plus } from 'lucide-react';
+import { Minus, Plus, BadgeCheck } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { toast } from 'sonner';
 
 type SessionLike = {
     user?: { id: string } | null;
@@ -42,6 +43,33 @@ export default function InlineCommentsPreview({
         { enabled: !!session },
     );
 
+    // Get comment IDs for helpful vote queries
+    const commentIds = useMemo(() => {
+        if (!fullPost?.comments) return [];
+        const extractCommentIds = (comments: any[]): number[] => {
+            const ids: number[] = [];
+            comments.forEach((comment) => {
+                ids.push(comment.id);
+                if (comment.replies && comment.replies.length > 0) {
+                    ids.push(...extractCommentIds(comment.replies));
+                }
+            });
+            return ids;
+        };
+        return extractCommentIds(fullPost.comments);
+    }, [fullPost?.comments]);
+
+    // Helpful vote queries for comments
+    const commentHelpfulCountsQuery =
+        trpc.community.getCommentHelpfulCounts.useQuery(
+            { commentIds },
+            { enabled: commentIds.length > 0 },
+        );
+    const userHelpfulVotesQuery = trpc.community.getUserHelpfulVotes.useQuery(
+        { commentIds },
+        { enabled: commentIds.length > 0 && !!session },
+    );
+
     const createComment = trpc.community.createComment.useMutation({
         onSuccess: () => {
             setCommentContent('');
@@ -50,6 +78,16 @@ export default function InlineCommentsPreview({
             utils.community.getPost.invalidate({ postId });
         },
     });
+
+    const toggleHelpfulMutation =
+        trpc.community.toggleCommentHelpful.useMutation({
+            onSuccess: () => {
+                // Invalidate helpful vote queries
+                utils.community.getCommentHelpfulCounts.invalidate();
+                utils.community.getUserHelpfulVotes.invalidate();
+            },
+            onError: () => toast.error('Failed to toggle helpful vote'),
+        });
 
     const handleSubmit = async () => {
         if (!session) return;
@@ -69,6 +107,11 @@ export default function InlineCommentsPreview({
             content: replyContent,
             parentId,
         });
+    };
+
+    const handleToggleHelpful = (commentId: number) => {
+        if (!session) return;
+        toggleHelpfulMutation.mutate({ commentId });
     };
 
     const toggleCommentExpansion = (commentId: number) => {
@@ -169,6 +212,39 @@ export default function InlineCommentsPreview({
                                     className="prose prose-sm dark:prose-invert max-w-none text-sm"
                                 />
                                 <div className="mt-1 flex items-center gap-2">
+                                    {session &&
+                                        session.user?.id !== c.author?.id && (
+                                            <button
+                                                className={`flex items-center gap-0.5 text-xs ${
+                                                    userHelpfulVotesQuery
+                                                        .data?.[c.id]
+                                                        ? 'text-green-600 hover:text-green-700'
+                                                        : 'text-muted-foreground hover:text-foreground'
+                                                }`}
+                                                onClick={(e) => {
+                                                    preventEventPropagation(
+                                                        e as unknown as React.MouseEvent,
+                                                    );
+                                                    handleToggleHelpful(c.id);
+                                                }}
+                                                disabled={
+                                                    toggleHelpfulMutation.isPending
+                                                }
+                                                title={
+                                                    userHelpfulVotesQuery
+                                                        .data?.[c.id]
+                                                        ? 'Mark as not helpful'
+                                                        : 'Mark as helpful'
+                                                }
+                                            >
+                                                <BadgeCheck className="h-3.5 w-3.5" />
+                                                <span>
+                                                    {commentHelpfulCountsQuery
+                                                        .data?.[c.id] || 0}
+                                                </span>
+                                                <span>Helpful</span>
+                                            </button>
+                                        )}
                                     <button
                                         className="text-muted-foreground hover:text-foreground text-xs underline"
                                         onClick={(e) => {
@@ -318,6 +394,58 @@ export default function InlineCommentsPreview({
                                                             className="prose prose-sm dark:prose-invert max-w-none"
                                                         />
                                                         <div className="mt-1 flex items-center gap-2">
+                                                            {session &&
+                                                                session.user
+                                                                    ?.id !==
+                                                                    r.author
+                                                                        ?.id && (
+                                                                    <button
+                                                                        className={`flex items-center gap-0.5 text-xs ${
+                                                                            userHelpfulVotesQuery
+                                                                                .data?.[
+                                                                                r
+                                                                                    .id
+                                                                            ]
+                                                                                ? 'text-green-600 hover:text-green-700'
+                                                                                : 'text-muted-foreground hover:text-foreground'
+                                                                        }`}
+                                                                        onClick={(
+                                                                            e,
+                                                                        ) => {
+                                                                            preventEventPropagation(
+                                                                                e as unknown as React.MouseEvent,
+                                                                            );
+                                                                            handleToggleHelpful(
+                                                                                r.id,
+                                                                            );
+                                                                        }}
+                                                                        disabled={
+                                                                            toggleHelpfulMutation.isPending
+                                                                        }
+                                                                        title={
+                                                                            userHelpfulVotesQuery
+                                                                                .data?.[
+                                                                                r
+                                                                                    .id
+                                                                            ]
+                                                                                ? 'Mark as not helpful'
+                                                                                : 'Mark as helpful'
+                                                                        }
+                                                                    >
+                                                                        <BadgeCheck className="h-3.5 w-3.5" />
+                                                                        <span>
+                                                                            {commentHelpfulCountsQuery
+                                                                                .data?.[
+                                                                                r
+                                                                                    .id
+                                                                            ] ||
+                                                                                0}
+                                                                        </span>
+                                                                        <span>
+                                                                            Helpful
+                                                                        </span>
+                                                                    </button>
+                                                                )}
                                                             <button
                                                                 className="text-muted-foreground hover:text-foreground text-xs underline"
                                                                 onClick={(
@@ -528,6 +656,60 @@ export default function InlineCommentsPreview({
                                                                                         className="prose prose-sm dark:prose-invert max-w-none"
                                                                                     />
                                                                                     <div className="mt-1 flex items-center gap-2">
+                                                                                        {session &&
+                                                                                            session
+                                                                                                .user
+                                                                                                ?.id !==
+                                                                                                subReply
+                                                                                                    .author
+                                                                                                    ?.id && (
+                                                                                                <button
+                                                                                                    className={`flex items-center gap-0.5 text-xs ${
+                                                                                                        userHelpfulVotesQuery
+                                                                                                            .data?.[
+                                                                                                            subReply
+                                                                                                                .id
+                                                                                                        ]
+                                                                                                            ? 'text-green-600 hover:text-green-700'
+                                                                                                            : 'text-muted-foreground hover:text-foreground'
+                                                                                                    }`}
+                                                                                                    onClick={(
+                                                                                                        e,
+                                                                                                    ) => {
+                                                                                                        preventEventPropagation(
+                                                                                                            e as unknown as React.MouseEvent,
+                                                                                                        );
+                                                                                                        handleToggleHelpful(
+                                                                                                            subReply.id,
+                                                                                                        );
+                                                                                                    }}
+                                                                                                    disabled={
+                                                                                                        toggleHelpfulMutation.isPending
+                                                                                                    }
+                                                                                                    title={
+                                                                                                        userHelpfulVotesQuery
+                                                                                                            .data?.[
+                                                                                                            subReply
+                                                                                                                .id
+                                                                                                        ]
+                                                                                                            ? 'Mark as not helpful'
+                                                                                                            : 'Mark as helpful'
+                                                                                                    }
+                                                                                                >
+                                                                                                    <BadgeCheck className="h-3.5 w-3.5" />
+                                                                                                    <span>
+                                                                                                        {commentHelpfulCountsQuery
+                                                                                                            .data?.[
+                                                                                                            subReply
+                                                                                                                .id
+                                                                                                        ] ||
+                                                                                                            0}
+                                                                                                    </span>
+                                                                                                    <span>
+                                                                                                        Helpful
+                                                                                                    </span>
+                                                                                                </button>
+                                                                                            )}
                                                                                         <button
                                                                                             className="text-muted-foreground hover:text-foreground text-xs underline"
                                                                                             onClick={(
@@ -725,7 +907,61 @@ export default function InlineCommentsPreview({
                                                                                                                 }
                                                                                                                 className="prose prose-sm dark:prose-invert max-w-none"
                                                                                                             />
-                                                                                                            <div className="mt-1">
+                                                                                                            <div className="mt-1 flex items-center gap-2">
+                                                                                                                {session &&
+                                                                                                                    session
+                                                                                                                        .user
+                                                                                                                        ?.id !==
+                                                                                                                        deeperReply
+                                                                                                                            .author
+                                                                                                                            ?.id && (
+                                                                                                                        <button
+                                                                                                                            className={`flex items-center gap-0.5 text-xs ${
+                                                                                                                                userHelpfulVotesQuery
+                                                                                                                                    .data?.[
+                                                                                                                                    deeperReply
+                                                                                                                                        .id
+                                                                                                                                ]
+                                                                                                                                    ? 'text-green-600 hover:text-green-700'
+                                                                                                                                    : 'text-muted-foreground hover:text-foreground'
+                                                                                                                            }`}
+                                                                                                                            onClick={(
+                                                                                                                                e,
+                                                                                                                            ) => {
+                                                                                                                                preventEventPropagation(
+                                                                                                                                    e as unknown as React.MouseEvent,
+                                                                                                                                );
+                                                                                                                                handleToggleHelpful(
+                                                                                                                                    deeperReply.id,
+                                                                                                                                );
+                                                                                                                            }}
+                                                                                                                            disabled={
+                                                                                                                                toggleHelpfulMutation.isPending
+                                                                                                                            }
+                                                                                                                            title={
+                                                                                                                                userHelpfulVotesQuery
+                                                                                                                                    .data?.[
+                                                                                                                                    deeperReply
+                                                                                                                                        .id
+                                                                                                                                ]
+                                                                                                                                    ? 'Mark as not helpful'
+                                                                                                                                    : 'Mark as helpful'
+                                                                                                                            }
+                                                                                                                        >
+                                                                                                                            <BadgeCheck className="h-3.5 w-3.5" />
+                                                                                                                            <span>
+                                                                                                                                {commentHelpfulCountsQuery
+                                                                                                                                    .data?.[
+                                                                                                                                    deeperReply
+                                                                                                                                        .id
+                                                                                                                                ] ||
+                                                                                                                                    0}
+                                                                                                                            </span>
+                                                                                                                            <span>
+                                                                                                                                Helpful
+                                                                                                                            </span>
+                                                                                                                        </button>
+                                                                                                                    )}
                                                                                                                 <button
                                                                                                                     className="text-muted-foreground hover:text-foreground text-xs underline"
                                                                                                                     onClick={(

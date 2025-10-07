@@ -186,6 +186,25 @@ export const comments = pgTable('comments', {
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
+export const commentHelpfulVotes = pgTable(
+    'comment_helpful_votes',
+    {
+        id: serial('id').primaryKey(),
+        commentId: integer('comment_id')
+            .notNull()
+            .references(() => comments.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            uniqueVote: unique().on(table.commentId, table.userId),
+        };
+    },
+);
+
 export const reactions = pgTable(
     'reactions',
     {
@@ -362,6 +381,20 @@ export const commentsRelations = relations(comments, ({ one }) => ({
         references: [users.id],
     }),
 }));
+
+export const commentHelpfulVotesRelations = relations(
+    commentHelpfulVotes,
+    ({ one }) => ({
+        comment: one(comments, {
+            fields: [commentHelpfulVotes.commentId],
+            references: [comments.id],
+        }),
+        user: one(users, {
+            fields: [commentHelpfulVotes.userId],
+            references: [users.id],
+        }),
+    }),
+);
 
 // Add extended relations for users and orgs
 export const extendedUsersRelations = relations(users, ({ many }) => ({

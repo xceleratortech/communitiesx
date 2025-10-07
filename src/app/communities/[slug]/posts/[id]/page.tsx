@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
@@ -124,6 +124,33 @@ export default function CommunityPostPage() {
         { enabled: !!session && !!postId },
     );
 
+    // Get comment IDs for helpful vote queries
+    const commentIds = useMemo(() => {
+        if (!post?.comments) return [];
+        const extractCommentIds = (comments: any[]): number[] => {
+            const ids: number[] = [];
+            comments.forEach((comment) => {
+                ids.push(comment.id);
+                if (comment.replies && comment.replies.length > 0) {
+                    ids.push(...extractCommentIds(comment.replies));
+                }
+            });
+            return ids;
+        };
+        return extractCommentIds(post.comments);
+    }, [post?.comments]);
+
+    // Helpful vote queries for comments
+    const commentHelpfulCountsQuery =
+        trpc.community.getCommentHelpfulCounts.useQuery(
+            { commentIds },
+            { enabled: commentIds.length > 0 },
+        );
+    const userHelpfulVotesQuery = trpc.community.getUserHelpfulVotes.useQuery(
+        { commentIds },
+        { enabled: commentIds.length > 0 && !!session },
+    );
+
     const savePostMutation = trpc.community.savePost.useMutation({
         onSuccess: () => {
             utils.community.getSavedPosts.invalidate();
@@ -141,6 +168,16 @@ export default function CommunityPostPage() {
         onError: () => toast.error('Failed to unsave'),
     });
 
+    const toggleHelpfulMutation =
+        trpc.community.toggleCommentHelpful.useMutation({
+            onSuccess: () => {
+                // Invalidate helpful vote queries
+                utils.community.getCommentHelpfulCounts.invalidate();
+                utils.community.getUserHelpfulVotes.invalidate();
+            },
+            onError: () => toast.error('Failed to toggle helpful vote'),
+        });
+
     const likeCount = likeCountsQuery.data?.[postId] ?? 0;
     const isLiked = (userReactionsQuery.data?.[postId] ?? false) as boolean;
     const isSaved = (userSavedMapQuery.data?.[postId] ?? false) as boolean;
@@ -152,6 +189,11 @@ export default function CommunityPostPage() {
         } else {
             savePostMutation.mutate({ postId });
         }
+    };
+
+    const handleToggleHelpful = (commentId: number) => {
+        if (!session) return;
+        toggleHelpfulMutation.mutate({ commentId });
     };
 
     const shareUrl =
@@ -624,6 +666,18 @@ export default function CommunityPostPage() {
                             }
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={handleCommentExpansionChange}
+                            helpfulCount={
+                                commentHelpfulCountsQuery.data?.[comment.id] ||
+                                0
+                            }
+                            isHelpful={
+                                userHelpfulVotesQuery.data?.[comment.id] ||
+                                false
+                            }
+                            onToggleHelpful={handleToggleHelpful}
+                            helpfulMutationPending={
+                                toggleHelpfulMutation.isPending
+                            }
                         />
                     ))}
                 </div>

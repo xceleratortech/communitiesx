@@ -119,7 +119,7 @@ export function LikeButton({
                 onClick={handleLike}
                 disabled={isLoading || disabled}
                 className={cn(
-                    'text-muted-foreground hover:bg-accent hover:text-foreground inline-flex items-center justify-center gap-2 transition-colors',
+                    'inline-flex items-center justify-center gap-2 transition-colors',
                     isLiked && 'text-blue-500 hover:text-blue-600',
                     className,
                 )}
