@@ -21,6 +21,7 @@ export default function PostActionBar({
     onToggleSave,
     shareUrl,
     sessionExists,
+    onLikeChange,
 }: {
     post: PostDisplay;
     canInteract: boolean;
@@ -29,6 +30,11 @@ export default function PostActionBar({
     onToggleSave: () => void;
     shareUrl: string;
     sessionExists: boolean;
+    onLikeChange?: (
+        postId: number,
+        isLiked: boolean,
+        likeCount: number,
+    ) => void;
 }) {
     if (!canInteract) return null;
     return (
@@ -40,6 +46,7 @@ export default function PostActionBar({
                     onClick={preventEventPropagation}
                 >
                     <LikeButton
+                        key={`${post.id}-${post.isLiked}-${post.likeCount}`}
                         postId={post.id}
                         initialLikeCount={post.likeCount ?? 0}
                         initialIsLiked={post.isLiked ?? false}
@@ -48,6 +55,7 @@ export default function PostActionBar({
                         disabled={!sessionExists}
                         showCount={false}
                         showLabel={true}
+                        onLikeChange={onLikeChange}
                     />
                 </div>
                 <Button

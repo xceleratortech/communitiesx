@@ -33,6 +33,7 @@ export default function PostCard({
     joiningCommunityId,
     isJoinPending,
     onJoinCommunity,
+    onLikeChange,
 }: {
     post: PostDisplay;
     session: SessionLike;
@@ -51,6 +52,11 @@ export default function PostCard({
     joiningCommunityId: number | null;
     isJoinPending: boolean;
     onJoinCommunity?: (communityId: number) => void;
+    onLikeChange?: (
+        postId: number,
+        isLiked: boolean,
+        likeCount: number,
+    ) => void;
 }) {
     return (
         <Link
@@ -209,6 +215,7 @@ export default function PostCard({
                         onToggleSave={onToggleSave}
                         shareUrl={shareUrl}
                         sessionExists={!!session}
+                        onLikeChange={onLikeChange}
                     />
 
                     {isCommentsExpanded && (

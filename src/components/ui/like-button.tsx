@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { trpc } from '@/providers/trpc-provider';
@@ -18,6 +18,11 @@ interface LikeButtonProps {
     showCount?: boolean;
     showLabel?: boolean;
     label?: string;
+    onLikeChange?: (
+        postId: number,
+        isLiked: boolean,
+        likeCount: number,
+    ) => void;
 }
 
 export function LikeButton({
@@ -31,18 +36,39 @@ export function LikeButton({
     showCount = true,
     showLabel = true,
     label = 'Like',
+    onLikeChange,
 }: LikeButtonProps) {
     const [isLiked, setIsLiked] = useState(initialIsLiked);
     const [likeCount, setLikeCount] = useState(initialLikeCount);
     const [showFloat, setShowFloat] = useState(false);
+    const [lastActionTime, setLastActionTime] = useState(0);
 
     // Update state when props change (e.g., on refresh)
     useEffect(() => {
         setIsLiked(initialIsLiked);
         setLikeCount(initialLikeCount);
-    }, [initialIsLiked, initialLikeCount]);
+    }, [initialIsLiked, initialLikeCount, postId]);
 
     const utils = trpc.useUtils();
+
+    // Function to refresh state from server
+    const refreshStateFromServer = useCallback(async () => {
+        try {
+            // Invalidate queries to force fresh data fetch
+            await Promise.all([
+                utils.community.getPostLikeCounts.invalidate(),
+                utils.community.getUserReactions.invalidate(),
+            ]);
+        } catch (error) {
+            console.error('Error refreshing state from server:', error);
+        }
+    }, [
+        postId,
+        utils.community.getPostLikeCounts,
+        utils.community.getUserReactions,
+        likeCount,
+        isLiked,
+    ]);
 
     const likeMutation = trpc.community.likePost.useMutation({
         onMutate: () => {
@@ -58,29 +84,48 @@ export function LikeButton({
         },
         onSuccess: (data) => {
             setLikeCount(data.likeCount);
+            setIsLiked(true);
+            // Call the callback to update parent component
+            onLikeChange?.(postId, true, data.likeCount);
+            // Invalidate queries to ensure updates across all components
+            utils.community.getUserReactions.invalidate();
+            utils.community.getPostLikeCounts.invalidate();
         },
-        onError: (_error, _variables, context) => {
+        onError: (error, _variables, context) => {
+            console.error('Like error:', error);
             if (context?.previousState) {
                 setIsLiked(context.previousState.isLiked);
                 setLikeCount(context.previousState.likeCount);
             }
+            // Refresh state from server to ensure consistency
+            refreshStateFromServer();
         },
     });
 
     const unlikeMutation = trpc.community.unlikePost.useMutation({
         onMutate: () => {
+            const previousState = { isLiked, likeCount };
             setIsLiked(false);
             setLikeCount((prev) => Math.max(0, prev - 1));
+            return { previousState };
         },
         onSuccess: (data) => {
             setLikeCount(data.likeCount);
-            // Remove invalidations to prevent loading states
-            // utils.community.getPostLikeCounts.invalidate();
-            // utils.community.getUserReactions.invalidate();
+            setIsLiked(false);
+            // Call the callback to update parent component
+            onLikeChange?.(postId, false, data.likeCount);
+            // Invalidate queries to ensure updates across all components
+            utils.community.getUserReactions.invalidate();
+            utils.community.getPostLikeCounts.invalidate();
         },
-        onError: () => {
-            setIsLiked(true);
-            setLikeCount((prev) => prev + 1);
+        onError: (error, _variables, context) => {
+            console.error('Unlike error:', error);
+            if (context?.previousState) {
+                setIsLiked(context.previousState.isLiked);
+                setLikeCount(context.previousState.likeCount);
+            }
+            // Refresh state from server to ensure consistency
+            refreshStateFromServer();
         },
     });
 
@@ -88,6 +133,16 @@ export function LikeButton({
 
     const handleLike = () => {
         if (isLoading || disabled) return;
+
+        // Prevent double-clicks by checking if a mutation is already in progress
+        if (likeMutation.isPending || unlikeMutation.isPending) return;
+
+        // Debounce rapid clicks (prevent clicks within 500ms)
+        const now = Date.now();
+        if (now - lastActionTime < 500) {
+            return;
+        }
+        setLastActionTime(now);
 
         if (isLiked) {
             unlikeMutation.mutate({ postId });
@@ -114,6 +169,7 @@ export function LikeButton({
     return (
         <div className="relative flex items-center">
             <Button
+                key={`like-${postId}-${isLiked}-${likeCount}`}
                 variant={variant}
                 size={buttonSize}
                 onClick={handleLike}

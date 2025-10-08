@@ -158,6 +158,18 @@ export default function PostsPage() {
 
     const { checkCommunityPermission } = usePermission();
 
+    // Handle like changes from LikeButton
+    const handleLikeChange = useCallback(
+        (postId: number, isLiked: boolean, likeCount: number) => {
+            setPosts((prev) =>
+                prev.map((post) =>
+                    post.id === postId ? { ...post, isLiked, likeCount } : post,
+                ),
+            );
+        },
+        [],
+    );
+
     // Set isClient to true after component mounts
     useEffect(() => {
         setIsClient(true);
@@ -841,6 +853,7 @@ export default function PostsPage() {
                             joiningCommunityId={joiningCommunityId}
                             isJoinPending={joinCommunityMutation.isPending}
                             onJoinCommunity={handleJoinCommunity}
+                            onLikeChange={handleLikeChange}
                         />
                     );
                 })}

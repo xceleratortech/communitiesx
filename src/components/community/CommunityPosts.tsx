@@ -87,6 +87,18 @@ export function CommunityPosts({
     >(new Set());
     const utils = trpc.useUtils();
 
+    // Handle like changes from LikeButton
+    const handleLikeChange = useCallback(
+        (postId: number, isLiked: boolean, likeCount: number) => {
+            setPostsWithLikes((prev) =>
+                prev.map((post) =>
+                    post.id === postId ? { ...post, isLiked, likeCount } : post,
+                ),
+            );
+        },
+        [],
+    );
+
     // Save/unsave mutations
     const savePostMutation = trpc.community.savePost.useMutation({
         onMutate: (variables) => {
@@ -149,8 +161,9 @@ export function CommunityPosts({
             enabled: postIds.length > 0,
             staleTime: 0, // Always fetch fresh data
             refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000, // More frequent polling to reflect others' likes
-            refetchIntervalInBackground: true, // Continue polling even when tab is not active
+            // Remove polling to prevent race conditions with immediate refetches
+            // refetchInterval: 5 * 1000,
+            // refetchIntervalInBackground: true,
         },
     );
 
@@ -161,8 +174,9 @@ export function CommunityPosts({
             enabled: postIds.length > 0 && !!session,
             staleTime: 0, // Always fetch fresh data
             refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000, // More frequent polling to reflect others' likes
-            refetchIntervalInBackground: true, // Continue polling even when tab is not active
+            // Remove polling to prevent race conditions with immediate refetches
+            // refetchInterval: 5 * 1000,
+            // refetchIntervalInBackground: true,
         },
     );
 
@@ -663,6 +677,7 @@ export function CommunityPosts({
                                                             }}
                                                         >
                                                             <LikeButton
+                                                                key={`${post.id}-${post.isLiked}-${post.likeCount}`}
                                                                 postId={post.id}
                                                                 initialLikeCount={
                                                                     post.likeCount ??
@@ -679,6 +694,9 @@ export function CommunityPosts({
                                                                 }
                                                                 showCount={
                                                                     false
+                                                                }
+                                                                onLikeChange={
+                                                                    handleLikeChange
                                                                 }
                                                             />
                                                         </div>

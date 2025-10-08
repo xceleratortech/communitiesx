@@ -958,6 +958,18 @@ export default function SavedPage() {
     const observerRef = useRef<IntersectionObserver | null>(null);
     const loadMoreRef = useRef<HTMLDivElement>(null);
 
+    // Handle like changes from LikeButton
+    const handleLikeChange = useCallback(
+        (postId: number, isLiked: boolean, likeCount: number) => {
+            setPosts((prev) =>
+                prev.map((post) =>
+                    post.id === postId ? { ...post, isLiked, likeCount } : post,
+                ),
+            );
+        },
+        [],
+    );
+
     const savedQuery = trpc.community.getSavedPosts.useQuery(
         {
             limit: 10,
@@ -1049,8 +1061,9 @@ export default function SavedPage() {
             enabled: postIds.length > 0,
             staleTime: 0,
             refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000,
-            refetchIntervalInBackground: true,
+            // Remove polling to prevent race conditions with immediate refetches
+            // refetchInterval: 5 * 1000,
+            // refetchIntervalInBackground: true,
         },
     );
     const userReactionsQuery = trpc.community.getUserReactions.useQuery(
@@ -1059,8 +1072,9 @@ export default function SavedPage() {
             enabled: postIds.length > 0 && !!session,
             staleTime: 0,
             refetchOnWindowFocus: true,
-            refetchInterval: 5 * 1000,
-            refetchIntervalInBackground: true,
+            // Remove polling to prevent race conditions with immediate refetches
+            // refetchInterval: 5 * 1000,
+            // refetchIntervalInBackground: true,
         },
     );
     const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
@@ -1407,9 +1421,19 @@ export default function SavedPage() {
 
                                     <div className="mt-2 flex items-center justify-between">
                                         <span className="text-muted-foreground text-xs">
-                                            {(post.likeCount ?? 0) > 0
-                                                ? `${post.likeCount} ${(post.likeCount ?? 0) === 1 ? 'person' : 'people'} liked this`
-                                                : ''}
+                                            {(() => {
+                                                const likeCountNum =
+                                                    post.likeCount ?? 0;
+                                                const isLiked =
+                                                    post.isLiked ?? false;
+                                                return likeCountNum > 0
+                                                    ? isLiked
+                                                        ? likeCountNum === 1
+                                                            ? 'You liked this'
+                                                            : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
+                                                        : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
+                                                    : '';
+                                            })()}
                                         </span>
                                         <span className="text-muted-foreground text-xs">
                                             {Array.isArray(post.comments)
@@ -1429,6 +1453,7 @@ export default function SavedPage() {
                                             }}
                                         >
                                             <LikeButton
+                                                key={`${post.id}-${post.isLiked}-${post.likeCount}`}
                                                 postId={post.id}
                                                 initialLikeCount={
                                                     post.likeCount ?? 0
@@ -1440,6 +1465,7 @@ export default function SavedPage() {
                                                 variant="ghost"
                                                 disabled={!session}
                                                 showCount={false}
+                                                onLikeChange={handleLikeChange}
                                             />
                                         </div>
                                         <Button
