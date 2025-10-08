@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Edit, Trash2, Plus, Minus, Reply } from 'lucide-react';
+import { Edit, Trash2, Plus, Minus, Reply, BadgeCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { users } from '@/server/db/schema'; // Assuming UserFromDb is similar or can be imported
@@ -50,6 +50,10 @@ interface CommentItemProps {
     depth?: number;
     autoExpandedComments: Set<number>;
     onExpansionChange: (commentId: number, isExpanded: boolean) => void;
+    helpfulCounts?: Record<number, number>;
+    isHelpfulMap?: Record<number, boolean>;
+    onToggleHelpful?: (commentId: number) => void;
+    helpfulMutationPending?: boolean;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -74,6 +78,10 @@ const CommentItem: React.FC<CommentItemProps> = ({
     depth = 0,
     autoExpandedComments,
     onExpansionChange,
+    helpfulCounts,
+    isHelpfulMap,
+    onToggleHelpful,
+    helpfulMutationPending = false,
 }) => {
     const shouldAutoExpand = autoExpandedComments.has(comment.id);
     const [isExpanded, setIsExpanded] = useState(shouldAutoExpand);
@@ -84,8 +92,16 @@ const CommentItem: React.FC<CommentItemProps> = ({
     const canDelete =
         !comment.isDeleted && session?.user?.id === comment.authorId;
     const canReply = !!session?.user;
+    const canMarkHelpful =
+        !!session?.user &&
+        !comment.isDeleted &&
+        session?.user?.id !== comment.authorId;
     const replies = comment.replies || [];
     const hasReplies = replies.length > 0;
+
+    // Get helpful data for this specific comment
+    const helpfulCount = helpfulCounts?.[comment.id] || 0;
+    const isHelpful = isHelpfulMap?.[comment.id] || false;
 
     // Update expansion state when autoExpandedComments changes
     useEffect(() => {
@@ -237,6 +253,29 @@ const CommentItem: React.FC<CommentItemProps> = ({
 
                                 {/* Comment actions */}
                                 <div className="flex flex-wrap items-center gap-1.5">
+                                    {canMarkHelpful && (
+                                        <button
+                                            onClick={() =>
+                                                onToggleHelpful?.(comment.id)
+                                            }
+                                            className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors ${
+                                                isHelpful
+                                                    ? 'text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/20'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                                            }`}
+                                            disabled={helpfulMutationPending}
+                                            title={
+                                                isHelpful
+                                                    ? 'Mark as not helpful'
+                                                    : 'Mark as helpful'
+                                            }
+                                        >
+                                            <BadgeCheck className="h-3.5 w-3.5" />
+                                            <span>{helpfulCount}</span>
+                                            <span>Helpful</span>
+                                        </button>
+                                    )}
+
                                     {canReply && !comment.isDeleted && (
                                         <button
                                             onClick={() =>
@@ -357,6 +396,10 @@ const CommentItem: React.FC<CommentItemProps> = ({
                             depth={depth + 1}
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={onExpansionChange}
+                            helpfulCounts={helpfulCounts}
+                            isHelpfulMap={isHelpfulMap}
+                            onToggleHelpful={onToggleHelpful}
+                            helpfulMutationPending={helpfulMutationPending}
                         />
                     ))}
                 </div>

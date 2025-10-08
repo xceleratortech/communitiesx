@@ -108,14 +108,6 @@ export function Topbar() {
                                     <Bookmark className="mr-2 h-4 w-4" /> Saved
                                     Items
                                 </Link>
-                                <Link
-                                    href="/notifications"
-                                    className="hover:bg-accent flex items-center rounded-md p-2 text-sm"
-                                    onClick={() => setNavOpen(false)}
-                                >
-                                    <Bell className="mr-2 h-4 w-4" />{' '}
-                                    Notifications
-                                </Link>
                                 <CreatePostDialog>
                                     <Button
                                         variant="outline"

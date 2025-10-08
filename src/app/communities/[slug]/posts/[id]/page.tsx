@@ -1,13 +1,22 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Edit, Trash2, ArrowLeft, Home, Users } from 'lucide-react';
+import {
+    Edit,
+    Trash2,
+    ArrowLeft,
+    Home,
+    Users,
+    Share2,
+    Bookmark,
+    BookmarkCheck,
+} from 'lucide-react';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
@@ -18,6 +27,24 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isHtmlContentEmpty } from '@/lib/utils';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { LikeButton } from '@/components/ui/like-button';
+import { toast } from 'sonner';
+
+// Utility function to format like count message
+function formatLikeMessage(likeCount: number, isLiked: boolean): string {
+    if (likeCount === 0) return '';
+
+    if (isLiked) {
+        if (likeCount === 1) {
+            return 'You liked this';
+        }
+        return `You & ${likeCount - 1} ${likeCount - 1 === 1 ? 'other' : 'others'} liked this`;
+    }
+
+    return `${likeCount} ${likeCount === 1 ? 'person' : 'people'} liked this`;
+}
 
 type User = {
     id: string;
@@ -41,6 +68,22 @@ type Post = {
         slug: string;
         type: 'public' | 'private';
     };
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
 };
 
 export default function CommunityPostPage() {
@@ -81,6 +124,113 @@ export default function CommunityPostPage() {
             enabled: !!session,
         },
     );
+    // Like count, reaction and saved status for this single post
+    const likeCountsQuery = trpc.community.getPostLikeCounts.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userReactionsQuery = trpc.community.getUserReactions.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+
+    // Get comment IDs for helpful vote queries
+    const commentIds = useMemo(() => {
+        if (!post?.comments) return [];
+        const extractCommentIds = (comments: any[]): number[] => {
+            const ids: number[] = [];
+            comments.forEach((comment) => {
+                ids.push(comment.id);
+                if (comment.replies && comment.replies.length > 0) {
+                    ids.push(...extractCommentIds(comment.replies));
+                }
+            });
+            return ids;
+        };
+        return extractCommentIds(post.comments);
+    }, [post?.comments]);
+
+    // Helpful vote queries for comments
+    const commentHelpfulCountsQuery =
+        trpc.community.getCommentHelpfulCounts.useQuery(
+            { commentIds },
+            { enabled: commentIds.length > 0 },
+        );
+    const userHelpfulVotesQuery = trpc.community.getUserHelpfulVotes.useQuery(
+        { commentIds },
+        { enabled: commentIds.length > 0 && !!session },
+    );
+
+    const savePostMutation = trpc.community.savePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Saved');
+        },
+        onError: () => toast.error('Failed to save'),
+    });
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Removed from saved');
+        },
+        onError: () => toast.error('Failed to unsave'),
+    });
+
+    const toggleHelpfulMutation =
+        trpc.community.toggleCommentHelpful.useMutation({
+            onSuccess: () => {
+                // Invalidate helpful vote queries
+                utils.community.getCommentHelpfulCounts.invalidate();
+                utils.community.getUserHelpfulVotes.invalidate();
+            },
+            onError: () => toast.error('Failed to toggle helpful vote'),
+        });
+
+    const likeCount = likeCountsQuery.data?.[postId] ?? 0;
+    const isLiked = (userReactionsQuery.data?.[postId] ?? false) as boolean;
+    const isSaved = (userSavedMapQuery.data?.[postId] ?? false) as boolean;
+
+    const handleToggleSave = () => {
+        if (!session) return;
+        if (isSaved) {
+            unsavePostMutation.mutate({ postId });
+        } else {
+            savePostMutation.mutate({ postId });
+        }
+    };
+
+    const handleToggleHelpful = (commentId: number) => {
+        if (!session) return;
+        toggleHelpfulMutation.mutate({ commentId });
+    };
+
+    const shareUrl =
+        typeof window !== 'undefined'
+            ? `${window.location.origin}/communities/${communitySlug}/posts/${postId}`
+            : '';
+
+    const handleShare = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: post?.title || 'Post',
+                    text: post?.title || 'Check this out',
+                    url: shareUrl,
+                });
+            } else {
+                await navigator.clipboard.writeText(shareUrl);
+                toast.success('Link copied to clipboard');
+            }
+        } catch (e) {
+            // User cancelled or sharing failed
+        }
+    };
 
     // Fetch community data for context
     const { data: community } = trpc.communities.getBySlug.useQuery(
@@ -377,13 +527,82 @@ export default function CommunityPostPage() {
                             </span>
                         </div>
                     ) : (
-                        <SafeHtml
-                            html={postData.content}
-                            className="whitespace-pre-wrap"
-                        />
+                        <div>
+                            {postData.attachments &&
+                            postData.attachments.length > 0 ? (
+                                <SafeHtmlWithoutImages
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            ) : (
+                                <SafeHtml
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            )}
+                        </div>
                     )}
                 </div>
+
+                {/* Post media */}
+                {postData.attachments && postData.attachments.length > 0 && (
+                    <div className="mt-6">
+                        <MixedMediaCarousel
+                            media={postData.attachments}
+                            className="max-w-2xl"
+                        />
+                    </div>
+                )}
             </div>
+
+            {/* Like count and comments summary */}
+            <div className="mt-2 flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                    {formatLikeMessage(likeCount, isLiked)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                    {Array.isArray(postData.comments)
+                        ? postData.comments.length
+                        : 0}{' '}
+                    Comments
+                </span>
+            </div>
+
+            {/* Actions: Like, Save, Share */}
+            {!postData.isDeleted && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <LikeButton
+                        postId={postId}
+                        initialLikeCount={likeCount}
+                        initialIsLiked={isLiked}
+                        size="sm"
+                        variant="ghost"
+                        showCount={false}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleToggleSave}
+                        disabled={
+                            savePostMutation.isPending ||
+                            unsavePostMutation.isPending
+                        }
+                    >
+                        {isSaved ? (
+                            <span className="flex items-center gap-2">
+                                <BookmarkCheck className="h-4 w-4" /> Saved
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-2">
+                                <Bookmark className="h-4 w-4" /> Save
+                            </span>
+                        )}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleShare}>
+                        <Share2 className="mr-2 h-4 w-4" /> Share
+                    </Button>
+                </div>
+            )}
 
             {/* Comments Section */}
             <div className="mb-8">
@@ -453,6 +672,12 @@ export default function CommunityPostPage() {
                             }
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={handleCommentExpansionChange}
+                            helpfulCounts={commentHelpfulCountsQuery.data}
+                            isHelpfulMap={userHelpfulVotesQuery.data}
+                            onToggleHelpful={handleToggleHelpful}
+                            helpfulMutationPending={
+                                toggleHelpfulMutation.isPending
+                            }
                         />
                     ))}
                 </div>

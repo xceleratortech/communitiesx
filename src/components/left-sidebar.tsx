@@ -62,6 +62,9 @@ export function LeftSidebar() {
 
     const isActive = (path: string) => {
         if (!pathname) return false;
+        if (path === '/communities') {
+            return pathname === '/communities';
+        }
         return pathname.startsWith(path);
     };
 
@@ -147,15 +150,6 @@ export function LeftSidebar() {
                     <Link href="/saved" className={getNavLinkClass('/saved')}>
                         <Bookmark className="mr-3 h-5 w-5" />
                         Saved Items
-                    </Link>
-
-                    {/* Notifications */}
-                    <Link
-                        href="/notifications"
-                        className={getNavLinkClass('/notifications')}
-                    >
-                        <Bell className="mr-3 h-5 w-5" />
-                        Notifications
                     </Link>
 
                     {/* Create Post */}

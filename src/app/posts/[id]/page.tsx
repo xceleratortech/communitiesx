@@ -12,6 +12,8 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
 import { isHtmlContentEmpty } from '@/lib/utils';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 
 type User = {
     id: string;
@@ -29,6 +31,22 @@ type Post = {
     author: User;
     comments: CommentWithReplies[];
     isDeleted: boolean;
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
 };
 
 export default function PostPage() {
@@ -293,12 +311,33 @@ export default function PostPage() {
                                 </span>
                             </div>
                         ) : (
-                            <SafeHtml
-                                html={postData.content}
-                                className="whitespace-pre-wrap"
-                            />
+                            <div>
+                                {postData.attachments &&
+                                postData.attachments.length > 0 ? (
+                                    <SafeHtmlWithoutImages
+                                        html={postData.content}
+                                        className="whitespace-pre-wrap"
+                                    />
+                                ) : (
+                                    <SafeHtml
+                                        html={postData.content}
+                                        className="whitespace-pre-wrap"
+                                    />
+                                )}
+                            </div>
                         )}
                     </div>
+
+                    {/* Post media */}
+                    {postData.attachments &&
+                        postData.attachments.length > 0 && (
+                            <div className="mt-6">
+                                <MixedMediaCarousel
+                                    media={postData.attachments}
+                                    className="max-w-2xl"
+                                />
+                            </div>
+                        )}
                 </div>
 
                 <div className="mb-8">

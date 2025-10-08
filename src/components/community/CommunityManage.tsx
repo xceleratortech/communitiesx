@@ -34,7 +34,7 @@ export function CommunityManage({
                         Pending Requests
                     </h2>
                     <p className="text-muted-foreground mb-4 text-sm">
-                        Manage join and follow requests for this community
+                        Manage join requests for this community
                     </p>
 
                     {pendingRequests && pendingRequests.length > 0 ? (
@@ -43,7 +43,7 @@ export function CommunityManage({
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>User</TableHead>
-                                        <TableHead>Request Type</TableHead>
+                                        <TableHead>Request</TableHead>
                                         <TableHead>Requested At</TableHead>
                                         <TableHead className="text-right">
                                             Actions
@@ -80,24 +80,12 @@ export function CommunityManage({
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <Badge
-                                                    variant={
-                                                        request.requestType ===
-                                                        'join'
-                                                            ? 'default'
-                                                            : 'secondary'
-                                                    }
-                                                >
-                                                    {request.requestType ===
-                                                    'join'
-                                                        ? 'Join'
-                                                        : 'Follow'}
+                                                <Badge variant="default">
+                                                    Join
                                                 </Badge>
                                                 <div className="text-muted-foreground mt-1 text-xs">
-                                                    {request.requestType ===
-                                                    'join'
-                                                        ? 'User wants to become a member'
-                                                        : 'User wants to follow posts'}
+                                                    User wants to become a
+                                                    member
                                                 </div>
                                             </TableCell>
                                             <TableCell>

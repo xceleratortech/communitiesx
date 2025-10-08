@@ -9,7 +9,7 @@ export interface CommunityMember {
     userId: string;
     communityId: number;
     role: string;
-    membershipType: string;
+    membershipType: 'member';
     status: string;
     joinedAt: string | Date;
     updatedAt: string | Date;
@@ -50,7 +50,7 @@ export interface CommunityMemberRequest {
     id: number;
     userId: string;
     communityId: number;
-    requestType: 'join' | 'follow';
+    requestType: 'join';
     status: 'pending' | 'approved' | 'rejected';
     message?: string | null;
     requestedAt: string | Date;
