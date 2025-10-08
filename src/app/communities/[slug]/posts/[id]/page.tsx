@@ -32,6 +32,20 @@ import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images'
 import { LikeButton } from '@/components/ui/like-button';
 import { toast } from 'sonner';
 
+// Utility function to format like count message
+function formatLikeMessage(likeCount: number, isLiked: boolean): string {
+    if (likeCount === 0) return '';
+
+    if (isLiked) {
+        if (likeCount === 1) {
+            return 'You liked this';
+        }
+        return `You & ${likeCount - 1} ${likeCount - 1 === 1 ? 'other' : 'others'} liked this`;
+    }
+
+    return `${likeCount} ${likeCount === 1 ? 'person' : 'people'} liked this`;
+}
+
 type User = {
     id: string;
     name: string | null;
@@ -544,13 +558,7 @@ export default function CommunityPostPage() {
             {/* Like count and comments summary */}
             <div className="mt-2 flex items-center justify-between">
                 <span className="text-muted-foreground text-xs">
-                    {likeCount > 0
-                        ? isLiked
-                            ? likeCount === 1
-                                ? 'You liked this'
-                                : `You & ${likeCount - 1} ${likeCount - 1 === 1 ? 'other' : 'others'} liked this`
-                            : `${likeCount} ${likeCount === 1 ? 'person' : 'people'} liked this`
-                        : ''}
+                    {formatLikeMessage(likeCount, isLiked)}
                 </span>
                 <span className="text-muted-foreground text-xs">
                     {Array.isArray(postData.comments)

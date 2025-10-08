@@ -20,111 +20,6 @@ import { Globe, Lock, Users, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 
-// Component for community action button
-function CommunityActionButton({
-    community,
-    isUserMember,
-    isAppAdmin,
-    isOrgAdmin,
-    joiningCommunityId,
-    setJoiningCommunityId,
-    joinCommunityMutation,
-}: {
-    community: any;
-    isUserMember: (id: number) => boolean;
-    isAppAdmin: boolean;
-    isOrgAdmin: boolean;
-    joiningCommunityId: number | null;
-    setJoiningCommunityId: (id: number | null) => void;
-    joinCommunityMutation: any;
-}) {
-    const utils = trpc.useUtils();
-    const { data: pendingRequests } =
-        trpc.communities.getUserPendingRequests.useQuery(
-            { communityId: community.id },
-            { enabled: !!community.id },
-        );
-
-    const pendingJoinRequest = pendingRequests?.find(
-        (req: any) => req.requestType === 'join' && req.status === 'pending',
-    );
-
-    const cancelRequestMutation =
-        trpc.communities.cancelPendingRequest.useMutation({
-            onSuccess: async () => {
-                toast.success('Request cancelled');
-                await utils.communities.getUserPendingRequests.invalidate({
-                    communityId: community.id,
-                });
-            },
-            onError: (error) => {
-                toast.error(error.message || 'Failed to cancel request');
-            },
-        });
-
-    // Don't show join button for admins or existing members
-    if (isAppAdmin || isOrgAdmin || isUserMember(community.id)) {
-        return (
-            <Button asChild variant="outline" className="w-full">
-                <Link href={`/communities/${community.slug}`}>
-                    View Community
-                </Link>
-            </Button>
-        );
-    }
-
-    // Show appropriate button based on state
-    if (pendingJoinRequest) {
-        return (
-            <div className="flex gap-2">
-                <Button
-                    variant="secondary"
-                    className="flex-1"
-                    onClick={() => {
-                        cancelRequestMutation.mutate({
-                            requestId: pendingJoinRequest.id,
-                        });
-                    }}
-                    disabled={cancelRequestMutation.isPending}
-                >
-                    {cancelRequestMutation.isPending
-                        ? 'Cancelling...'
-                        : 'Cancel Request'}
-                </Button>
-                <Button asChild variant="outline" className="flex-1">
-                    <Link href={`/communities/${community.slug}`}>
-                        View Community
-                    </Link>
-                </Button>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex gap-2">
-            <Button
-                className="flex-1"
-                onClick={() => {
-                    setJoiningCommunityId(community.id);
-                    joinCommunityMutation.mutate({
-                        communityId: community.id,
-                    });
-                }}
-                disabled={joiningCommunityId === community.id}
-            >
-                {joiningCommunityId === community.id
-                    ? 'Joining...'
-                    : 'Join Community'}
-            </Button>
-            <Button asChild variant="outline" className="flex-1">
-                <Link href={`/communities/${community.slug}`}>
-                    View Community
-                </Link>
-            </Button>
-        </div>
-    );
-}
-
 export default function ExploreCommunitiesPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [joiningCommunityId, setJoiningCommunityId] = useState<number | null>(
@@ -159,6 +54,118 @@ export default function ExploreCommunitiesPage() {
             setJoiningCommunityId(null);
         },
     });
+
+    // Scoped types derived from live hooks for stronger type-safety
+    type CommunityType = NonNullable<
+        typeof communitiesQuery.data
+    >['items'][number];
+    type JoinCommunityMutationType = typeof joinCommunityMutation;
+
+    // Component for community action button (typed props)
+    function CommunityActionButton({
+        community,
+        isUserMember,
+        isAppAdmin,
+        isOrgAdmin,
+        joiningCommunityId,
+        setJoiningCommunityId,
+        joinCommunityMutation,
+    }: {
+        community: CommunityType;
+        isUserMember: (id: number) => boolean;
+        isAppAdmin: boolean;
+        isOrgAdmin: boolean;
+        joiningCommunityId: number | null;
+        setJoiningCommunityId: (id: number | null) => void;
+        joinCommunityMutation: JoinCommunityMutationType;
+    }) {
+        const utils = trpc.useUtils();
+        const { data: pendingRequests } =
+            trpc.communities.getUserPendingRequests.useQuery(
+                { communityId: community.id },
+                { enabled: !!community.id },
+            );
+
+        const pendingJoinRequest = pendingRequests?.find(
+            (req: NonNullable<typeof pendingRequests>[number]) =>
+                req.requestType === 'join' && req.status === 'pending',
+        );
+
+        const cancelRequestMutation =
+            trpc.communities.cancelPendingRequest.useMutation({
+                onSuccess: async () => {
+                    toast.success('Request cancelled');
+                    await utils.communities.getUserPendingRequests.invalidate({
+                        communityId: community.id,
+                    });
+                },
+                onError: (error) => {
+                    toast.error(error.message || 'Failed to cancel request');
+                },
+            });
+
+        // Don't show join button for admins or existing members
+        if (isAppAdmin || isOrgAdmin || isUserMember(community.id)) {
+            return (
+                <Button asChild variant="outline" className="w-full">
+                    <Link href={`/communities/${community.slug}`}>
+                        View Community
+                    </Link>
+                </Button>
+            );
+        }
+
+        // Show appropriate button based on state
+        if (pendingJoinRequest) {
+            return (
+                <div className="flex gap-2">
+                    <Button
+                        variant="secondary"
+                        className="flex-1"
+                        onClick={() => {
+                            cancelRequestMutation.mutate({
+                                requestId: pendingJoinRequest.id,
+                            });
+                        }}
+                        disabled={cancelRequestMutation.isPending}
+                    >
+                        {cancelRequestMutation.isPending
+                            ? 'Cancelling...'
+                            : 'Cancel Request'}
+                    </Button>
+                    <Button asChild variant="outline" className="flex-1">
+                        <Link href={`/communities/${community.slug}`}>
+                            View Community
+                        </Link>
+                    </Button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="flex gap-2">
+                <Button
+                    className="flex-1"
+                    onClick={() => {
+                        setJoiningCommunityId(community.id);
+                        joinCommunityMutation.mutate({
+                            communityId: community.id,
+                        });
+                    }}
+                    disabled={joiningCommunityId === community.id}
+                >
+                    {joiningCommunityId === community.id
+                        ? 'Joining...'
+                        : 'Join Community'}
+                </Button>
+                <Button asChild variant="outline" className="flex-1">
+                    <Link href={`/communities/${community.slug}`}>
+                        View Community
+                    </Link>
+                </Button>
+            </div>
+        );
+    }
 
     const communities = communitiesQuery.data?.items || [];
     const isLoading = communitiesQuery.isLoading;
