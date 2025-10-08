@@ -185,7 +185,6 @@ export const discoveryProcedures = {
                         ? lt(communities.id, cursor)
                         : and(filter, lt(communities.id, cursor)),
                     with: {
-                        members: true,
                         posts: {
                             where: eq(posts.isDeleted, false),
                         },
@@ -201,13 +200,46 @@ export const discoveryProcedures = {
                     limit,
                 });
 
+                // Get member counts for each community
+                const communityIds = allCommunities.map((c) => c.id);
+                const memberCounts = await db
+                    .select({
+                        communityId: communityMembers.communityId,
+                        count: sql<number>`count(*)`.as('count'),
+                    })
+                    .from(communityMembers)
+                    .where(
+                        communityIds.length > 0
+                            ? inArray(
+                                  communityMembers.communityId,
+                                  communityIds,
+                              )
+                            : sql`false`,
+                    )
+                    .groupBy(communityMembers.communityId);
+
+                // Create a map of community ID to member count
+                const memberCountMap = new Map(
+                    memberCounts.map((mc) => [mc.communityId, mc.count]),
+                );
+
+                // Add member count to each community
+                const communitiesWithCounts = allCommunities.map(
+                    (community) => ({
+                        ...community,
+                        memberCount: memberCountMap.get(community.id) || 0,
+                    }),
+                );
+
                 const nextCursor =
-                    allCommunities.length === limit
-                        ? allCommunities[allCommunities.length - 1]?.id
+                    communitiesWithCounts.length === limit
+                        ? communitiesWithCounts[
+                              communitiesWithCounts.length - 1
+                          ]?.id
                         : undefined;
 
                 return {
-                    items: allCommunities,
+                    items: communitiesWithCounts,
                     nextCursor,
                 };
             } else {
@@ -218,7 +250,6 @@ export const discoveryProcedures = {
                         posts: {
                             where: eq(posts.isDeleted, false),
                         },
-                        members: true,
                         creator: {
                             columns: {
                                 id: true,
@@ -231,13 +262,46 @@ export const discoveryProcedures = {
                     limit,
                 });
 
+                // Get member counts for each community
+                const communityIds = allCommunities.map((c) => c.id);
+                const memberCounts = await db
+                    .select({
+                        communityId: communityMembers.communityId,
+                        count: sql<number>`count(*)`.as('count'),
+                    })
+                    .from(communityMembers)
+                    .where(
+                        communityIds.length > 0
+                            ? inArray(
+                                  communityMembers.communityId,
+                                  communityIds,
+                              )
+                            : sql`false`,
+                    )
+                    .groupBy(communityMembers.communityId);
+
+                // Create a map of community ID to member count
+                const memberCountMap = new Map(
+                    memberCounts.map((mc) => [mc.communityId, mc.count]),
+                );
+
+                // Add member count to each community
+                const communitiesWithCounts = allCommunities.map(
+                    (community) => ({
+                        ...community,
+                        memberCount: memberCountMap.get(community.id) || 0,
+                    }),
+                );
+
                 const nextCursor =
-                    allCommunities.length === limit
-                        ? allCommunities[allCommunities.length - 1]?.id
+                    communitiesWithCounts.length === limit
+                        ? communitiesWithCounts[
+                              communitiesWithCounts.length - 1
+                          ]?.id
                         : undefined;
 
                 return {
-                    items: allCommunities,
+                    items: communitiesWithCounts,
                     nextCursor,
                 };
             }
@@ -299,6 +363,10 @@ export const discoveryProcedures = {
                         return {
                             ...community,
                             posts: [],
+                            members: community.members.map((member) => ({
+                                ...member,
+                                membershipType: 'member' as const,
+                            })),
                         };
                     }
                 } else if (community.type === 'private' && !ctx.session?.user) {
@@ -306,6 +374,10 @@ export const discoveryProcedures = {
                     return {
                         ...community,
                         posts: [],
+                        members: community.members.map((member) => ({
+                            ...member,
+                            membershipType: 'member' as const,
+                        })),
                     };
                 }
 
@@ -363,6 +435,10 @@ export const discoveryProcedures = {
                     ...community,
                     posts: postsWithTags,
                     tags: communityTags,
+                    members: community.members.map((member) => ({
+                        ...member,
+                        membershipType: 'member' as const,
+                    })),
                 };
             } catch (error) {
                 console.error(
@@ -402,6 +478,10 @@ export const discoveryProcedures = {
                     where: eq(communities.slug, slug),
                     with: {
                         members: {
+                            where: eq(
+                                communityMembers.membershipType,
+                                'member',
+                            ),
                             with: {
                                 user: {
                                     columns: {
@@ -475,6 +555,10 @@ export const discoveryProcedures = {
                             return {
                                 ...community,
                                 posts: [],
+                                members: community.members.map((member) => ({
+                                    ...member,
+                                    membershipType: 'member' as const,
+                                })),
                             };
                         }
                     }
@@ -483,6 +567,10 @@ export const discoveryProcedures = {
                     return {
                         ...community,
                         posts: [],
+                        members: community.members.map((member) => ({
+                            ...member,
+                            membershipType: 'member' as const,
+                        })),
                     };
                 }
 
@@ -588,6 +676,10 @@ export const discoveryProcedures = {
                             ...community,
                             orgId: community.orgId,
                             posts: [],
+                            members: community.members.map((member) => ({
+                                ...member,
+                                membershipType: 'member' as const,
+                            })),
                         };
                     }
                 }
@@ -631,6 +723,10 @@ export const discoveryProcedures = {
                     ...community,
                     orgId: community.orgId, // <-- add this line
                     posts: postsWithTags,
+                    members: community.members.map((member) => ({
+                        ...member,
+                        membershipType: 'member' as const,
+                    })),
                 };
             } catch (error) {
                 console.error(

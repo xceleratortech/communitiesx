@@ -50,8 +50,8 @@ interface CommentItemProps {
     depth?: number;
     autoExpandedComments: Set<number>;
     onExpansionChange: (commentId: number, isExpanded: boolean) => void;
-    helpfulCount?: number;
-    isHelpful?: boolean;
+    helpfulCounts?: Record<number, number>;
+    isHelpfulMap?: Record<number, boolean>;
     onToggleHelpful?: (commentId: number) => void;
     helpfulMutationPending?: boolean;
 }
@@ -78,8 +78,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
     depth = 0,
     autoExpandedComments,
     onExpansionChange,
-    helpfulCount = 0,
-    isHelpful = false,
+    helpfulCounts,
+    isHelpfulMap,
     onToggleHelpful,
     helpfulMutationPending = false,
 }) => {
@@ -98,6 +98,10 @@ const CommentItem: React.FC<CommentItemProps> = ({
         session?.user?.id !== comment.authorId;
     const replies = comment.replies || [];
     const hasReplies = replies.length > 0;
+
+    // Get helpful data for this specific comment
+    const helpfulCount = helpfulCounts?.[comment.id] || 0;
+    const isHelpful = isHelpfulMap?.[comment.id] || false;
 
     // Update expansion state when autoExpandedComments changes
     useEffect(() => {
@@ -392,8 +396,8 @@ const CommentItem: React.FC<CommentItemProps> = ({
                             depth={depth + 1}
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={onExpansionChange}
-                            helpfulCount={helpfulCount}
-                            isHelpful={isHelpful}
+                            helpfulCounts={helpfulCounts}
+                            isHelpfulMap={isHelpfulMap}
                             onToggleHelpful={onToggleHelpful}
                             helpfulMutationPending={helpfulMutationPending}
                         />

@@ -672,14 +672,8 @@ export default function CommunityPostPage() {
                             }
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={handleCommentExpansionChange}
-                            helpfulCount={
-                                commentHelpfulCountsQuery.data?.[comment.id] ||
-                                0
-                            }
-                            isHelpful={
-                                userHelpfulVotesQuery.data?.[comment.id] ||
-                                false
-                            }
+                            helpfulCounts={commentHelpfulCountsQuery.data}
+                            isHelpfulMap={userHelpfulVotesQuery.data}
                             onToggleHelpful={handleToggleHelpful}
                             helpfulMutationPending={
                                 toggleHelpfulMutation.isPending

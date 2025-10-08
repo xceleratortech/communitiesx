@@ -110,18 +110,6 @@ export default function CommunityDetailPage() {
         },
     );
 
-    // Normalize community typing to enforce member-only membershipType
-    const normalizedCommunity = useMemo(() => {
-        if (!community) return community;
-        return {
-            ...community,
-            members: community.members?.map((m) => ({
-                ...m,
-                membershipType: 'member' as const,
-            })),
-        };
-    }, [community]);
-
     const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
         session?.user,
         community?.orgId,
@@ -703,7 +691,7 @@ export default function CommunityDetailPage() {
     return (
         <div className="container mx-auto py-6">
             <CommunityBanner
-                community={normalizedCommunity!}
+                community={community!}
                 isMember={isMember}
                 isAdmin={isAdmin}
                 hasPendingJoinRequest={hasPendingJoinRequest}
@@ -733,10 +721,10 @@ export default function CommunityDetailPage() {
                 canManageCommunityMembers={canManageCommunityMembers}
                 pendingRequestsCount={pendingRequests?.length || 0}
             >
-                <CommunityOverview community={normalizedCommunity!} />
+                <CommunityOverview community={community!} />
 
                 <CommunityPosts
-                    community={normalizedCommunity!}
+                    community={community!}
                     isLoading={isLoading}
                     isMember={isMember}
                     canInteract={canInteract}
@@ -757,14 +745,14 @@ export default function CommunityDetailPage() {
                 />
 
                 <CommunityTags
-                    community={normalizedCommunity!}
+                    community={community!}
                     canCreateTag={canCreateTag}
                     canEditTag={canEditTag}
                     canDeleteTag={canDeleteTag}
                 />
 
                 <CommunityMembers
-                    community={normalizedCommunity!}
+                    community={community!}
                     canManageCommunityMembers={canManageCommunityMembers}
                     canManageCommunityAdmins={canManageCommunityAdmins}
                     canRemoveCommunityAdmins={canRemoveCommunityAdmins}
