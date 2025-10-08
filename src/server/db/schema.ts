@@ -8,6 +8,7 @@ import {
     primaryKey,
     varchar,
     jsonb,
+    unique,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -103,7 +104,7 @@ export const communityMemberRequests = pgTable('community_member_requests', {
     communityId: integer('community_id')
         .notNull()
         .references(() => communities.id, { onDelete: 'cascade' }),
-    requestType: text('request_type').notNull(), // 'join' | 'follow'
+    requestType: text('request_type').notNull(), // 'join'
     status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
     message: text('message'),
     requestedAt: timestamp('requested_at').notNull().defaultNow(),
@@ -185,17 +186,66 @@ export const comments = pgTable('comments', {
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const reactions = pgTable('reactions', {
-    id: serial('id').primaryKey(),
-    postId: integer('post_id')
-        .notNull()
-        .references(() => posts.id, { onDelete: 'cascade' }),
-    userId: text('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+export const commentHelpfulVotes = pgTable(
+    'comment_helpful_votes',
+    {
+        id: serial('id').primaryKey(),
+        commentId: integer('comment_id')
+            .notNull()
+            .references(() => comments.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            uniqueVote: unique().on(table.commentId, table.userId),
+        };
+    },
+);
+
+export const reactions = pgTable(
+    'reactions',
+    {
+        id: serial('id').primaryKey(),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        type: text('type').notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            // Unique constraint to prevent duplicate reactions from the same user on the same post
+            uniqueUserPostType: unique('unique_user_post_type').on(
+                table.postId,
+                table.userId,
+                table.type,
+            ),
+        };
+    },
+);
+
+// Saved posts (bookmarks)
+export const savedPosts = pgTable(
+    'saved_posts',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.userId, table.postId] }),
+    }),
+);
 
 // Define relations
 export const communitiesRelations = relations(communities, ({ one, many }) => ({
@@ -304,6 +354,12 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     attachments: many(attachments), // was images
 }));
 
+// Saved posts relations
+export const savedPostsRelations = relations(savedPosts, ({ one }) => ({
+    user: one(users, { fields: [savedPosts.userId], references: [users.id] }),
+    post: one(posts, { fields: [savedPosts.postId], references: [posts.id] }),
+}));
+
 export const postTagsRelations = relations(postTags, ({ one }) => ({
     post: one(posts, {
         fields: [postTags.postId],
@@ -325,6 +381,20 @@ export const commentsRelations = relations(comments, ({ one }) => ({
         references: [users.id],
     }),
 }));
+
+export const commentHelpfulVotesRelations = relations(
+    commentHelpfulVotes,
+    ({ one }) => ({
+        comment: one(comments, {
+            fields: [commentHelpfulVotes.commentId],
+            references: [comments.id],
+        }),
+        user: one(users, {
+            fields: [commentHelpfulVotes.userId],
+            references: [users.id],
+        }),
+    }),
+);
 
 // Add extended relations for users and orgs
 export const extendedUsersRelations = relations(users, ({ many }) => ({

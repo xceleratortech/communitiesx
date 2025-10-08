@@ -12,7 +12,18 @@ export const trpc = createTRPCReact<AppRouter>();
 
 // Provider to wrap your app with both tRPC and React Query
 export function TRPCProvider({ children }: React.PropsWithChildren<{}>) {
-    const [queryClient] = React.useState(() => new QueryClient());
+    const [queryClient] = React.useState(
+        () =>
+            new QueryClient({
+                defaultOptions: {
+                    queries: {
+                        staleTime: 30 * 1000, // 30 seconds
+                        refetchOnWindowFocus: false, // Don't refetch on window focus
+                        retry: 1, // Reduce retries
+                    },
+                },
+            }),
+    );
     const [trpcClient] = React.useState(() =>
         trpc.createClient({
             links: [

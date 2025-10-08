@@ -24,6 +24,7 @@ import {
 } from '@/components/community';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { DateFilter, type DateFilterState } from '@/components/date-filter';
+import { CommunityMember } from '@/types/community';
 
 export default function CommunityDetailPage() {
     const params = useParams();
@@ -319,13 +320,7 @@ export default function CommunityDetailPage() {
                 req.requestType === 'join' && req.status === 'pending',
         ) || false;
 
-    const hasPendingFollowRequest =
-        userPendingRequests?.some(
-            (req: { requestType: string; status: string }) =>
-                req.requestType === 'follow' && req.status === 'pending',
-        ) || false;
-
-    // Join, follow, leave, unfollow mutations
+    // Join, leave, mutations
     const joinCommunityMutation = trpc.communities.joinCommunity.useMutation({
         onSuccess: (result) => {
             refetch();
@@ -343,26 +338,6 @@ export default function CommunityDetailPage() {
         },
     });
 
-    const followCommunityMutation =
-        trpc.communities.followCommunity.useMutation({
-            onSuccess: (result) => {
-                refetch();
-                if (result.status === 'approved') {
-                    toast.success("You're now following this community");
-                } else {
-                    toast.success(
-                        'Follow request sent! Waiting for admin approval.',
-                    );
-                }
-            },
-            onError: (error) => {
-                toast.error(error.message || 'Failed to follow community');
-            },
-            onSettled: () => {
-                setIsActionInProgress(false);
-            },
-        });
-
     const leaveCommunityMutation = trpc.communities.leaveCommunity.useMutation({
         onSuccess: () => {
             refetch();
@@ -375,20 +350,6 @@ export default function CommunityDetailPage() {
             setIsActionInProgress(false);
         },
     });
-
-    const unfollowCommunityMutation =
-        trpc.communities.unfollowCommunity.useMutation({
-            onSuccess: () => {
-                refetch();
-                toast.success("You've unfollowed the community");
-            },
-            onError: (error) => {
-                toast.error(error.message || 'Failed to unfollow community');
-            },
-            onSettled: () => {
-                setIsActionInProgress(false);
-            },
-        });
 
     // Approve/reject request mutations
     const approveRequestMutation = trpc.communities.approveRequest.useMutation({
@@ -504,12 +465,6 @@ export default function CommunityDetailPage() {
         joinCommunityMutation.mutate({ communityId: community.id });
     };
 
-    const handleFollowCommunity = () => {
-        if (!community || isActionInProgress) return;
-        setIsActionInProgress(true);
-        followCommunityMutation.mutate({ communityId: community.id });
-    };
-
     const handleLeaveCommunity = () => {
         if (!community || isActionInProgress) return;
         setIsLeaveCommunityDialogOpen(true);
@@ -520,12 +475,6 @@ export default function CommunityDetailPage() {
         setIsActionInProgress(true);
         leaveCommunityMutation.mutate({ communityId: community.id });
         setIsLeaveCommunityDialogOpen(false);
-    };
-
-    const handleUnfollowCommunity = () => {
-        if (!community || isActionInProgress) return;
-        setIsActionInProgress(true);
-        unfollowCommunityMutation.mutate({ communityId: community.id });
     };
 
     // Handle request approval/rejection
@@ -735,30 +684,25 @@ export default function CommunityDetailPage() {
         (!!userMembership && userMembership.membershipType === 'member') ||
         isOrgAdminForCommunityCheck ||
         isSuperAdmin;
-    const isFollower =
-        !!userMembership && userMembership.membershipType === 'follower';
     const isModerator = !!userMembership && userMembership.role === 'moderator';
     const isAdmin = !!userMembership && userMembership.role === 'admin';
+    const canInteract = isMember || isOrgAdminForCommunityCheck || isSuperAdmin;
 
     return (
         <div className="container mx-auto py-6">
             <CommunityBanner
-                community={community}
+                community={community!}
                 isMember={isMember}
-                isFollower={isFollower}
                 isAdmin={isAdmin}
                 hasPendingJoinRequest={hasPendingJoinRequest}
-                hasPendingFollowRequest={hasPendingFollowRequest}
                 isActionInProgress={isActionInProgress}
                 onJoinCommunity={handleJoinCommunity}
-                onFollowCommunity={handleFollowCommunity}
                 onLeaveCommunity={handleLeaveCommunity}
-                onUnfollowCommunity={handleUnfollowCommunity}
             />
 
             {/* Add sort control above tabs */}
             {community && (
-                <div className="mb-4 flex justify-end">
+                <div className="mb-4 flex justify-end space-x-2">
                     <DateFilter
                         value={dateFilter}
                         onChange={setDateFilter}
@@ -777,12 +721,13 @@ export default function CommunityDetailPage() {
                 canManageCommunityMembers={canManageCommunityMembers}
                 pendingRequestsCount={pendingRequests?.length || 0}
             >
-                <CommunityOverview community={community} />
+                <CommunityOverview community={community!} />
 
                 <CommunityPosts
-                    community={community}
+                    community={community!}
                     isLoading={isLoading}
                     isMember={isMember}
+                    canInteract={canInteract}
                     canCreatePost={canCreatePost}
                     filteredPosts={filteredPosts}
                     showMyPosts={showMyPosts}
@@ -800,14 +745,14 @@ export default function CommunityDetailPage() {
                 />
 
                 <CommunityTags
-                    community={community}
+                    community={community!}
                     canCreateTag={canCreateTag}
                     canEditTag={canEditTag}
                     canDeleteTag={canDeleteTag}
                 />
 
                 <CommunityMembers
-                    community={community}
+                    community={community!}
                     canManageCommunityMembers={canManageCommunityMembers}
                     canManageCommunityAdmins={canManageCommunityAdmins}
                     canRemoveCommunityAdmins={canRemoveCommunityAdmins}

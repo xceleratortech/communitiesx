@@ -50,6 +50,7 @@ function NewPostForm() {
     const { data: session } = useSession();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [hasMedia, setHasMedia] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
 
@@ -168,6 +169,25 @@ function NewPostForm() {
         );
     }
 
+    // If no community specified, block org-wide posts
+    if (!communityId) {
+        return (
+            <div className="mx-auto max-w-4xl p-4">
+                <h1 className="mb-4 text-3xl font-bold">Select a Community</h1>
+                <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Community Required</AlertTitle>
+                    <AlertDescription>
+                        You must choose a community to create a post.
+                    </AlertDescription>
+                </Alert>
+                <Button asChild>
+                    <Link href="/communities">Browse Communities</Link>
+                </Button>
+            </div>
+        );
+    }
+
     // Show loading state while checking community membership and permissions
     if (communityId && (isLoadingCommunity || isPermissionLoading)) {
         return <Loading message="Loading community information..." />;
@@ -233,7 +253,7 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || isHtmlContentEmpty(content)) {
+        if (!title.trim() || (isHtmlContentEmpty(content) && !hasMedia)) {
             return;
         }
 
@@ -281,6 +301,7 @@ function NewPostForm() {
                         placeholder="Write your post content here..."
                         communityId={communityId || undefined}
                         communitySlug={communitySlug || undefined}
+                        onMediaChange={(v) => setHasMedia(v)}
                     />
                 </div>
 
@@ -376,7 +397,7 @@ function NewPostForm() {
                     disabled={
                         createPost.isPending ||
                         !title.trim() ||
-                        isHtmlContentEmpty(content)
+                        (isHtmlContentEmpty(content) && !hasMedia)
                     }
                     className="w-full"
                 >

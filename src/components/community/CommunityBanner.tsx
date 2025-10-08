@@ -7,29 +7,21 @@ import { Globe, Lock, Users, Calendar } from 'lucide-react';
 interface CommunityBannerProps {
     community: any;
     isMember: boolean;
-    isFollower: boolean;
     isAdmin: boolean;
     hasPendingJoinRequest: boolean;
-    hasPendingFollowRequest: boolean;
     isActionInProgress: boolean;
     onJoinCommunity: () => void;
-    onFollowCommunity: () => void;
     onLeaveCommunity: () => void;
-    onUnfollowCommunity: () => void;
 }
 
 export function CommunityBanner({
     community,
     isMember,
-    isFollower,
     isAdmin,
     hasPendingJoinRequest,
-    hasPendingFollowRequest,
     isActionInProgress,
     onJoinCommunity,
-    onFollowCommunity,
     onLeaveCommunity,
-    onUnfollowCommunity,
 }: CommunityBannerProps) {
     return (
         <div className="mb-8">
@@ -109,60 +101,8 @@ export function CommunityBanner({
                             >
                                 {isAdmin ? 'Admin' : 'Leave Community'}
                             </Button>
-                        ) : isFollower ? (
-                            <div className="flex flex-col gap-2">
-                                <Button
-                                    variant="outline"
-                                    onClick={onUnfollowCommunity}
-                                    disabled={isActionInProgress}
-                                    className="w-full bg-transparent"
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Unfollow'}
-                                </Button>
-                                {hasPendingJoinRequest ? (
-                                    <Button
-                                        disabled
-                                        variant="secondary"
-                                        className="w-full"
-                                    >
-                                        Join Request Pending
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        onClick={onJoinCommunity}
-                                        disabled={isActionInProgress}
-                                        className="w-full"
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Join Community'}
-                                    </Button>
-                                )}
-                            </div>
                         ) : (
                             <div className="flex flex-col gap-2">
-                                {hasPendingFollowRequest ? (
-                                    <Button
-                                        disabled
-                                        variant="secondary"
-                                        className="w-full"
-                                    >
-                                        Follow Request Pending
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        variant="outline"
-                                        onClick={onFollowCommunity}
-                                        disabled={isActionInProgress}
-                                        className="w-full bg-transparent"
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Follow'}
-                                    </Button>
-                                )}
                                 {hasPendingJoinRequest ? (
                                     <Button
                                         disabled
@@ -241,49 +181,8 @@ export function CommunityBanner({
                             >
                                 {isAdmin ? 'Admin' : 'Leave Community'}
                             </Button>
-                        ) : isFollower ? (
-                            <div className="flex gap-3">
-                                <Button
-                                    variant="outline"
-                                    onClick={onUnfollowCommunity}
-                                    disabled={isActionInProgress}
-                                >
-                                    {isActionInProgress
-                                        ? 'Processing...'
-                                        : 'Unfollow'}
-                                </Button>
-                                {hasPendingJoinRequest ? (
-                                    <Button disabled variant="secondary">
-                                        Join Request Pending
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        onClick={onJoinCommunity}
-                                        disabled={isActionInProgress}
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Join Community'}
-                                    </Button>
-                                )}
-                            </div>
                         ) : (
                             <div className="flex gap-3">
-                                {hasPendingFollowRequest ? (
-                                    <Button disabled variant="secondary">
-                                        Follow Request Pending
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        variant="outline"
-                                        onClick={onFollowCommunity}
-                                        disabled={isActionInProgress}
-                                    >
-                                        {isActionInProgress
-                                            ? 'Processing...'
-                                            : 'Follow'}
-                                    </Button>
-                                )}
                                 {hasPendingJoinRequest ? (
                                     <Button disabled variant="secondary">
                                         Join Request Pending

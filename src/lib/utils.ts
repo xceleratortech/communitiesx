@@ -31,6 +31,12 @@ export function isOrgAdminForCommunity(
 export function isHtmlContentEmpty(html: string): boolean {
     if (!html || html.trim() === '') return true;
 
+    // If contains media (images or our video placeholders), treat as non-empty
+    const hasImage = /<img\b[^>]*src=/i.test(html);
+    const hasVideoPlaceholder = /\[VIDEO:[^\]]+\]/i.test(html);
+    const hasYouTubeEmbed = /data-youtube-video/i.test(html);
+    if (hasImage || hasVideoPlaceholder || hasYouTubeEmbed) return false;
+
     // Remove HTML tags and check if the remaining text is empty
     const textContent = html.replace(/<[^>]*>/g, '').trim();
     if (textContent === '') return true;
@@ -83,6 +89,29 @@ export function getRelativeTime(date: Date): string {
 
     const diffInYears = Math.floor(diffInMonths / 12);
     return `${diffInYears} year${diffInYears > 1 ? 's' : ''} ago`;
+}
+
+/**
+ * Formats a date input into a human-readable relative time string
+ * @param dateInput - The date to format (string, number, or Date)
+ * @returns A string like "Just now", "2 minutes ago", "3 hours ago", etc.
+ */
+export function formatRelativeTime(dateInput: string | number | Date): string {
+    const date = new Date(dateInput);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+    const years = Math.floor(months / 12);
+    return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
 /**
