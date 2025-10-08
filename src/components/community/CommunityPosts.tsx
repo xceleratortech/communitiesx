@@ -19,7 +19,7 @@ import { LikeButton } from '@/components/ui/like-button';
 import Link from 'next/link';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
-import { ImageCarousel } from '@/components/ui/image-carousel';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { DateFilter, type DateFilterState } from '@/components/date-filter';
 import { trpc } from '@/providers/trpc-provider';
@@ -554,19 +554,13 @@ export function CommunityPosts({
                                                         )}
                                                     </div>
 
-                                                    {/* Post images */}
+                                                    {/* Post media */}
                                                     {post.attachments &&
                                                         post.attachments
                                                             .length > 0 && (
-                                                            <ImageCarousel
-                                                                images={
-                                                                    post.attachments.filter(
-                                                                        (
-                                                                            att: any,
-                                                                        ) =>
-                                                                            att.type ===
-                                                                            'image',
-                                                                    ) as any
+                                                            <MixedMediaCarousel
+                                                                media={
+                                                                    post.attachments
                                                                 }
                                                                 className="max-w-xs"
                                                             />

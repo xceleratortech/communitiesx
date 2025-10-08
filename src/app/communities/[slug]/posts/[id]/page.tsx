@@ -27,7 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isHtmlContentEmpty } from '@/lib/utils';
-import { ImageCarousel } from '@/components/ui/image-carousel';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { LikeButton } from '@/components/ui/like-button';
 import { toast } from 'sonner';
@@ -530,13 +530,11 @@ export default function CommunityPostPage() {
                     )}
                 </div>
 
-                {/* Post images */}
+                {/* Post media */}
                 {postData.attachments && postData.attachments.length > 0 && (
                     <div className="mt-6">
-                        <ImageCarousel
-                            images={postData.attachments.filter(
-                                (att) => att.type === 'image',
-                            )}
+                        <MixedMediaCarousel
+                            media={postData.attachments}
                             className="max-w-2xl"
                         />
                     </div>

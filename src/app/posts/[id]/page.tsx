@@ -12,7 +12,7 @@ import TipTapEditor from '@/components/TipTapEditor';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
 import { isHtmlContentEmpty } from '@/lib/utils';
-import { ImageCarousel } from '@/components/ui/image-carousel';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 
 type User = {
@@ -328,14 +328,12 @@ export default function PostPage() {
                         )}
                     </div>
 
-                    {/* Post images */}
+                    {/* Post media */}
                     {postData.attachments &&
                         postData.attachments.length > 0 && (
                             <div className="mt-6">
-                                <ImageCarousel
-                                    images={postData.attachments.filter(
-                                        (att) => att.type === 'image',
-                                    )}
+                                <MixedMediaCarousel
+                                    media={postData.attachments}
                                     className="max-w-2xl"
                                 />
                             </div>

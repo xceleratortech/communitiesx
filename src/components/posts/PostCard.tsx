@@ -3,8 +3,9 @@
 import React from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { ImageCarousel } from '@/components/ui/image-carousel';
 import { HtmlImageCarousel } from '@/components/ui/html-image-carousel';
+import { HtmlVideoCarousel } from '@/components/ui/html-video-carousel';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtml } from '@/lib/sanitize';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
@@ -113,18 +114,28 @@ export default function PostCard({
                             </div>
 
                             {post.attachments && post.attachments.length > 0 ? (
-                                <ImageCarousel
-                                    images={post.attachments.filter(
-                                        (att) => att.type === 'image',
+                                <MixedMediaCarousel
+                                    media={post.attachments}
+                                    className="w-full"
+                                />
+                            ) : (
+                                <>
+                                    {/* Images from HTML content */}
+                                    {post.content.includes('<img') && (
+                                        <HtmlImageCarousel
+                                            htmlContent={post.content}
+                                            className="w-full"
+                                        />
                                     )}
-                                    className="w-full"
-                                />
-                            ) : post.content.includes('<img') ? (
-                                <HtmlImageCarousel
-                                    htmlContent={post.content}
-                                    className="w-full"
-                                />
-                            ) : null}
+                                    {/* Videos from HTML content */}
+                                    {post.content.includes('[VIDEO:') && (
+                                        <HtmlVideoCarousel
+                                            htmlContent={post.content}
+                                            className="w-full"
+                                        />
+                                    )}
+                                </>
+                            )}
                         </div>
                     )}
 

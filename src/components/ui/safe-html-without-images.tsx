@@ -14,7 +14,9 @@ export function SafeHtmlWithoutImages({
     className = '',
     ...props
 }: SafeHtmlWithoutImagesProps) {
-    const processedHtml = html.replace(/<img[^>]*>/gi, '');
+    // Remove both images and video placeholders since they're handled by carousels
+    let processedHtml = html.replace(/<img[^>]*>/gi, '');
+    processedHtml = processedHtml.replace(/\[VIDEO:[^\]]+\]/gi, '');
 
     return <SafeHtml html={processedHtml} className={className} {...props} />;
 }

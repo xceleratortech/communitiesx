@@ -152,15 +152,6 @@ export function LeftSidebar() {
                         Saved Items
                     </Link>
 
-                    {/* Notifications */}
-                    <Link
-                        href="/notifications"
-                        className={getNavLinkClass('/notifications')}
-                    >
-                        <Bell className="mr-3 h-5 w-5" />
-                        Notifications
-                    </Link>
-
                     {/* Create Post */}
                     <CreatePostDialog>
                         <Button

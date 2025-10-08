@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { SafeHtml } from '@/lib/sanitize';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
-import { ImageCarousel } from '@/components/ui/image-carousel';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { HtmlImageCarousel } from '@/components/ui/html-image-carousel';
 import { Separator } from '@/components/ui/separator';
 import { LikeButton } from '@/components/ui/like-button';
@@ -1390,12 +1390,8 @@ export default function SavedPage() {
 
                                             {post.attachments &&
                                             post.attachments.length > 0 ? (
-                                                <ImageCarousel
-                                                    images={post.attachments.filter(
-                                                        (att: any) =>
-                                                            att.type ===
-                                                            'image',
-                                                    )}
+                                                <MixedMediaCarousel
+                                                    media={post.attachments}
                                                     className="w-full"
                                                 />
                                             ) : post.content.includes(
