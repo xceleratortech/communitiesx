@@ -98,7 +98,19 @@ export const discoveryProcedures = {
                     ? searchFilter
                     : and(baseFilter, searchFilter),
                 with: {
-                    members: true,
+                    members: {
+                        with: {
+                            user: {
+                                columns: {
+                                    id: true,
+                                    name: true,
+                                    email: true,
+                                    image: true,
+                                },
+                            },
+                        },
+                        limit: 3, // Only get first 3 members for avatar display
+                    },
                     posts: {
                         where: eq(posts.isDeleted, false),
                     },
@@ -195,6 +207,19 @@ export const discoveryProcedures = {
                                 email: true,
                             },
                         },
+                        members: {
+                            with: {
+                                user: {
+                                    columns: {
+                                        id: true,
+                                        name: true,
+                                        email: true,
+                                        image: true,
+                                    },
+                                },
+                            },
+                            limit: 3, // Only get first 3 members for avatar display
+                        },
                     },
                     orderBy: desc(communities.id),
                     limit,
@@ -256,6 +281,19 @@ export const discoveryProcedures = {
                                 name: true,
                                 email: true,
                             },
+                        },
+                        members: {
+                            with: {
+                                user: {
+                                    columns: {
+                                        id: true,
+                                        name: true,
+                                        email: true,
+                                        image: true,
+                                    },
+                                },
+                            },
+                            limit: 3, // Only get first 3 members for avatar display
                         },
                     },
                     orderBy: desc(communities.id),

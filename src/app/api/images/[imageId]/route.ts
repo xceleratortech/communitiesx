@@ -7,6 +7,7 @@ import {
     posts as postsTable,
     communityMembers,
 } from '@/server/db/schema';
+import { users } from '@/server/db/auth-schema';
 import { and, eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
 import { ServerPermissions } from '@/server/utils/permission';
@@ -56,6 +57,23 @@ export async function GET(
             const isAppAdmin = perms.isAppAdmin();
 
             let isAllowed = isAppAdmin;
+
+            // Allow access to user profile pictures for users in the same organization
+            if (!isAllowed && attachmentRecord.type === 'image') {
+                // Check if this is a user profile picture by checking if the uploader is in the same org
+                const uploaderUser = await db.query.users.findFirst({
+                    where: eq(users.id, attachmentRecord.uploadedBy),
+                    columns: { orgId: true },
+                });
+
+                if (
+                    uploaderUser?.orgId &&
+                    session.user.orgId &&
+                    uploaderUser.orgId === session.user.orgId
+                ) {
+                    isAllowed = true;
+                }
+            }
 
             // If linked to a community directly, allow active members/followers or org admins of that org
             if (!isAllowed && attachmentRecord.communityId) {
