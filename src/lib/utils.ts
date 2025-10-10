@@ -158,3 +158,61 @@ export function validateCommunityType(
 ): 'public' | 'private' {
     return validateRole(type, ['public', 'private'] as const, 'public');
 }
+
+/**
+ * Formats a number into a compact notation (e.g., 1.2K, 3.4M)
+ * @param num - The number to format
+ * @returns A formatted string with compact notation
+ */
+export function formatCount(num: number): string {
+    return new Intl.NumberFormat('en', {
+        notation: 'compact',
+        maximumFractionDigits: 1,
+    }).format(num);
+}
+
+/**
+ * Generates initials from a name (first letter of first and last word)
+ * @param name - The name to generate initials from
+ * @returns The initials in uppercase, or empty string if no name provided
+ */
+export function getInitials(name?: string): string {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+}
+
+/**
+ * Interface for member avatar data
+ */
+export interface MemberAvatar {
+    src?: string;
+    initials?: string;
+}
+
+/**
+ * Generates member avatar data from community members
+ * @param members - Array of community members
+ * @param limit - Maximum number of avatars to generate (default: 3)
+ * @returns Array of member avatar data
+ */
+export function generateMemberAvatars(
+    members: Array<{ user?: { name?: string; image?: string | null } }>,
+    limit: number = 3,
+): MemberAvatar[] {
+    return members.slice(0, limit).map((member) => {
+        const imageId = member?.user?.image;
+        // Check if imageId is already a full URL or just an ID
+        const imageUrl = imageId
+            ? imageId.startsWith('/api/images/')
+                ? imageId
+                : `/api/images/${imageId}`
+            : undefined;
+
+        return {
+            src: imageUrl,
+            initials: getInitials(member?.user?.name),
+        };
+    });
+}

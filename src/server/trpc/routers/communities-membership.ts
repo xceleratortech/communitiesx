@@ -8,7 +8,7 @@ import {
     communityMemberRequests,
     users,
 } from '@/server/db/schema';
-import { and, eq, desc, inArray } from 'drizzle-orm';
+import { and, eq, desc, inArray, sql } from 'drizzle-orm';
 import { ServerPermissions } from '@/server/utils/permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 
@@ -521,14 +521,59 @@ export const membershipProcedures = {
                     eq(communityMembers.status, 'active'),
                 ),
                 with: {
-                    community: true,
+                    community: {
+                        with: {
+                            members: {
+                                with: {
+                                    user: {
+                                        columns: {
+                                            id: true,
+                                            name: true,
+                                            email: true,
+                                            image: true,
+                                        },
+                                    },
+                                },
+                                limit: 3, // Only get first 3 members for avatar display
+                            },
+                        },
+                    },
                 },
             });
 
-            // Return communities with role information
+            // Get member counts for each community
+            const communityIds = userMemberships.map(
+                (membership) => membership.community.id,
+            );
+            const memberCounts = await db
+                .select({
+                    communityId: communityMembers.communityId,
+                    count: sql<number>`count(*)`.as('count'),
+                })
+                .from(communityMembers)
+                .where(
+                    communityIds.length > 0
+                        ? and(
+                              inArray(
+                                  communityMembers.communityId,
+                                  communityIds,
+                              ),
+                              eq(communityMembers.status, 'active'),
+                          )
+                        : sql`false`,
+                )
+                .groupBy(communityMembers.communityId);
+
+            // Create a map of community ID to member count
+            const memberCountMap = new Map(
+                memberCounts.map((mc) => [mc.communityId, mc.count]),
+            );
+
+            // Return communities with role information, member data, and member count
             const userCommunities = userMemberships.map((membership) => ({
                 ...membership.community,
                 userRole: membership.role,
+                memberCount: memberCountMap.get(membership.community.id) || 0,
             }));
 
             return userCommunities;
