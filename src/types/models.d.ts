@@ -2,6 +2,22 @@
 import type { z } from 'zod';
 import type { ResumeProfileSchema } from '../lib/services/resume-parser';
 
+export interface CommunityMember {
+    userId: string;
+    communityId: number;
+    role: string;
+    membershipType: string;
+    status: string;
+    joinedAt: string | Date;
+    updatedAt: string | Date;
+    user?: {
+        id: string;
+        name: string;
+        email: string;
+        image: string | null;
+    };
+}
+
 export interface Community {
     id: number;
     name: string;
@@ -11,12 +27,13 @@ export interface Community {
     rules: string | null;
     banner: string | null;
     avatar: string | null;
-    postCreationMinRole: 'member' | 'moderator' | 'admin'; // Minimum role required to create posts
+    postCreationMinRole: string; // Changed from union type to string to match database schema
     orgId?: string | null; // Optional for org-independent communities
     createdBy: string;
     createdAt: string | Date;
     updatedAt: string | Date;
-    members?: Array<OrgMember>;
+    members?: Array<CommunityMember>;
+    memberCount?: number; // Added member count field
     posts?: any[];
     creator?: {
         id: string;

@@ -7,6 +7,7 @@ import {
     posts as postsTable,
     communityMembers,
 } from '@/server/db/schema';
+import { users } from '@/server/db/auth-schema';
 import { and, eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
 import { ServerPermissions } from '@/server/utils/permission';
@@ -57,6 +58,28 @@ export async function GET(
 
             let isAllowed = isAppAdmin;
 
+            // Allow access to user profile pictures for users in the same organization
+            if (
+                !isAllowed &&
+                attachmentRecord.type === 'image' &&
+                !attachmentRecord.postId &&
+                !attachmentRecord.communityId
+            ) {
+                // Check if this is a user profile picture by checking if the uploader is in the same org
+                const uploaderUser = await db.query.users.findFirst({
+                    where: eq(users.id, attachmentRecord.uploadedBy),
+                    columns: { orgId: true },
+                });
+
+                if (
+                    uploaderUser?.orgId &&
+                    session.user.orgId &&
+                    uploaderUser.orgId === session.user.orgId
+                ) {
+                    isAllowed = true;
+                }
+            }
+
             // If linked to a community directly, allow active members/followers or org admins of that org
             if (!isAllowed && attachmentRecord.communityId) {
                 // Check membership (active)
@@ -74,19 +97,34 @@ export async function GET(
                 if (membership) {
                     isAllowed = true;
                 } else {
-                    // Check org admin override for the community's org
+                    // Check if this is a public community and user is from the same org
                     const community = await db.query.communities.findFirst({
                         where: eq(
                             communitiesTable.id,
                             attachmentRecord.communityId,
                         ),
-                        columns: { orgId: true },
+                        columns: { orgId: true, type: true },
                     });
-                    if (
-                        community &&
-                        isOrgAdminForCommunity(session.user, community.orgId)
-                    ) {
-                        isAllowed = true;
+
+                    if (community) {
+                        // For public communities, allow access if user is from the same org
+                        if (
+                            community.type === 'public' &&
+                            session.user.orgId &&
+                            community.orgId &&
+                            session.user.orgId === community.orgId
+                        ) {
+                            isAllowed = true;
+                        }
+                        // Check org admin override for the community's org
+                        else if (
+                            isOrgAdminForCommunity(
+                                session.user,
+                                community.orgId,
+                            )
+                        ) {
+                            isAllowed = true;
+                        }
                     }
                 }
             }
@@ -117,16 +155,28 @@ export async function GET(
                     } else {
                         const community = await db.query.communities.findFirst({
                             where: eq(communitiesTable.id, post.communityId),
-                            columns: { orgId: true },
+                            columns: { orgId: true, type: true },
                         });
-                        if (
-                            community &&
-                            isOrgAdminForCommunity(
-                                session.user,
-                                community.orgId,
-                            )
-                        ) {
-                            isAllowed = true;
+
+                        if (community) {
+                            // For public communities, allow access if user is from the same org
+                            if (
+                                community.type === 'public' &&
+                                session.user.orgId &&
+                                community.orgId &&
+                                session.user.orgId === community.orgId
+                            ) {
+                                isAllowed = true;
+                            }
+                            // Check org admin override for the community's org
+                            else if (
+                                isOrgAdminForCommunity(
+                                    session.user,
+                                    community.orgId,
+                                )
+                            ) {
+                                isAllowed = true;
+                            }
                         }
                     }
                 } else if (post?.orgId) {
