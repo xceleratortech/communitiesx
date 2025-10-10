@@ -28,6 +28,7 @@ import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
+import { formatCount, generateMemberAvatars } from '@/lib/utils';
 import type { Community } from '@/types/models';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -299,23 +300,8 @@ function CommunityCard({
         }
     };
 
-    const formatCount = (num: number) =>
-        new Intl.NumberFormat('en', {
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(num);
-
     const members = (community.members as any[]) || [];
-    const getInitials = (name?: string) => {
-        if (!name) return '';
-        const parts = name.trim().split(/\s+/);
-        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-        return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
-    };
-    const memberAvatars = members.slice(0, 3).map((m) => ({
-        src: m?.user?.image || undefined,
-        initials: getInitials(m?.user?.name),
-    }));
+    const memberAvatars = generateMemberAvatars(members, 3);
 
     return (
         <Card className="group relative flex h-[420px] flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md">

@@ -18,12 +18,15 @@ import { useSession } from '@/server/auth/client';
 import { Globe, Lock, Users, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import type { Community } from '@/types/models';
+import { formatCount, generateMemberAvatars } from '@/lib/utils';
+import type { Community, CommunityMember } from '@/types/models';
 
 export default function ExploreCommunitiesPage() {
     const [searchInputValue, setSearchInputValue] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+    const [searchResults, setSearchResults] = useState<Community[] | null>(
+        null,
+    );
     const [isSearching, setIsSearching] = useState(false);
     const [joiningCommunityId, setJoiningCommunityId] = useState<number | null>(
         null,
@@ -34,6 +37,7 @@ export default function ExploreCommunitiesPage() {
     const { appRole, orgRole } = usePermission();
     const isAppAdmin = appRole === 'admin';
     const isOrgAdmin = orgRole === 'admin';
+    const utils = trpc.useUtils();
 
     // Query for all communities
     const { data: allCommunities, isLoading: isLoadingCommunities } =
@@ -61,8 +65,8 @@ export default function ExploreCommunitiesPage() {
         onSuccess: (result) => {
             if (result?.status === 'approved') {
                 toast.success("You've joined the community!");
-                // Refresh the communities list to remove the joined community
-                window.location.reload();
+                utils.communities.getAll.invalidate();
+                utils.communities.getUserCommunities.invalidate();
             } else {
                 toast.success('Join request sent! Waiting for admin approval.');
             }
@@ -109,7 +113,7 @@ export default function ExploreCommunitiesPage() {
         if (searchTerm.length >= 2) {
             setIsSearching(true);
             if (searchQuery.data) {
-                setSearchResults(searchQuery.data.items as any[]);
+                setSearchResults(searchQuery.data.items as Community[]);
             }
         } else {
             setIsSearching(false);
@@ -136,7 +140,7 @@ export default function ExploreCommunitiesPage() {
     };
 
     // Filter out communities user has already joined
-    const filterUnjoinedCommunities = (communities: any[]) => {
+    const filterUnjoinedCommunities = (communities: Community[]) => {
         return communities.filter((community) => !isUserMember(community.id));
     };
 
@@ -211,10 +215,10 @@ export default function ExploreCommunitiesPage() {
                 ) : communitiesToRender.length ? (
                     <>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {communitiesToRender.map((community: any) => (
+                            {communitiesToRender.map((community: Community) => (
                                 <CommunityCard
                                     key={community.id}
-                                    community={community as Community}
+                                    community={community}
                                     joiningCommunityId={joiningCommunityId}
                                     setJoiningCommunityId={
                                         setJoiningCommunityId
@@ -300,32 +304,8 @@ function CommunityCard({
             },
         });
 
-    const formatCount = (num: number) =>
-        new Intl.NumberFormat('en', {
-            notation: 'compact',
-            maximumFractionDigits: 1,
-        }).format(num);
-
-    const members = (community.members as any[]) || [];
-    const getInitials = (name?: string) => {
-        if (!name) return '';
-        const parts = name.trim().split(/\s+/);
-        if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-        return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
-    };
-    const memberAvatars = members.slice(0, 3).map((m) => {
-        const imageId = m?.user?.image;
-        // Check if imageId is already a full URL or just an ID
-        const imageUrl = imageId
-            ? imageId.startsWith('/api/images/')
-                ? imageId
-                : `/api/images/${imageId}`
-            : undefined;
-        return {
-            src: imageUrl,
-            initials: getInitials(m?.user?.name),
-        };
-    });
+    const members = (community.members as CommunityMember[]) || [];
+    const memberAvatars = generateMemberAvatars(members, 3);
 
     return (
         <Card className="group relative flex h-[420px] flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md">
@@ -376,7 +356,7 @@ function CommunityCard({
                     <div className="flex items-center gap-3">
                         <div className="flex items-center">
                             {(
-                                ((community as any).memberCount > 0
+                                ((community.memberCount ?? 0) > 0
                                     ? memberAvatars
                                     : [{}, {}, {}]) as Array<{
                                     src?: string;
@@ -402,8 +382,8 @@ function CommunityCard({
                             ))}
                         </div>
                         <div className="text-muted-foreground text-sm">
-                            {(community as any).memberCount > 0
-                                ? `${formatCount((community as any).memberCount)} Members`
+                            {(community.memberCount ?? 0) > 0
+                                ? `${formatCount(community.memberCount!)} Members`
                                 : 'No members yet'}
                         </div>
                     </div>
