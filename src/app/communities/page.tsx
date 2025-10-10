@@ -356,18 +356,6 @@ function CommunityCard({
                         </div>
                     </div>
                 )}
-
-                {/* <div className="absolute -bottom-10 left-4">
-                    <Avatar className="border-background h-20 w-20 border-4">
-                        <AvatarImage
-                            src={community.avatar || undefined}
-                            alt={community.name}
-                        />
-                        <AvatarFallback className="bg-primary text-xl">
-                            {community.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                    </Avatar>
-                </div> */}
             </div>
 
             <CardHeader className="pt-2 pb-2">
