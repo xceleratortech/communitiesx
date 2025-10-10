@@ -13,20 +13,10 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import {
-    Globe,
-    Lock,
-    Users,
-    Eye,
-    MessageSquare,
-    Loader2,
-    Bell,
-    BellOff,
-} from 'lucide-react';
+import { Globe, Lock, Bell, BellOff } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/server/auth/client';
 import { formatCount, generateMemberAvatars } from '@/lib/utils';
 import type { Community } from '@/types/models';
