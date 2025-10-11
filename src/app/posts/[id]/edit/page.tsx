@@ -8,6 +8,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import TipTapEditor from '@/components/TipTapEditor';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Check, ChevronsUpDown, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Loading } from '@/components/ui/loading';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 export default function EditPostPage() {
     const params = useParams();
@@ -17,6 +36,8 @@ export default function EditPostPage() {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [error, setError] = useState('');
+    const [selectedTags, setSelectedTags] = useState<any[]>([]);
+    const [open, setOpen] = useState(false);
 
     const { data: post, isLoading } = trpc.community.getPost.useQuery(
         { postId },
@@ -32,12 +53,54 @@ export default function EditPostPage() {
         },
     });
 
+    // Fetch available tags for the post's community
+    const communityId = post?.communityId;
+    const { data: community, isLoading: isLoadingCommunity } =
+        trpc.communities.getById.useQuery(
+            { id: communityId! },
+            { enabled: !!communityId },
+        );
+    const availableTags = community?.tags || [];
+
     useEffect(() => {
         if (post) {
             setTitle(post.title);
             setContent(post.content);
+            // Pre-select tags
+            setSelectedTags(post.tags || []);
         }
     }, [post]);
+
+    const handleTagSelect = (tag: any) => {
+        const isAlreadySelected = selectedTags.some(
+            (selectedTag) => selectedTag.id === tag.id,
+        );
+        if (isAlreadySelected) {
+            setSelectedTags(
+                selectedTags.filter((selectedTag) => selectedTag.id !== tag.id),
+            );
+        } else {
+            setSelectedTags([...selectedTags, tag]);
+        }
+    };
+    const handleTagRemove = (tagId: number) => {
+        setSelectedTags(selectedTags.filter((tag) => tag.id !== tagId));
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        if (!title.trim() || isHtmlContentEmpty(content)) {
+            setError('Title and content are required.');
+            return;
+        }
+        editPost.mutate({
+            postId,
+            title: title.trim(),
+            content: content,
+            tagIds: selectedTags.map((tag) => tag.id), // Pass selected tag IDs
+        });
+    };
 
     if (!session) {
         return (
@@ -51,7 +114,7 @@ export default function EditPostPage() {
     }
 
     if (isLoading) {
-        return <div className="p-4">Loading post...</div>;
+        return <Loading message="Loading post..." />;
     }
 
     if (!post) {
@@ -63,34 +126,9 @@ export default function EditPostPage() {
         return null;
     }
 
-    if (post.authorId !== session.user.id) {
-        return (
-            <div className="mx-auto max-w-4xl p-4">
-                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
-                <p className="mb-4 text-gray-600">
-                    You are not authorized to edit this post.
-                </p>
-            </div>
-        );
-    }
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        if (!title.trim() || !content.trim()) {
-            setError('Title and content are required.');
-            return;
-        }
-        editPost.mutate({
-            postId,
-            title: title.trim(),
-            content: content,
-        });
-    };
-
     return (
-        <div className="mx-auto max-w-4xl p-4">
-            <h1 className="mb-6 text-3xl font-bold">Edit Post</h1>
+        <div className="mx-auto max-w-4xl py-4">
+            <h1 className="mb-6 text-3xl font-bold">Edit {post.title}</h1>
             {error && <div className="mb-4 text-red-500">{error}</div>}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -120,9 +158,114 @@ export default function EditPostPage() {
                         content={content}
                         onChange={setContent}
                         placeholder="Edit your post content here..."
+                        postId={postId}
+                        communityId={post?.communityId || undefined}
+                        communitySlug={community?.slug || undefined}
                     />
                 </div>
-                <Button type="submit" disabled={editPost.isPending}>
+                {/* Tags Selection */}
+                {availableTags.length > 0 && (
+                    <div>
+                        <Label>Tags</Label>
+                        <div className="space-y-2">
+                            <Popover open={open} onOpenChange={setOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={open}
+                                        className="w-full justify-between"
+                                    >
+                                        {selectedTags.length > 0
+                                            ? `${selectedTags.length} tag${selectedTags.length > 1 ? 's' : ''} selected`
+                                            : 'Select tags...'}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                                    <Command>
+                                        <CommandInput placeholder="Search tags..." />
+                                        <CommandList>
+                                            <CommandEmpty>
+                                                No tags found.
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                                {availableTags.map(
+                                                    (tag: any) => (
+                                                        <CommandItem
+                                                            key={tag.id}
+                                                            value={tag.name}
+                                                            onSelect={() =>
+                                                                handleTagSelect(
+                                                                    tag,
+                                                                )
+                                                            }
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    'mr-2 h-4 w-4',
+                                                                    selectedTags.some(
+                                                                        (
+                                                                            selectedTag,
+                                                                        ) =>
+                                                                            selectedTag.id ===
+                                                                            tag.id,
+                                                                    )
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0',
+                                                                )}
+                                                            />
+                                                            <div>
+                                                                <div className="font-medium">
+                                                                    {tag.name}
+                                                                </div>
+                                                                {tag.description && (
+                                                                    <div className="text-muted-foreground text-sm">
+                                                                        {
+                                                                            tag.description
+                                                                        }
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </CommandItem>
+                                                    ),
+                                                )}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {/* Selected Tags Display */}
+                            {selectedTags.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedTags.map((tag) => (
+                                        <Badge
+                                            key={tag.id}
+                                            variant="secondary"
+                                            className="flex items-center gap-1"
+                                        >
+                                            {tag.name}
+                                            <X
+                                                className="h-3 w-3 cursor-pointer"
+                                                onClick={() =>
+                                                    handleTagRemove(tag.id)
+                                                }
+                                            />
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+                <Button
+                    type="submit"
+                    disabled={
+                        editPost.isPending ||
+                        !title.trim() ||
+                        isHtmlContentEmpty(content)
+                    }
+                >
                     {editPost.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
             </form>

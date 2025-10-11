@@ -51,6 +51,8 @@ async function seed() {
                 .values({
                     id: orgId,
                     name: 'Xcelerator',
+                    slug: 'xcelerator',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -61,6 +63,8 @@ async function seed() {
                 .values({
                     id: org2Id,
                     name: 'TechCorp',
+                    slug: 'techcorp',
+                    createdAt: new Date(),
                 })
                 .returning();
 
@@ -504,6 +508,8 @@ async function seed() {
             .values({
                 id: orgId,
                 name: 'Xcelerator',
+                slug: 'xcelerator',
+                createdAt: new Date(),
             })
             .returning();
         // Create admin user
@@ -513,7 +519,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: adminId,
-                name: 'Admin User',
+                name: 'IT Admin',
                 email: 'it@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,
@@ -539,7 +545,7 @@ async function seed() {
             .insert(users)
             .values({
                 id: userId,
-                name: 'Regular User',
+                name: 'Rajesh',
                 email: 'raj@xcelerator.co.in',
                 emailVerified: true,
                 orgId: org.id,

@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Building, Users, MessageSquare, FileText } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { Community } from '@/types/models';
 
 interface CommunityPopoverProps {
     communityId: number;
@@ -25,6 +26,7 @@ export function CommunityPopover({
     const router = useRouter();
     const [isOpen, setIsOpen] = useState(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isHoveringRef = useRef(false);
 
     // Get community details
     const { data: communityData, isLoading } =
@@ -46,17 +48,21 @@ export function CommunityPopover({
 
     // Handlers for mouse events to control hover behavior
     const handleMouseEnter = () => {
+        isHoveringRef.current = true;
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
         // Add a delay before showing the popover
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(true);
+            if (isHoveringRef.current) {
+                setIsOpen(true);
+            }
         }, 1000);
     };
 
     const handleMouseLeave = () => {
+        isHoveringRef.current = false;
         // Clear the open timeout if the mouse leaves before the popover opens
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -65,7 +71,9 @@ export function CommunityPopover({
 
         // Add a small delay before closing to prevent flickering
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(false);
+            if (!isHoveringRef.current) {
+                setIsOpen(false);
+            }
         }, 300); // Small delay to prevent closing when moving to popover content
     };
 
@@ -78,6 +86,15 @@ export function CommunityPopover({
             router.push(`/communities/${communityData.slug}`);
         }
     };
+
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
@@ -160,22 +177,6 @@ export function CommunityPopover({
                                                 (m) =>
                                                     m.membershipType ===
                                                     'member',
-                                            ).length
-                                        }
-                                    </span>
-                                </span>
-                            </div>
-
-                            <div className="flex items-center text-sm">
-                                <Users className="text-muted-foreground mr-2 h-4 w-4" />
-                                <span>
-                                    Followers:{' '}
-                                    <span className="font-medium">
-                                        {
-                                            communityData.members.filter(
-                                                (m) =>
-                                                    m.membershipType ===
-                                                    'follower',
                                             ).length
                                         }
                                     </span>

@@ -4,12 +4,14 @@ import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { SparklesCore } from '@/components/ui/sparkles';
-import { useSession } from '@/server/auth/client';
+import { useTypedSession } from '@/server/auth/client';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useProfileCompletion } from '@/hooks/useProfileCompletion';
 
 export default function Home() {
-    const { data: session } = useSession();
+    const { data: session } = useTypedSession();
+    const { isProfileIncomplete } = useProfileCompletion();
     const router = useRouter();
     const [mounted, setMounted] = useState(false);
 
@@ -20,13 +22,23 @@ export default function Home() {
     // Redirect logged-in users away from the landing page
     useEffect(() => {
         if (session) {
-            router.replace('/posts');
+            // Check if user needs to complete profile
+            if (
+                session.user.orgId === process.env.NEXT_PUBLIC_ORG_ID &&
+                session.user.appRole !== 'admin' &&
+                session?.user?.role !== 'admin' &&
+                isProfileIncomplete
+            ) {
+                router.replace('/profile');
+            } else {
+                router.replace('/posts');
+            }
         }
-    }, [session, router]);
+    }, [session, router, isProfileIncomplete]);
 
     return (
-        <div className="relative flex min-h-[calc(100vh-3.5rem)] flex-col items-center justify-center overflow-hidden text-center">
-            <div className="fixed inset-0 top-10 h-[calc(100vh-3.5rem)] w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
+        <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden pt-14 text-center">
+            <div className="fixed inset-0 top-0 h-screen w-screen bg-gradient-to-b from-blue-50 to-white dark:from-blue-950 dark:to-gray-900">
                 <SparklesCore
                     id="tsparticles"
                     background="transparent"
@@ -38,7 +50,7 @@ export default function Home() {
                     className="h-full w-full"
                 />
             </div>
-            <div className="relative z-10 mt-10 px-4 sm:mt-0">
+            <div className="relative z-10 px-4">
                 <h1 className="mb-6 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl md:text-6xl dark:text-gray-100">
                     Let&apos;s Build a{' '}
                     <span className="text-blue-600 dark:text-blue-400">

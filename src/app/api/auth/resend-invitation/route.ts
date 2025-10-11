@@ -4,6 +4,7 @@ import { verifications, orgs } from '@/server/db/auth-schema';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { sendEmail } from '@/lib/email';
+import { createInvitationEmail } from '@/lib/email-templates';
 
 // Define email options type
 interface EmailOptions {
@@ -131,15 +132,16 @@ export async function POST(request: Request) {
 
         // Try to send the invite email with retries
         try {
+            const invitationEmail = createInvitationEmail(
+                organization.name,
+                inviteUrl,
+                role,
+            );
+
             await retrySendEmail({
                 to: email,
-                subject: `Invitation to join ${organization.name}`,
-                html: `
-          <h1>You've been invited to join ${organization.name}</h1>
-          <p>Click the link below to create your account:</p>
-          <a href="${inviteUrl}">Accept Invitation</a>
-          <p>This link will expire in 7 days.</p>
-        `,
+                subject: invitationEmail.subject,
+                html: invitationEmail.html,
             });
 
             return NextResponse.json({

@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { MessageSquare, Building, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { UserBadgeDisplay } from './user-badge-display';
 
 interface UserProfilePopoverProps {
     userId: string;
@@ -30,6 +31,7 @@ export function UserProfilePopover({
     const { openChat, setActiveThreadId } = useChat();
     const [isOpen, setIsOpen] = useState(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isHoveringRef = useRef(false);
 
     // Get user details
     const { data: userData, isLoading: isLoadingUser } =
@@ -78,16 +80,20 @@ export function UserProfilePopover({
 
     // Handlers for mouse events to control hover behavior
     const handleMouseEnter = () => {
+        isHoveringRef.current = true;
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
             timeoutRef.current = null;
         }
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(true);
+            if (isHoveringRef.current) {
+                setIsOpen(true);
+            }
         }, 1000);
     };
 
     const handleMouseLeave = () => {
+        isHoveringRef.current = false;
         // Clear the open timeout if the mouse leaves before the popover opens
         if (timeoutRef.current) {
             clearTimeout(timeoutRef.current);
@@ -96,9 +102,20 @@ export function UserProfilePopover({
 
         // Add a small delay before closing to prevent flickering
         timeoutRef.current = setTimeout(() => {
-            setIsOpen(false);
+            if (!isHoveringRef.current) {
+                setIsOpen(false);
+            }
         }, 300); // Small delay to prevent closing when moving to popover content
     };
+
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+            }
+        };
+    }, []);
 
     // Handle community badge click
     const handleCommunityClick = (e: React.MouseEvent, slug: string) => {
@@ -106,6 +123,14 @@ export function UserProfilePopover({
         e.stopPropagation();
         setIsOpen(false);
         router.push(`/communities/${slug}`);
+    };
+
+    // Handle user profile click
+    const handleUserProfileClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsOpen(false);
+        router.push(`/userProfile-details/${userId}`);
     };
 
     return (
@@ -140,7 +165,10 @@ export function UserProfilePopover({
                 ) : userData ? (
                     <div className="space-y-3">
                         {/* User header */}
-                        <div className="flex items-center space-x-3 border-b p-4">
+                        <div
+                            className="hover:bg-accent flex cursor-pointer items-center space-x-3 border-b p-4 transition-colors"
+                            onClick={handleUserProfileClick}
+                        >
                             <Avatar className="h-12 w-12">
                                 <AvatarImage
                                     src={userData.image || undefined}
@@ -156,6 +184,20 @@ export function UserProfilePopover({
                                 </p>
                             </div>
                         </div>
+
+                        {/* User badges */}
+                        {userData.badges && userData.badges.length > 0 && (
+                            <div className="px-4">
+                                <h4 className="mb-2 text-sm font-medium">
+                                    Badges
+                                </h4>
+                                <UserBadgeDisplay
+                                    badges={userData.badges}
+                                    compact={false}
+                                    maxDisplay={6}
+                                />
+                            </div>
+                        )}
 
                         {/* User details */}
                         <div className="space-y-2 px-4">

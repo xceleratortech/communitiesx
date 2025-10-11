@@ -1,0 +1,483 @@
+import { z } from 'zod';
+import { authProcedure } from '../trpc';
+import { db } from '@/server/db';
+import { TRPCError } from '@trpc/server';
+import {
+    posts,
+    users,
+    communities,
+    communityMembers,
+    tags,
+    postTags,
+    attachments,
+} from '@/server/db/schema';
+import { and, eq, isNull, gte, inArray } from 'drizzle-orm';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { isOrgAdminForCommunity } from '@/lib/utils';
+import {
+    sendCommunityPostNotification,
+    saveCommunityPostNotifications,
+} from '@/lib/community-notifications';
+
+export const postProcedures = {
+    // Create a new post
+    createPost: authProcedure
+        .input(
+            z.object({
+                title: z.string().min(1).max(200),
+                content: z.string(),
+                communityId: z.number().nullable().optional(),
+                orgId: z.string().optional().nullable(),
+                tagIds: z.array(z.number()).optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Always fetch user details from DB
+                const user = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session?.user?.id ?? ''),
+                });
+
+                if (!user) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found.',
+                    });
+                }
+
+                // Super admins don't need an orgId
+                const isSuperAdmin = user.appRole === 'admin';
+                const orgId = user.orgId;
+
+                if (!isSuperAdmin && !orgId) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User does not have an organization.',
+                    });
+                }
+
+                // If communityId is provided, verify the community exists and user has access
+                if (input.communityId) {
+                    const community = await db.query.communities.findFirst({
+                        where: eq(communities.id, input.communityId),
+                        with: {
+                            members: {
+                                where: eq(
+                                    communityMembers.userId,
+                                    ctx.session?.user?.id ?? '',
+                                ),
+                            },
+                        },
+                    });
+
+                    if (!community) {
+                        throw new TRPCError({
+                            code: 'NOT_FOUND',
+                            message: 'Community not found',
+                        });
+                    }
+
+                    // Check if user is a member, regardless of community type
+                    const userMembership = community.members.find(
+                        (m) =>
+                            m.membershipType === 'member' &&
+                            m.status === 'active',
+                    );
+
+                    // --- PERMISSION OVERRIDES ---
+                    // Check if user is org admin for this community
+                    const isOrgAdminForCommunityCheck = isOrgAdminForCommunity(
+                        { role: user.role, orgId: user.orgId },
+                        community.orgId,
+                    );
+
+                    // Super admins can create posts in ANY community across all organizations
+                    // Org admins can create posts in ANY community within their organization
+                    if (isSuperAdmin) {
+                        // Super admin can create posts anywhere - skip all checks
+                    } else if (isOrgAdminForCommunityCheck) {
+                        // Org admin can create posts in their org's communities - skip membership check
+                    } else if (!userMembership) {
+                        throw new TRPCError({
+                            code: 'FORBIDDEN',
+                            message:
+                                'You must be a member to post in this community',
+                        });
+                    }
+
+                    // Check if user's role meets the minimum requirement for post creation
+                    // Super admins and org admins bypass role hierarchy checks
+                    if (!isSuperAdmin && !isOrgAdminForCommunityCheck) {
+                        const userRole = userMembership?.role || 'member';
+                        const minRole = community.postCreationMinRole;
+
+                        // Define role hierarchy (higher number = higher privilege)
+                        const roleHierarchy = {
+                            member: 1,
+                            moderator: 2,
+                            admin: 3,
+                        };
+
+                        const userRoleLevel =
+                            roleHierarchy[
+                                userRole as keyof typeof roleHierarchy
+                            ] || 0;
+                        const minRoleLevel =
+                            roleHierarchy[
+                                minRole as keyof typeof roleHierarchy
+                            ] || 1;
+
+                        if (userRoleLevel < minRoleLevel) {
+                            const roleDisplay = {
+                                member: 'members',
+                                moderator: 'moderators and admins',
+                                admin: 'admins',
+                            };
+
+                            throw new TRPCError({
+                                code: 'FORBIDDEN',
+                                message: `Only ${roleDisplay[minRole as keyof typeof roleDisplay]} can create posts in this community`,
+                            });
+                        }
+                    }
+
+                    // If tagIds are provided, verify they belong to the community
+                    if (input.tagIds && input.tagIds.length > 0) {
+                        const communityTags = await db.query.tags.findMany({
+                            where: and(
+                                eq(tags.communityId, input.communityId),
+                                inArray(tags.id, input.tagIds),
+                            ),
+                        });
+
+                        if (communityTags.length !== input.tagIds.length) {
+                            throw new TRPCError({
+                                code: 'BAD_REQUEST',
+                                message:
+                                    'Some tags do not belong to this community',
+                            });
+                        }
+                    }
+                }
+
+                // Determine if there are any recent, unlinked attachments from this user
+                const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                const baseAttachmentConds = [
+                    eq(attachments.uploadedBy, ctx.session?.user?.id ?? ''),
+                    isNull(attachments.postId),
+                    gte(attachments.createdAt, oneHourAgo),
+                ];
+                if (input.communityId) {
+                    baseAttachmentConds.push(
+                        eq(attachments.communityId, input.communityId),
+                    );
+                }
+                const pendingAttachments = await db.query.attachments.findMany({
+                    where: and(...baseAttachmentConds),
+                });
+
+                // Allow media-only posts if there are pending attachments
+                const textOnlyContent = (input.content || '')
+                    .replace(/<[^>]*>/g, '')
+                    .trim();
+                if (!textOnlyContent && pendingAttachments.length === 0) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message:
+                            'Post must have text content or at least one image/video.',
+                    });
+                }
+
+                // Use a transaction to create post and link tags
+                const result = await db.transaction(async (tx) => {
+                    // Determine the orgId for the post
+                    // For super admins posting in communities, use the community's orgId
+                    // For regular users, use their own orgId
+                    let postOrgId = orgId;
+                    if (isSuperAdmin && input.communityId) {
+                        // For super admins, get the community's orgId
+                        const community = await tx.query.communities.findFirst({
+                            where: eq(communities.id, input.communityId),
+                            columns: { orgId: true },
+                        });
+                        postOrgId = community?.orgId || orgId;
+                    }
+
+                    // Ensure we have a valid orgId
+                    if (!postOrgId) {
+                        throw new TRPCError({
+                            code: 'BAD_REQUEST',
+                            message:
+                                'Unable to determine organization for post creation',
+                        });
+                    }
+
+                    // Create the post
+                    const [post] = await tx
+                        .insert(posts)
+                        .values({
+                            title: input.title.trim(),
+                            content: input.content,
+                            authorId: ctx.session?.user?.id ?? '',
+                            orgId: postOrgId,
+                            communityId: input.communityId || null,
+                            visibility: input.communityId
+                                ? 'community'
+                                : 'public',
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        })
+                        .returning();
+
+                    // Link the post with tags if any are provided
+                    if (input.tagIds && input.tagIds.length > 0) {
+                        const postTagValues = input.tagIds.map((tagId) => ({
+                            postId: post.id,
+                            tagId: tagId,
+                        }));
+
+                        await tx.insert(postTags).values(postTagValues);
+                    }
+
+                    // Link any pending attachments to this new post
+                    await tx
+                        .update(attachments)
+                        .set({ postId: post.id, updatedAt: new Date() })
+                        .where(and(...baseAttachmentConds));
+
+                    return post;
+                });
+
+                // Send notifications if post is in a community
+                if (input.communityId) {
+                    try {
+                        // Get community and author details for notification
+                        const [community, author] = await Promise.all([
+                            db.query.communities.findFirst({
+                                where: eq(communities.id, input.communityId),
+                            }),
+                            db.query.users.findFirst({
+                                where: eq(
+                                    users.id,
+                                    ctx.session?.user?.id ?? '',
+                                ),
+                            }),
+                        ]);
+
+                        if (community && author) {
+                            // Send push notifications
+                            await sendCommunityPostNotification(
+                                input.communityId,
+                                input.title.trim(),
+                                author.name || 'Unknown User',
+                                community.name,
+                                result.id,
+                                ctx.session?.user?.id ?? '', // Pass authorId to exclude post creator
+                            );
+
+                            // Save notifications to database for all eligible users
+                            await saveCommunityPostNotifications(
+                                input.title.trim(),
+                                author.name || 'Unknown User',
+                                community.name,
+                                result.id,
+                                input.communityId,
+                                ctx.session?.user?.id ?? '', // Pass authorId to exclude post creator
+                            );
+                        }
+                    } catch (notificationError) {
+                        // Log error but don't fail the post creation
+                        console.error(
+                            'Error sending notifications:',
+                            notificationError,
+                        );
+                    }
+                }
+
+                return result;
+            } catch (error) {
+                console.error('Error creating post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create post',
+                });
+            }
+        }),
+
+    // Edit a post
+    editPost: authProcedure
+        .input(
+            z.object({
+                postId: z.number(),
+                title: z.string().min(1).max(200),
+                content: z.string().min(1),
+                tagIds: z.array(z.number()).optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Find the post with community information
+                const post = await db.query.posts.findFirst({
+                    where: eq(posts.id, input.postId),
+                    with: {
+                        community: true,
+                    },
+                });
+
+                if (!post) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Post not found',
+                    });
+                }
+
+                // Check permissions using ServerPermissions
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+
+                // Check if user can edit this post
+                let canEdit = false;
+
+                // Check if user is the post author
+                if (post.authorId === ctx.session.user.id) {
+                    canEdit = true;
+                } else if (post.communityId) {
+                    // Check community permissions
+                    canEdit = await permission.checkCommunityPermission(
+                        post.communityId.toString(),
+                        PERMISSIONS.EDIT_POST,
+                    );
+                } else {
+                    // Check org permissions for org-wide posts
+                    canEdit = permission.checkOrgPermission(
+                        PERMISSIONS.EDIT_POST,
+                    );
+                }
+
+                if (!canEdit) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'You do not have permission to edit this post',
+                    });
+                }
+
+                // Update post content/title
+                const [updatedPost] = await db
+                    .update(posts)
+                    .set({
+                        title: input.title,
+                        content: input.content,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(posts.id, input.postId))
+                    .returning();
+
+                // Update tags if provided
+                if (input.tagIds) {
+                    // Remove existing tags
+                    await db
+                        .delete(postTags)
+                        .where(eq(postTags.postId, input.postId));
+                    // Add new tags
+                    if (input.tagIds.length > 0) {
+                        const postTagValues = input.tagIds.map((tagId) => ({
+                            postId: input.postId,
+                            tagId,
+                        }));
+                        await db.insert(postTags).values(postTagValues);
+                    }
+                }
+
+                return updatedPost;
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error editing post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to edit post',
+                });
+            }
+        }),
+
+    // Soft delete a post
+    deletePost: authProcedure
+        .input(
+            z.object({
+                postId: z.number(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Find the post with community information
+                const postToDelete = await db.query.posts.findFirst({
+                    where: eq(posts.id, input.postId),
+                    with: {
+                        community: true,
+                    },
+                });
+
+                if (!postToDelete) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Post not found',
+                    });
+                }
+
+                // Check permissions using ServerPermissions
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+
+                // Check if user can delete this post
+                let canDelete = false;
+
+                // Check if user is the post author
+                if (postToDelete.authorId === ctx.session.user.id) {
+                    canDelete = true;
+                } else if (postToDelete.communityId) {
+                    // Check community permissions
+                    canDelete = await permission.checkCommunityPermission(
+                        postToDelete.communityId.toString(),
+                        PERMISSIONS.DELETE_POST,
+                    );
+                } else {
+                    // Check org permissions for org-wide posts
+                    canDelete = permission.checkOrgPermission(
+                        PERMISSIONS.DELETE_POST,
+                    );
+                }
+
+                if (!canDelete) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to delete this post',
+                    });
+                }
+
+                const [updatedPost] = await db
+                    .update(posts)
+                    .set({
+                        isDeleted: true,
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(posts.id, input.postId))
+                    .returning();
+
+                return updatedPost;
+            } catch (error) {
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                console.error('Error deleting post:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete post',
+                });
+            }
+        }),
+};

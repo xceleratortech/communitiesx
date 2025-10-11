@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useCallback } from 'react';
+import debounce from 'lodash/debounce';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +28,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { Mail, Upload, CheckCircle, Loader2 } from 'lucide-react';
 import { inferProcedureOutput } from '@trpc/server';
 import { AppRouter } from '@/server/trpc/routers';
+import { validatePostCreationMinRole } from '@/lib/utils';
 
 interface InviteEmailDialogProps {
     open: boolean;
@@ -50,7 +52,7 @@ export function InviteEmailDialog({
     const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
     const [form, setForm] = useState({
         email: '',
-        role: 'member' as 'member' | 'moderator',
+        role: validatePostCreationMinRole('member'),
         senderName: '',
     });
 
@@ -103,30 +105,37 @@ export function InviteEmailDialog({
         }
     };
 
+    // Debounced email parsing and validation function
+    const debouncedEmailParsing = useCallback(
+        debounce((value: string) => {
+            // Parse and validate emails
+            const emails = value
+                .split(/[\s,;]+/)
+                .map((e) => e.trim())
+                .filter((e) => e);
+
+            const valid: string[] = [];
+            const invalid: string[] = [];
+
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            emails.forEach((email) => {
+                if (emailRegex.test(email)) {
+                    valid.push(email);
+                } else if (email) {
+                    invalid.push(email);
+                }
+            });
+
+            setParsedEmails(valid);
+            setInvalidEmails(invalid);
+        }, 300), // 300ms delay
+        [],
+    );
+
     const handleBulkEmailsChange = (value: string) => {
-        setBulkEmails(value);
-
-        // Parse and validate emails
-        const emails = value
-            .split(/[\s,;]+/)
-            .map((e) => e.trim())
-            .filter((e) => e);
-
-        const valid: string[] = [];
-        const invalid: string[] = [];
-
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-        emails.forEach((email) => {
-            if (emailRegex.test(email)) {
-                valid.push(email);
-            } else if (email) {
-                invalid.push(email);
-            }
-        });
-
-        setParsedEmails(valid);
-        setInvalidEmails(invalid);
+        setBulkEmails(value); // Update the textarea immediately for responsiveness
+        debouncedEmailParsing(value); // Debounce the expensive parsing logic
     };
 
     const handleFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -230,7 +239,8 @@ export function InviteEmailDialog({
                                             ...form,
                                             role: role as
                                                 | 'member'
-                                                | 'moderator',
+                                                | 'moderator'
+                                                | 'admin',
                                         })
                                     }
                                     disabled={!isAdmin}
@@ -250,13 +260,19 @@ export function InviteEmailDialog({
                                                 Moderator
                                             </SelectItem>
                                         )}
+                                        {isAdmin && (
+                                            <SelectItem value="admin">
+                                                Admin
+                                            </SelectItem>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </div>
 
                             {!isAdmin && (
                                 <p className="text-muted-foreground text-center text-xs">
-                                    Only admins can invite moderators
+                                    Only admins can invite moderators and admin
+                                    users
                                 </p>
                             )}
 

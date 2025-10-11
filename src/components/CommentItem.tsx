@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Edit, Trash2, Plus, Minus, Reply } from 'lucide-react';
+import { Edit, Trash2, Plus, Minus, Reply, BadgeCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { users } from '@/server/db/schema'; // Assuming UserFromDb is similar or can be imported
 import { useSession } from '@/server/auth/client'; // Import useSession to infer its return type
 import TipTapEditor from '@/components/TipTapEditor';
 import { UserProfilePopover } from '@/components/ui/user-profile-popover';
+import { SafeHtml } from '@/lib/sanitize';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 type SessionData = ReturnType<typeof useSession>['data'];
 
@@ -48,6 +50,10 @@ interface CommentItemProps {
     depth?: number;
     autoExpandedComments: Set<number>;
     onExpansionChange: (commentId: number, isExpanded: boolean) => void;
+    helpfulCounts?: Record<number, number>;
+    isHelpfulMap?: Record<number, boolean>;
+    onToggleHelpful?: (commentId: number) => void;
+    helpfulMutationPending?: boolean;
 }
 
 const CommentItem: React.FC<CommentItemProps> = ({
@@ -72,6 +78,10 @@ const CommentItem: React.FC<CommentItemProps> = ({
     depth = 0,
     autoExpandedComments,
     onExpansionChange,
+    helpfulCounts,
+    isHelpfulMap,
+    onToggleHelpful,
+    helpfulMutationPending = false,
 }) => {
     const shouldAutoExpand = autoExpandedComments.has(comment.id);
     const [isExpanded, setIsExpanded] = useState(shouldAutoExpand);
@@ -82,8 +92,16 @@ const CommentItem: React.FC<CommentItemProps> = ({
     const canDelete =
         !comment.isDeleted && session?.user?.id === comment.authorId;
     const canReply = !!session?.user;
+    const canMarkHelpful =
+        !!session?.user &&
+        !comment.isDeleted &&
+        session?.user?.id !== comment.authorId;
     const replies = comment.replies || [];
     const hasReplies = replies.length > 0;
+
+    // Get helpful data for this specific comment
+    const helpfulCount = helpfulCounts?.[comment.id] || 0;
+    const isHelpful = isHelpfulMap?.[comment.id] || false;
 
     // Update expansion state when autoExpandedComments changes
     useEffect(() => {
@@ -101,7 +119,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
     };
 
     // Calculate left margin for thread indentation
-    const leftMargin = depth * 12; // 12px per level (more compact)
+    const leftMargin = Math.min(depth * 12, 48); // 12px per level, max 48px on mobile
 
     return (
         <div className="relative">
@@ -120,7 +138,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                 className="hover:bg-muted/10 group relative px-2 py-1.5 transition-colors"
                 style={{ marginLeft: `${leftMargin}px` }}
             >
-                <div className="flex gap-1.5">
+                <div className="flex min-w-0 gap-1.5">
                     {/* Collapse/Expand button */}
                     <div className="flex w-4 flex-shrink-0 justify-center">
                         {hasReplies && (
@@ -151,6 +169,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     onChange={onSetEditedContent}
                                     placeholder="Edit your comment..."
                                     variant="compact"
+                                    postId={comment.postId}
                                 />
                                 <div className="flex justify-end gap-1.5">
                                     <Button
@@ -165,7 +184,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                         onClick={() => onSaveEdit(comment.id)}
                                         disabled={
                                             updateCommentMutationPending ||
-                                            !editedCommentContent.trim()
+                                            isHtmlContentEmpty(
+                                                editedCommentContent,
+                                            )
                                         }
                                     >
                                         {updateCommentMutationPending
@@ -177,7 +198,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                         ) : (
                             <>
                                 {/* Comment metadata */}
-                                <div className="text-muted-foreground mb-1 flex items-center gap-1 text-xs">
+                                <div className="text-muted-foreground mb-1 flex flex-wrap items-center gap-1 text-xs">
                                     {comment.author?.id ? (
                                         <UserProfilePopover
                                             userId={comment.author.id}
@@ -192,7 +213,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             Unknown
                                         </span>
                                     )}
-                                    <span>•</span>
+                                    <span className="hidden sm:inline">•</span>
                                     <span className="text-xs">
                                         {new Date(
                                             comment.createdAt,
@@ -206,7 +227,9 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     {comment.createdAt !==
                                         comment.updatedAt && (
                                         <>
-                                            <span>•</span>
+                                            <span className="hidden sm:inline">
+                                                •
+                                            </span>
                                             <span className="text-xs italic">
                                                 edited
                                             </span>
@@ -215,23 +238,44 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                 </div>
 
                                 {/* Comment content */}
-                                <div className="mb-1.5">
+                                <div className="mb-1.5 break-words">
                                     {comment.isDeleted ? (
                                         <p className="text-muted-foreground text-sm italic">
                                             [Comment deleted]
                                         </p>
                                     ) : (
-                                        <div
+                                        <SafeHtml
+                                            html={comment.content}
                                             className="prose prose-sm dark:prose-invert max-w-none text-sm leading-normal"
-                                            dangerouslySetInnerHTML={{
-                                                __html: comment.content,
-                                            }}
                                         />
                                     )}
                                 </div>
 
                                 {/* Comment actions */}
-                                <div className="flex items-center gap-1.5">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {canMarkHelpful && (
+                                        <button
+                                            onClick={() =>
+                                                onToggleHelpful?.(comment.id)
+                                            }
+                                            className={`flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors ${
+                                                isHelpful
+                                                    ? 'text-green-600 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/20'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                                            }`}
+                                            disabled={helpfulMutationPending}
+                                            title={
+                                                isHelpful
+                                                    ? 'Mark as not helpful'
+                                                    : 'Mark as helpful'
+                                            }
+                                        >
+                                            <BadgeCheck className="h-3.5 w-3.5" />
+                                            <span>{helpfulCount}</span>
+                                            <span>Helpful</span>
+                                        </button>
+                                    )}
+
                                     {canReply && !comment.isDeleted && (
                                         <button
                                             onClick={() =>
@@ -259,7 +303,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     {canEdit && (
                                         <button
                                             onClick={() => onStartEdit(comment)}
-                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
+                                            className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                                             title="Edit comment"
                                         >
                                             <Edit className="h-2.5 w-2.5" />
@@ -272,7 +316,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                             onClick={() =>
                                                 onDeleteComment(comment.id)
                                             }
-                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs opacity-0 transition-colors group-hover:opacity-100"
+                                            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs transition-colors sm:opacity-0 sm:group-hover:opacity-100"
                                             title="Delete comment"
                                             disabled={deleteCommentPending}
                                         >
@@ -292,6 +336,7 @@ const CommentItem: React.FC<CommentItemProps> = ({
                                     onChange={onSetReplyContent}
                                     placeholder="Write your reply..."
                                     variant="compact"
+                                    postId={comment.postId}
                                 />
                                 <div className="flex justify-end gap-1.5">
                                     <Button
@@ -351,6 +396,10 @@ const CommentItem: React.FC<CommentItemProps> = ({
                             depth={depth + 1}
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={onExpansionChange}
+                            helpfulCounts={helpfulCounts}
+                            isHelpfulMap={isHelpfulMap}
+                            onToggleHelpful={onToggleHelpful}
+                            helpfulMutationPending={helpfulMutationPending}
                         />
                     ))}
                 </div>

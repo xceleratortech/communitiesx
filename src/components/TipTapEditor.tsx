@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
+import Youtube from '@tiptap/extension-youtube';
 import { Button } from '@/components/ui/button';
 import {
     Bold,
@@ -14,6 +15,7 @@ import {
     ListOrdered,
     Link as LinkIcon,
     Image as ImageIcon,
+    Video,
     Heading1,
     Heading2,
     Undo,
@@ -22,14 +24,23 @@ import {
     Code,
     Strikethrough,
     Pilcrow,
+    Upload,
+    Youtube as YoutubeIcon,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isHtmlContentEmpty } from '@/lib/utils';
+import { uploadAttachmentWithPresignedFlow } from '@/lib/image-upload-utils';
+import { useSession } from '@/server/auth/client';
+import { validateAttachmentFile } from '@/lib/r2';
 
 interface TipTapEditorProps {
     content: string;
     onChange: (richText: string) => void;
     placeholder?: string;
     variant?: 'default' | 'compact';
+    postId?: number;
+    communityId?: number;
+    communitySlug?: string;
+    onMediaChange?: (hasMedia: boolean) => void;
 }
 
 const TipTapEditor: React.FC<TipTapEditorProps> = ({
@@ -37,12 +48,41 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     onChange,
     placeholder = 'Write something...',
     variant = 'default',
+    postId,
+    communityId,
+    communitySlug,
+    onMediaChange,
 }) => {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState(false);
+    type UploadedMediaItem = {
+        id: number;
+        type: 'image' | 'video';
+        url: string;
+        thumbnailUrl?: string | null;
+    };
+    const [uploadedMedia, setUploadedMedia] = useState<UploadedMediaItem[]>([]);
+
+    // Notify parent about media presence after state updates/render, not during render
+    useEffect(() => {
+        if (typeof onMediaChange === 'function') {
+            onMediaChange(uploadedMedia.length > 0);
+        }
+    }, [uploadedMedia, onMediaChange]);
+    const { data: session } = useSession();
+
+    const MAX_FILES_PER_BATCH = 10;
+    const MAX_TOTAL_SIZE_BYTES = 50 * 1024 * 1024; // 50MB total
+
     const editor = useEditor({
+        immediatelyRender: false,
         extensions: [
             StarterKit.configure({
                 heading: {
                     levels: [1, 2],
+                    HTMLAttributes: {
+                        class: 'font-bold',
+                    },
                 },
                 bulletList: {
                     keepMarks: true,
@@ -80,6 +120,13 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     class: 'max-w-full rounded-md',
                 },
             }),
+            Youtube.configure({
+                width: 640,
+                height: 480,
+                HTMLAttributes: {
+                    class: 'max-w-full rounded-md',
+                },
+            }),
         ],
         content,
         onUpdate: ({ editor }) => {
@@ -109,6 +156,9 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
     });
 
     useEffect(() => {
+        // Avoid resetting editor content while uploads are in progress,
+        // which can clobber programmatic insertions (multi-file case)
+        if (isUploading) return;
         if (editor) {
             // Only update content if it's different from current editor content
             // to avoid cursor jumping issues
@@ -127,7 +177,7 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 editor.commands.setContent(content);
             }
         }
-    }, [content, editor]);
+    }, [content, editor, isUploading]);
 
     // Add custom CSS to improve the editor experience
     useEffect(() => {
@@ -159,6 +209,18 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     .tiptap-editor-content p:last-child {
                         margin-bottom: 0;
                     }
+                    .tiptap-editor-content h1 {
+                        font-size: 1.5rem;
+                        font-weight: bold;
+                        margin: 1rem 0 0.5rem 0;
+                        line-height: 1.2;
+                    }
+                    .tiptap-editor-content h2 {
+                        font-size: 1.25rem;
+                        font-weight: bold;
+                        margin: 0.75rem 0 0.5rem 0;
+                        line-height: 1.3;
+                    }
                     .dark .tiptap-editor-content:focus, .dark .tiptap-editor-content:focus-within {
                         background-color: rgba(255, 255, 255, 0.02);
                     }
@@ -176,6 +238,16 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                     .dark .tiptap-editor-content:hover {
                         background-color: rgba(255, 255, 255, 0.01);
                     }
+                    /* YouTube embed styles */
+                    .tiptap-editor-content div[data-youtube-video] {
+                        margin: 1rem 0;
+                        max-width: 100%;
+                    }
+                    .tiptap-editor-content div[data-youtube-video] iframe {
+                        max-width: 100%;
+                        height: auto;
+                        aspect-ratio: 16/9;
+                    }
                 `;
                 document.head.appendChild(style);
 
@@ -190,11 +262,104 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
         return null;
     }
 
-    const addImage = () => {
-        const url = prompt('Enter image URL');
-        if (url) {
-            editor.chain().focus().setImage({ src: url }).run();
+    const handleFilesUpload = async (
+        event: React.ChangeEvent<HTMLInputElement>,
+    ) => {
+        const files = Array.from(event.target.files || []);
+        if (files.length === 0) return;
+
+        if (!session?.user?.email) {
+            alert('You must be logged in to upload files');
+            return;
         }
+
+        if (!editor) {
+            return;
+        }
+
+        try {
+            setIsUploading(true);
+
+            if (files.length > MAX_FILES_PER_BATCH) {
+                alert(
+                    `Please select up to ${MAX_FILES_PER_BATCH} files at a time.`,
+                );
+                return;
+            }
+
+            const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+            if (totalSize > MAX_TOTAL_SIZE_BYTES) {
+                alert(
+                    'Selected files are too large in total. Please upload fewer or smaller files.',
+                );
+                return;
+            }
+
+            for (const file of files) {
+                const validation = validateAttachmentFile(file as File);
+                if (!validation.valid) {
+                    continue;
+                }
+
+                const result = await uploadAttachmentWithPresignedFlow(
+                    file,
+                    session.user.email,
+                    {
+                        postId,
+                        communityId,
+                        communitySlug,
+                    },
+                );
+                if (result.type === 'image') {
+                    const imgSrc = `${result.url}?v=${Date.now()}`;
+                    editor
+                        .chain()
+                        .focus('end')
+                        .setImage({ src: imgSrc })
+                        .insertContent('<p></p>')
+                        .run();
+                    setUploadedMedia((prev: UploadedMediaItem[]) => [
+                        ...prev,
+                        { id: result.id, type: 'image' as const, url: imgSrc },
+                    ]);
+                } else if (result.type === 'video') {
+                    const videoPlaceholder = `[VIDEO:${result.url}]`;
+                    editor
+                        .chain()
+                        .focus('end')
+                        .insertContent(videoPlaceholder)
+                        .insertContent('<p></p>')
+                        .run();
+                    setUploadedMedia((prev: UploadedMediaItem[]) => [
+                        ...prev,
+                        {
+                            id: result.id,
+                            type: 'video' as const,
+                            url: result.thumbnailUrl || result.url,
+                            thumbnailUrl: result.thumbnailUrl,
+                        },
+                    ]);
+                }
+            }
+            // After processing the whole batch, propagate final HTML once
+            onChange(editor.getHTML());
+        } catch (error) {
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to upload file. Please try again.',
+            );
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+    const addFile = () => {
+        // Trigger file input click
+        fileInputRef.current?.click();
     };
 
     const setLink = () => {
@@ -219,6 +384,30 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
             .extendMarkRange('link')
             .setLink({ href: url })
             .run();
+    };
+
+    const addYoutubeVideo = () => {
+        const url = prompt('Enter YouTube URL:');
+
+        // cancelled
+        if (url === null) {
+            return;
+        }
+
+        // empty
+        if (url === '') {
+            return;
+        }
+
+        // add youtube video
+        editor.commands.setYoutubeVideo({
+            src: url,
+            width: Math.max(320, Math.min(640, window.innerWidth - 100)),
+            height: Math.max(
+                180,
+                Math.min(480, (window.innerWidth - 100) * 0.5625),
+            ),
+        });
     };
 
     /* -------------------------------------------------------------------------------------------------
@@ -259,6 +448,45 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 }
             }}
         >
+            {/* Hidden file input for file upload */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                onChange={handleFilesUpload}
+                className="hidden"
+            />
+
+            {/* Simple preview of uploaded media (local) */}
+            {uploadedMedia.length > 0 && (
+                <div className="px-3 pt-3">
+                    <div className="text-muted-foreground mb-2 text-xs">
+                        Uploaded media preview
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                        {uploadedMedia.map((m: UploadedMediaItem) => (
+                            <div
+                                key={`${m.type}-${m.id}`}
+                                className="relative overflow-hidden rounded border"
+                            >
+                                {m.type === 'image' ? (
+                                    <img
+                                        src={m.url}
+                                        alt="uploaded"
+                                        className="h-24 w-full object-cover"
+                                    />
+                                ) : (
+                                    <div className="bg-muted flex h-24 w-full items-center justify-center text-xs">
+                                        Video
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             <div
                 className={toolbarClasses}
                 onClick={(e) => e.stopPropagation()}
@@ -424,13 +652,29 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        addImage();
+                        addFile();
                     }}
                     className={buttonClasses}
                     type="button"
-                    title="Image"
+                    title="Upload Files (Images/Videos)"
+                    disabled={isUploading}
                 >
-                    <ImageIcon className="h-4 w-4" />
+                    {isUploading ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                        <Upload className="h-4 w-4" />
+                    )}
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        addYoutubeVideo();
+                    }}
+                    className={buttonClasses}
+                    type="button"
+                    title="Add YouTube Video"
+                >
+                    <YoutubeIcon className="h-4 w-4" />
                 </button>
                 <button
                     onClick={(e) => {
@@ -473,6 +717,24 @@ const TipTapEditor: React.FC<TipTapEditorProps> = ({
                 </button>
             </div>
             <EditorContent editor={editor} className={contentClasses} />
+
+            {/* Content validation indicator */}
+            <div className="text-muted-foreground mt-2 text-xs">
+                {editor && (
+                    <>
+                        {isHtmlContentEmpty(editor.getHTML()) ? (
+                            <span className="text-orange-500">
+                                Content cannot be empty
+                            </span>
+                        ) : (
+                            <span>
+                                Content length: {editor.getText().length}{' '}
+                                characters
+                            </span>
+                        )}
+                    </>
+                )}
+            </div>
         </div>
     );
 };

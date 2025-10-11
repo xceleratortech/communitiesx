@@ -11,14 +11,12 @@ To maintain consistency and quality throughout the project lifecycle, all team m
 ### Code Organization Rules
 
 1. **File Structure Enforcement**:
-
     - All server-side code MUST be located in the `src/server/` directory
     - All client components MUST be placed in appropriate directories under `src/app/`
     - Shared utilities MUST go in `src/lib/`
     - Context providers MUST be in `src/providers/`
 
 2. **Naming Conventions**:
-
     - Use PascalCase for React components: `UserProfile.tsx`
     - Use camelCase for utilities and hooks: `useFormattedDate.ts`
     - Use kebab-case for CSS files: `button-styles.css`
@@ -31,19 +29,16 @@ To maintain consistency and quality throughout the project lifecycle, all team m
 ### Development Process Rules
 
 1. **Branch Management**:
-
     - Feature branches must follow pattern: `feature/feature-name`
     - Bug fixes must follow pattern: `fix/issue-description`
     - Always rebase on main before creating a pull request
 
 2. **Commit Guidelines**:
-
     - Follow Conventional Commits format: `feat: add user authentication`
     - Include issue number when applicable: `fix: resolve login redirect issue (#123)`
     - Keep commits focused on single logical changes
 
 3. **Code Quality Requirements**:
-
     - All code MUST pass linting before commit (enforced by husky)
     - Unit tests MUST be written for critical business logic
     - Authentication-related changes MUST undergo security review
@@ -56,7 +51,6 @@ To maintain consistency and quality throughout the project lifecycle, all team m
 ### API Development Rules
 
 1. **tRPC Implementation**:
-
     - All procedures MUST be properly typed with Zod schemas for inputs
     - Public procedures MUST be explicit about their exposure
     - Protected procedures MUST include proper session validation
@@ -71,7 +65,6 @@ To maintain consistency and quality throughout the project lifecycle, all team m
 ### Security Rules
 
 1. **Authentication**:
-
     - NEVER bypass authentication for protected routes
     - ALWAYS validate user permissions for admin actions
     - NEVER expose sensitive tokens in client-side code
@@ -82,10 +75,16 @@ To maintain consistency and quality throughout the project lifecycle, all team m
     - NEVER trust client-side validation alone
     - Use content security policies to prevent XSS
 
+3. **HTML Content Security**:
+    - **NEVER use `dangerouslySetInnerHTML` directly**
+    - **ALWAYS use the `SafeHtml` component for rendering user-generated HTML content**
+    - **ALWAYS sanitize HTML content server-side before storing in database**
+    - Use the `sanitizeHtml()` function from `@/lib/sanitize` for server-side sanitization
+    - Use the `SafeHtml` component from `@/lib/sanitize` for client-side rendering
+
 ### Performance Rules
 
 1. **Frontend Optimization**:
-
     - Implement proper code-splitting for larger components
     - Optimize images and assets before deployment
     - Use React Server Components where possible to reduce client bundle
@@ -215,7 +214,7 @@ pnpm db:push      # Applies migrations to your database
 
 ### 3. Authentication with better-auth
 
-The project uses better-auth for authentication with email/password support and admin features.
+The project uses better-auth for authentication with email/password support, Google OAuth, and OTP (One-Time Password) authentication.
 
 #### Server Configuration
 
@@ -234,10 +233,36 @@ export const auth = betterAuth({
             defaultRole: 'user',
             impersonationSessionDuration: 60 * 60 * 24,
         }),
+        emailOTP({
+            otpLength: 6,
+            expiresIn: 300, // 5 minutes
+            allowedAttempts: 3,
+            disableSignUp: true, // Only for existing users
+            async sendVerificationOTP({ email, otp, type }) {
+                const { subject, html } = createOTPEmail(email, otp, type);
+                await sendEmail({ to: email, subject, html });
+            },
+        }),
     ],
     // Additional configuration
 });
 ```
+
+#### Authentication Methods
+
+The platform supports three authentication methods:
+
+1. **Email/Password**: Traditional username/password authentication
+2. **Google OAuth**: Social login via Google accounts
+3. **OTP (One-Time Password)**: Passwordless authentication via email
+
+#### OTP Authentication Features
+
+- **6-digit codes** sent to user's registered email
+- **5-minute expiration** for security
+- **3 attempt limit** before requiring a new OTP
+- **Existing users only** (no automatic registration)
+- **Professional email templates** with CommunityX branding
 
 #### Client Usage
 
@@ -251,7 +276,19 @@ export function AuthComponent() {
     const session = useSession();
 
     if (!session.data) {
-        return <button onClick={() => signIn()}>Sign In</button>;
+        return (
+            <div>
+                <button onClick={() => signIn.email({ email, password })}>
+                    Sign In with Password
+                </button>
+                <button onClick={() => signIn.social({ provider: 'google' })}>
+                    Sign In with Google
+                </button>
+                <button onClick={() => signIn.emailOtp({ email, otp })}>
+                    Sign In with OTP
+                </button>
+            </div>
+        );
     }
 
     return (
@@ -262,6 +299,15 @@ export function AuthComponent() {
     );
 }
 ```
+
+#### OTP Authentication Flow
+
+1. **User enters email** on login page
+2. **Clicks "Sign in with OTP"** button
+3. **System sends 6-digit code** to user's email
+4. **User enters OTP** in the verification form
+5. **System validates OTP** and signs user in
+6. **User is redirected** to their intended destination
 
 ## Best Practices
 
@@ -345,12 +391,10 @@ const protectedRouter = router({
 ### Project Organization
 
 1. **Component Structure**:
-
     - Reusable UI components go in `src/components/`
     - Page-specific components should live within their page directory
 
 2. **Server Logic**:
-
     - Keep all server-related code in the `src/server/` directory
     - Database models in `src/server/db/schema.ts`
     - API routes using tRPC procedures in `src/server/trpc/router.ts`
@@ -397,15 +441,27 @@ The project enforces code quality standards with ESLint and Prettier:
 - Generate migrations with `pnpm db:generate`
 - Apply migrations with `pnpm db:push`
 
+#### Recent Schema Changes
+
+**User Profiles Table (user_profiles)**
+
+- **Table:** `user_profiles`
+- **Purpose:** Stores user profile information in a flexible JSON structure
+- **Key Fields:**
+    - `id`: Primary key (serial)
+    - `userId`: Foreign key to users table (unique)
+    - `metadata`: JSONB column containing profile data (phone, experiences, education, skills, etc.)
+    - `createdAt` & `updatedAt`: Timestamps
+- **Data Type:** Uses `jsonb` for optimal JSON storage and querying in PostgreSQL
+- **Migration:** Migration `0025_famous_redwing.sql` converts metadata from `text` to `jsonb`
+
 ## Deployment Considerations
 
 1. **Database Setup**:
-
     - Ensure your PostgreSQL database is properly set up
     - Run migrations on deployment with `pnpm db:push`
 
 2. **Environment Variables**:
-
     - Set all required environment variables in your deployment platform
     - Ensure `NEXT_PUBLIC_APP_URL` is set to your production URL
 

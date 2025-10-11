@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
     return {
-        name: 'AU NEP',
-        short_name: 'AU NEP',
-        description: 'Namma Educators Parishad | Atria University',
+        name: 'Community-X',
+        short_name: 'Community-X',
+        description:
+            'Community to connect and engage yourself for your interests',
         start_url: '/',
         display: 'standalone',
         background_color: '#ffffff',
@@ -45,6 +46,31 @@ export default function manifest(): MetadataRoute.Manifest {
                 sizes: '512x512',
                 type: 'image/png',
                 purpose: 'maskable',
+            },
+        ],
+        share_target: {
+            action: '/share-target', // Route in your app to handle shared content
+            method: 'POST',
+            enctype: 'multipart/form-data',
+            params: {
+                title: 'title',
+                text: 'text',
+                url: 'url',
+            },
+        },
+        categories: ['social', 'productivity', 'utilities'],
+        shortcuts: [
+            {
+                name: 'Share Content',
+                short_name: 'Share',
+                description: 'Share content to other apps',
+                url: '/share-target',
+                icons: [
+                    {
+                        src: '/diamond-96.png',
+                        sizes: '96x96',
+                    },
+                ],
             },
         ],
     };

@@ -2,9 +2,10 @@ import { randomUUID } from 'crypto';
 import { hashPassword } from 'better-auth/crypto';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { db } from '@/server/db';
-import { orgs, users, accounts } from '@/server/db/auth-schema';
-import { sendEmail } from '@/lib/email';
+import { db } from '../src/server/db';
+import { orgs, users, accounts } from '../src/server/db/auth-schema';
+import { sendEmail } from '../src/lib/email';
+import { createWelcomeEmail } from '../src/lib/email-templates';
 import { eq } from 'drizzle-orm';
 
 interface UserData {
@@ -23,62 +24,6 @@ function generatePassword(length: number = 8): string {
         password += charset.charAt(Math.floor(Math.random() * charset.length));
     }
     return password;
-}
-
-// Email template for user credentials
-function createWelcomeEmail(name: string, email: string, password: string) {
-    return {
-        subject: "Welcome to AU's NEP 2025 Platform - Your Login Credentials",
-        html: `
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .logo { max-width: 200px; height: auto; }
-                .content { background: #f9f9f9; padding: 20px; border-radius: 8px; }
-                .credentials { background: #fff; padding: 15px; border-radius: 5px; margin: 20px 0; }
-                .button { display: inline-block; background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-                .footer { text-align: center; margin-top: 30px; color: #666; font-size: 14px; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <div class="header">
-                    <img src="https://bucket.xcelerator.co.in/au_logo.jpg" alt="AU Logo" class="logo">
-                </div>
-                
-                <div class="content">
-                    <h2>Welcome to AU's NEP 2025 Platform!</h2>
-                    
-                    <p>Dear ${name},</p>
-                    
-                    <p>Thank you for participating in AU's NEP 2025. We believe today was just the beginning, join us on this platform to continue the conversations that were ignited today.</p>
-                    
-                    <div class="credentials">
-                        <h3>Your Login Credentials:</h3>
-                        <p><strong>Email:</strong> ${email}</p>
-                        <p><strong>Password:</strong> ${password}</p>
-                    </div>
-                    
-                    <p>Please keep these credentials secure and change your password after your first login for security purposes.</p>
-                    
-                    <p>We look forward to your continued participation in shaping the future of education!</p>
-                    
-                    <p>Best regards,<br>
-                    The AU NEP 2025 Team</p>
-                </div>
-                
-                <div class="footer">
-                    <p>This is an automated message. Please do not reply to this email.</p>
-                </div>
-            </div>
-        </body>
-        </html>
-        `,
-    };
 }
 
 async function importUsers() {
@@ -171,6 +116,11 @@ async function importUsers() {
                         await db.insert(orgs).values({
                             id: orgId,
                             name: cleanInstitute,
+                            slug: cleanInstitute
+                                .toLowerCase()
+                                .replace(/\s+/g, '-')
+                                .replace(/[^a-z0-9\-]/g, ''),
+                            createdAt: new Date(),
                         });
                         createdOrgs.set(cleanInstitute, orgId);
                         orgCount++;
@@ -211,15 +161,11 @@ async function importUsers() {
 
                 // Send welcome email
                 try {
-                    const emailTemplate = createWelcomeEmail(
-                        cleanName,
-                        cleanEmail,
-                        password,
-                    );
+                    const welcomeEmail = createWelcomeEmail(`${process.env.NEXT_PUBLIC_APP_URL || 'https://communityx.xcelerator.in'}/auth/login`);
                     const emailResult = await sendEmail({
                         to: cleanEmail,
-                        subject: emailTemplate.subject,
-                        html: emailTemplate.html,
+                        subject: welcomeEmail.subject,
+                        html: welcomeEmail.html,
                     });
 
                     if (emailResult.success) {
