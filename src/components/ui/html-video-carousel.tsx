@@ -49,7 +49,9 @@ export function HtmlVideoCarousel({
                                         controls
                                         playsInline
                                         webkit-playsinline="true"
-                                        preload="none"
+                                        preload={
+                                            idx === 0 ? 'metadata' : 'none'
+                                        }
                                         muted
                                         className="max-h-full max-w-full object-contain"
                                         crossOrigin="anonymous"

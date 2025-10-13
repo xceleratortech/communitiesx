@@ -69,7 +69,9 @@ export function MixedMediaCarousel({
                                             fill
                                             className="object-contain object-center"
                                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                            loading="lazy"
+                                            priority={
+                                                item.id === mediaList[0].id
+                                            }
                                             quality={85}
                                         />
                                     ) : item.type === 'video' ? (
@@ -78,7 +80,11 @@ export function MixedMediaCarousel({
                                             controls
                                             playsInline
                                             webkit-playsinline="true"
-                                            preload="none"
+                                            preload={
+                                                item.id === mediaList[0].id
+                                                    ? 'metadata'
+                                                    : 'none'
+                                            }
                                             muted
                                             className="max-h-full max-w-full object-contain"
                                             crossOrigin="anonymous"

@@ -50,7 +50,7 @@ export function HtmlImageCarousel({
                                         fill
                                         className="object-contain object-center"
                                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                        loading="lazy"
+                                        priority={idx === 0}
                                         quality={85}
                                     />
                                 </div>
