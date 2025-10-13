@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import {
     Carousel,
@@ -43,10 +44,14 @@ export function HtmlImageCarousel({
                                 className="h-full"
                             >
                                 <div className="flex h-full w-full items-center justify-center">
-                                    <img
+                                    <Image
                                         src={src}
                                         alt={`Image ${idx + 1}`}
-                                        className="max-h-full max-w-full object-contain object-center"
+                                        fill
+                                        className="object-contain object-center"
+                                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                        priority={idx === 0}
+                                        quality={85}
                                     />
                                 </div>
                             </CarouselItem>

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import {
     Carousel,
@@ -62,10 +63,16 @@ export function MixedMediaCarousel({
                             <CarouselItem key={item.id} className="h-full">
                                 <div className="flex h-full w-full items-center justify-center">
                                     {item.type === 'image' ? (
-                                        <img
+                                        <Image
                                             src={item.url as string}
                                             alt={item.filename}
-                                            className="max-h-full max-w-full object-contain object-center"
+                                            fill
+                                            className="object-contain object-center"
+                                            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                            priority={
+                                                item.id === mediaList[0].id
+                                            }
+                                            quality={85}
                                         />
                                     ) : item.type === 'video' ? (
                                         <video
@@ -73,7 +80,11 @@ export function MixedMediaCarousel({
                                             controls
                                             playsInline
                                             webkit-playsinline="true"
-                                            preload="metadata"
+                                            preload={
+                                                item.id === mediaList[0].id
+                                                    ? 'metadata'
+                                                    : 'none'
+                                            }
                                             muted
                                             className="max-h-full max-w-full object-contain"
                                             crossOrigin="anonymous"
