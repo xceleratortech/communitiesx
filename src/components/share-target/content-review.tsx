@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import {
     Card,
@@ -306,10 +307,14 @@ export function ContentReview({
                                                 </p>
                                             </div>
                                             {linkPreview.image && (
-                                                <img
+                                                <Image
                                                     src={linkPreview.image}
                                                     alt="Preview"
-                                                    className="ml-2 h-16 w-16 rounded object-cover"
+                                                    width={64}
+                                                    height={64}
+                                                    className="ml-2 rounded object-cover"
+                                                    loading="lazy"
+                                                    quality={85}
                                                 />
                                             )}
                                         </div>

@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Globe, Lock, Users, Calendar } from 'lucide-react';
@@ -28,10 +29,14 @@ export function CommunityBanner({
             {/* Banner Image */}
             <div className="relative h-32 w-full overflow-hidden rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 sm:h-40 md:h-48 lg:h-56">
                 {community.banner && (
-                    <img
+                    <Image
                         src={community.banner || '/placeholder.svg'}
                         alt={`${community.name} banner`}
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        loading="lazy"
+                        quality={85}
                     />
                 )}
                 {/* Overlay for better text readability */}
