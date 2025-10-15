@@ -25,6 +25,7 @@ import { useSession } from '@/server/auth/client';
 import { Plus } from 'lucide-react';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import type { PostableCommunity } from '@/types/community';
 
 interface CreatePostDialogProps {
     children: React.ReactNode;
@@ -76,8 +77,8 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
     const userCommunities = userCommunitiesQuery.data || [];
     // getUserPostableCommunities already handles org admin logic and returns communities where user can post
     const communitiesWhereCanPost = userCommunities.filter((community) => {
-        return (community as any).canPost === true;
-    });
+        return community.canPost === true;
+    }) as PostableCommunity[];
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -111,15 +112,13 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
                                             <span>{community.name}</span>
                                             <span className="text-muted-foreground text-xs">
                                                 (
-                                                {(community as any).reason ===
+                                                {community.reason ===
                                                 'org_admin'
                                                     ? 'Org Admin'
-                                                    : (community as any)
-                                                            .reason ===
+                                                    : community.reason ===
                                                         'super_admin'
                                                       ? 'Super Admin'
-                                                      : (community as any)
-                                                            .userRole ||
+                                                      : community.userRole ||
                                                         'Member'}
                                                 )
                                             </span>
