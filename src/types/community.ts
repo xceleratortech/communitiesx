@@ -102,3 +102,14 @@ export interface Post {
     author?: User;
     tags?: Tag[];
 }
+
+export interface PostableCommunity extends Community {
+    userRole: 'member' | 'moderator' | 'admin';
+    canPost: true;
+    reason: 'member' | 'org_admin' | 'super_admin';
+    organization?: {
+        id: string;
+        name: string;
+        slug: string;
+    } | null;
+}
