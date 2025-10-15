@@ -39,12 +39,10 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
     const { checkOrgPermission, isAppAdmin, userDetails } = usePermission();
 
     // Get user's communities where they can create posts
-    const userCommunitiesQuery = trpc.communities.getUserCommunities.useQuery(
-        undefined,
-        {
+    const userCommunitiesQuery =
+        trpc.communities.getUserPostableCommunities.useQuery(undefined, {
             enabled: !!session.data?.user?.id,
-        },
-    );
+        });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -76,33 +74,9 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
     };
 
     const userCommunities = userCommunitiesQuery.data || [];
-    // Only show communities where the user meets the community's postCreationMinRole
-    // or is an app admin, or is an org admin for the community's org
-    const roleHierarchy: Record<string, number> = {
-        member: 1,
-        moderator: 2,
-        admin: 3,
-    };
-
+    // getUserPostableCommunities already handles org admin logic and returns communities where user can post
     const communitiesWhereCanPost = userCommunities.filter((community) => {
-        const userRole = (community as any).userRole as
-            | 'member'
-            | 'moderator'
-            | 'admin'
-            | 'follower'
-            | undefined;
-        if (!userRole || userRole === 'follower') return false;
-
-        const minRole = (community as any).postCreationMinRole || 'member';
-        const hasMinRole =
-            (roleHierarchy[userRole] || 0) >= (roleHierarchy[minRole] || 1);
-
-        const isOrgAdminForCommunity =
-            checkOrgPermission(PERMISSIONS.CREATE_POST) &&
-            userDetails?.orgId &&
-            userDetails.orgId === community.orgId;
-
-        return isAppAdmin() || isOrgAdminForCommunity || hasMinRole;
+        return (community as any).canPost === true;
     });
 
     return (
@@ -136,7 +110,18 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
                                         <div className="flex items-center space-x-2">
                                             <span>{community.name}</span>
                                             <span className="text-muted-foreground text-xs">
-                                                ({community.userRole})
+                                                (
+                                                {(community as any).reason ===
+                                                'org_admin'
+                                                    ? 'Org Admin'
+                                                    : (community as any)
+                                                            .reason ===
+                                                        'super_admin'
+                                                      ? 'Super Admin'
+                                                      : (community as any)
+                                                            .userRole ||
+                                                        'Member'}
+                                                )
                                             </span>
                                         </div>
                                     </SelectItem>
