@@ -76,9 +76,7 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
 
     const userCommunities = userCommunitiesQuery.data || [];
     // getUserPostableCommunities already handles org admin logic and returns communities where user can post
-    const communitiesWhereCanPost = userCommunities.filter((community) => {
-        return community.canPost === true;
-    }) as PostableCommunity[];
+    const communitiesWhereCanPost = userCommunities as PostableCommunity[];
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -112,14 +110,26 @@ export function CreatePostDialog({ children }: CreatePostDialogProps) {
                                             <span>{community.name}</span>
                                             <span className="text-muted-foreground text-xs">
                                                 (
-                                                {community.reason ===
-                                                'org_admin'
-                                                    ? 'Org Admin'
-                                                    : community.reason ===
+                                                {(() => {
+                                                    if (
+                                                        community.reason ===
+                                                        'org_admin'
+                                                    )
+                                                        return 'Org Admin';
+                                                    if (
+                                                        community.reason ===
                                                         'super_admin'
-                                                      ? 'Super Admin'
-                                                      : community.userRole ||
-                                                        'Member'}
+                                                    )
+                                                        return 'Super Admin';
+                                                    const role =
+                                                        community.userRole;
+                                                    return (
+                                                        role
+                                                            .charAt(0)
+                                                            .toUpperCase() +
+                                                        role.slice(1)
+                                                    );
+                                                })()}
                                                 )
                                             </span>
                                         </div>
