@@ -192,6 +192,16 @@ export interface MemberAvatar {
 }
 
 /**
+ * Encodes an R2 key for use in a public URL by URL-encoding each path segment
+ * This handles characters like @, &, and spaces while preserving path structure
+ * @param key - The R2 key to encode
+ * @returns The URL-encoded key
+ */
+export function encodeR2KeyForUrl(key: string): string {
+    return key.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
  * Generates member avatar data from community members
  * @param members - Array of community members
  * @param limit - Maximum number of avatars to generate (default: 3)
@@ -211,7 +221,7 @@ export function generateMemberAvatars(
             } else if (imageId.startsWith('/api/images/')) {
                 imageUrl = imageId;
             } else if (process.env.NEXT_PUBLIC_R2_PUBLIC_URL) {
-                imageUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${imageId}`;
+                imageUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${encodeR2KeyForUrl(imageId)}`;
             } else {
                 imageUrl = `/api/images/${imageId}`;
             }

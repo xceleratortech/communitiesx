@@ -3,6 +3,7 @@ import { getUserSession } from '@/server/auth/server';
 import { db } from '@/server/db';
 import { attachments } from '@/server/db/schema';
 import { eq } from 'drizzle-orm';
+import { encodeR2KeyForUrl } from '@/lib/utils';
 
 // Video conversion service interfaces
 interface VideoConversionRequest {
@@ -339,10 +340,7 @@ export async function POST(request: NextRequest) {
             r2Key: finalR2Key,
             r2Url: url,
             // URL-encode the key to handle characters like @ and & while preserving path slashes
-            publicUrl: `${process.env.R2_PUBLIC_URL}/${finalR2Key
-                .split('/')
-                .map(encodeURIComponent)
-                .join('/')}`,
+            publicUrl: `${process.env.R2_PUBLIC_URL}/${encodeR2KeyForUrl(finalR2Key)}`,
             thumbnailUrl: null, // For video, can be set if available
             uploadedBy: session.user.id,
             postId: postId || null,
@@ -405,10 +403,7 @@ export async function POST(request: NextRequest) {
                 mimetype: attachmentRecord.mimetype,
                 type: attachmentRecord.type,
                 key: attachmentRecord.r2Key,
-                url: `${process.env.R2_PUBLIC_URL}/${attachmentRecord.r2Key
-                    .split('/')
-                    .map(encodeURIComponent)
-                    .join('/')}`,
+                url: `${process.env.R2_PUBLIC_URL}/${encodeR2KeyForUrl(attachmentRecord.r2Key)}`,
                 thumbnailUrl: attachmentRecord.thumbnailUrl,
                 needsConversion: needsVideoConversion,
             },

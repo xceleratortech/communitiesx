@@ -11,7 +11,7 @@ import { users } from '@/server/db/auth-schema';
 import { and, eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
 import { ServerPermissions } from '@/server/utils/permission';
-import { isOrgAdminForCommunity } from '@/lib/utils';
+import { isOrgAdminForCommunity, encodeR2KeyForUrl } from '@/lib/utils';
 
 export async function GET(
     request: NextRequest,
@@ -207,10 +207,7 @@ export async function GET(
             );
         }
 
-        const directUrl = `${process.env.R2_PUBLIC_URL}/${attachmentRecord.r2Key
-            .split('/')
-            .map(encodeURIComponent)
-            .join('/')}`;
+        const directUrl = `${process.env.R2_PUBLIC_URL}/${encodeR2KeyForUrl(attachmentRecord.r2Key)}`;
         const res = NextResponse.redirect(directUrl, 302);
         res.headers.set('cache-control', 'public, max-age=3600');
         return res;

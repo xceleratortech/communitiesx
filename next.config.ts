@@ -14,7 +14,6 @@ const nextConfig: NextConfig = {
       "*.xcelerator.in",
       "storage-communityx.xcelerator.in",
       "stroage-dev.xcelerator.work",
-      "storage-dev.xcelerator.work"
     ],
     remotePatterns: [
       {
@@ -45,10 +44,6 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "stroage-dev.xcelerator.work",
       },
-      {
-        protocol: "https",
-        hostname: "storage-dev.xcelerator.work",
-      }
     ],
   },
 };
