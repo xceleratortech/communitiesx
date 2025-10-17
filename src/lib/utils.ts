@@ -213,7 +213,6 @@ export function generateMemberAvatars(
 ): MemberAvatar[] {
     return members.slice(0, limit).map((member) => {
         const imageId = member?.user?.image;
-        // Normalize image URL: accept full URLs, legacy /api/images paths, or bare keys
         let imageUrl: string | undefined = undefined;
         if (imageId) {
             if (imageId.startsWith('http')) {
