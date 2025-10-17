@@ -61,7 +61,7 @@ export function MixedMediaCarousel({
                     <CarouselContent className="h-full">
                         {mediaList.map((item) => (
                             <CarouselItem key={item.id} className="h-full">
-                                <div className="flex h-full w-full items-center justify-center">
+                                <div className="relative flex h-full w-full items-center justify-center">
                                     {item.type === 'image' ? (
                                         <Image
                                             src={item.url as string}

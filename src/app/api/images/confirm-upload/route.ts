@@ -338,7 +338,11 @@ export async function POST(request: NextRequest) {
             size: 0, // Will be updated if needed
             r2Key: finalR2Key,
             r2Url: url,
-            publicUrl: `${process.env.R2_PUBLIC_URL}/${finalR2Key}`,
+            // URL-encode the key to handle characters like @ and & while preserving path slashes
+            publicUrl: `${process.env.R2_PUBLIC_URL}/${finalR2Key
+                .split('/')
+                .map(encodeURIComponent)
+                .join('/')}`,
             thumbnailUrl: null, // For video, can be set if available
             uploadedBy: session.user.id,
             postId: postId || null,
@@ -349,12 +353,6 @@ export async function POST(request: NextRequest) {
             .insert(attachments)
             .values(insertData)
             .returning();
-
-        // Update the publicUrl to use our API endpoint
-        await db
-            .update(attachments)
-            .set({ publicUrl: `/api/images/${attachmentRecord.id}` })
-            .where(eq(attachments.id, attachmentRecord.id));
 
         // If video needs conversion, trigger background conversion
         if (needsVideoConversion) {
@@ -407,7 +405,10 @@ export async function POST(request: NextRequest) {
                 mimetype: attachmentRecord.mimetype,
                 type: attachmentRecord.type,
                 key: attachmentRecord.r2Key,
-                url: `/api/images/${attachmentRecord.id}`,
+                url: `${process.env.R2_PUBLIC_URL}/${attachmentRecord.r2Key
+                    .split('/')
+                    .map(encodeURIComponent)
+                    .join('/')}`,
                 thumbnailUrl: attachmentRecord.thumbnailUrl,
                 needsConversion: needsVideoConversion,
             },

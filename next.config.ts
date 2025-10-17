@@ -11,7 +11,10 @@ const nextConfig: NextConfig = {
       "*.amazonaws.com",
       "lh3.googleusercontent.com",
       "*.xcelerator.co.in",
-      "*.xcelerator.in"
+      "*.xcelerator.in",
+      "storage-communityx.xcelerator.in",
+      "stroage-dev.xcelerator.work",
+      "storage-dev.xcelerator.work"
     ],
     remotePatterns: [
       {
@@ -33,6 +36,18 @@ const nextConfig: NextConfig = {
       {
         protocol: "https",
         hostname: "*.xcelerator.in",
+      },
+      {
+        protocol: "https",
+        hostname: "storage-communityx.xcelerator.in",
+      },
+      {
+        protocol: "https",
+        hostname: "stroage-dev.xcelerator.work",
+      },
+      {
+        protocol: "https",
+        hostname: "storage-dev.xcelerator.work",
       }
     ],
   },

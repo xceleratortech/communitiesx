@@ -43,7 +43,7 @@ export function HtmlImageCarousel({
                                 key={`${src}-${idx}`}
                                 className="h-full"
                             >
-                                <div className="flex h-full w-full items-center justify-center">
+                                <div className="relative flex h-full w-full items-center justify-center">
                                     <Image
                                         src={src}
                                         alt={`Image ${idx + 1}`}

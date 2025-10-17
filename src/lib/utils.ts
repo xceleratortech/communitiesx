@@ -203,12 +203,19 @@ export function generateMemberAvatars(
 ): MemberAvatar[] {
     return members.slice(0, limit).map((member) => {
         const imageId = member?.user?.image;
-        // Check if imageId is already a full URL or just an ID
-        const imageUrl = imageId
-            ? imageId.startsWith('/api/images/')
-                ? imageId
-                : `/api/images/${imageId}`
-            : undefined;
+        // Normalize image URL: accept full URLs, legacy /api/images paths, or bare keys
+        let imageUrl: string | undefined = undefined;
+        if (imageId) {
+            if (imageId.startsWith('http')) {
+                imageUrl = imageId;
+            } else if (imageId.startsWith('/api/images/')) {
+                imageUrl = imageId;
+            } else if (process.env.NEXT_PUBLIC_R2_PUBLIC_URL) {
+                imageUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${imageId}`;
+            } else {
+                imageUrl = `/api/images/${imageId}`;
+            }
+        }
 
         return {
             src: imageUrl,
