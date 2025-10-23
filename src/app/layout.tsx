@@ -5,10 +5,13 @@ import { cn } from '@/lib/utils';
 import NextTopLoader from 'nextjs-toploader';
 import { ThemeProvider } from '@/providers/theme-provider';
 import { TRPCProvider } from '@/providers/trpc-provider';
-import { ChatProvider } from '@/providers/chat-provider';
-import { Navbar } from '@/components/navbar';
-import { ChatContainer } from '@/components/chat/chat-container';
+import { LeftSidebar } from '@/components/left-sidebar';
+import { Topbar } from '@/components/topbar';
 import { Toaster } from '@/components/ui/sonner';
+import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
+import { PWAInstaller } from '@/components/pwa-installer';
+import Script from 'next/script';
+import { SentryUserProvider } from '@/providers/sentry-user-provider';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -23,6 +26,34 @@ const geistMono = Geist_Mono({
 export const metadata = {
     title: 'Community-X',
     description: 'Community to connect and engage yourself for your interests',
+    manifest: '/manifest.json',
+    applicationName: 'Community-X',
+    themeColor: '#000000',
+    viewport: 'width=device-width, initial-scale=1',
+    formatDetection: {
+        telephone: false,
+    },
+    appleWebApp: {
+        capable: true,
+        statusBarStyle: 'default',
+        title: 'Community-X',
+    },
+    icons: {
+        icon: '/favicon.ico',
+        shortcut: '/favicon.ico',
+        apple: [
+            { url: '/diamond-192.png', sizes: '192x192', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '152x152', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '180x180', type: 'image/png' },
+            { url: '/diamond-192.png', sizes: '167x167', type: 'image/png' },
+        ],
+    },
+    other: {
+        'mobile-web-app-capable': 'yes',
+        'msapplication-TileColor': '#000000',
+        'msapplication-tap-highlight': 'no',
+        'msapplication-navbutton-color': '#000000',
+    },
 };
 
 export default function RootLayout({
@@ -39,23 +70,46 @@ export default function RootLayout({
                     'bg-background min-h-screen font-sans antialiased',
                 )}
             >
+                {process.env.NODE_ENV === 'production' &&
+                    process.env.NEXT_PUBLIC_PLAUSIBLE_SRC &&
+                    process.env.NEXT_PUBLIC_PLAUSIBLE_DATA_DOMAIN && (
+                        <Script
+                            src={process.env.NEXT_PUBLIC_PLAUSIBLE_SRC}
+                            data-domain={
+                                process.env.NEXT_PUBLIC_PLAUSIBLE_DATA_DOMAIN
+                            }
+                            strategy="afterInteractive"
+                        />
+                    )}
                 <ThemeProvider
                     attribute="class"
                     defaultTheme="light"
                     disableTransitionOnChange
                 >
                     <TRPCProvider>
-                        <ChatProvider>
-                            <Navbar />
-                            <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                                <NextTopLoader />
-                                <main>{children}</main>
-                                <Toaster />
+                        <SentryUserProvider>
+                            {/* <ChatProvider> */}
+                            <div className="flex h-screen">
+                                <div className="hidden md:block">
+                                    <LeftSidebar />
+                                </div>
+                                <div className="flex-1 overflow-auto">
+                                    <ProfileCompletionGuard>
+                                        <Topbar />
+                                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                            {/* <NextTopLoader /> */}
+                                            <main>{children}</main>
+                                            <Toaster />
+                                        </div>
+                                    </ProfileCompletionGuard>
+                                </div>
                             </div>
-                            <ChatContainer />
-                        </ChatProvider>
+                            {/* <ChatContainer />
+                        </ChatProvider> */}
+                        </SentryUserProvider>
                     </TRPCProvider>
                 </ThemeProvider>
+                <PWAInstaller />
             </body>
         </html>
     );

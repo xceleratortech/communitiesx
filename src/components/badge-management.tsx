@@ -19,11 +19,13 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
     const [editingBadge, setEditingBadge] = useState<any>(null);
     const [managingBadge, setManagingBadge] = useState<any>(null);
 
-    const { checkOrgPermission } = usePermission();
-    const canCreateBadge = checkOrgPermission('create_badge');
-    const canEditBadge = checkOrgPermission('edit_badge');
-    const canDeleteBadge = checkOrgPermission('delete_badge');
-    const canAssignBadge = checkOrgPermission('assign_badge');
+    const { checkOrgPermission, isAppAdmin } = usePermission();
+
+    // Super admins can perform all badge operations
+    const canCreateBadge = isAppAdmin() || checkOrgPermission('create_badge');
+    const canEditBadge = isAppAdmin() || checkOrgPermission('edit_badge');
+    const canDeleteBadge = isAppAdmin() || checkOrgPermission('delete_badge');
+    const canAssignBadge = isAppAdmin() || checkOrgPermission('assign_badge');
 
     // TRPC Queries
     const {
@@ -77,6 +79,22 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
         },
     });
 
+    const assignBadgeBulkMutation = trpc.badges.assignBadgeBulk.useMutation({
+        onSuccess: (assignments) => {
+            toast.success(
+                `Badge assigned to ${assignments.length} users successfully`,
+            );
+            refetchBadges();
+        },
+        onError: (error: unknown) => {
+            const message =
+                error instanceof Error
+                    ? error.message
+                    : 'Failed to assign badge to users';
+            toast.error(message);
+        },
+    });
+
     const unassignBadgeMutation = trpc.badges.unassignBadge.useMutation({
         onSuccess: () => {
             toast.success('Badge unassigned successfully');
@@ -112,6 +130,17 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
     }) => {
         if (!managingBadge) return;
         await assignBadgeMutation.mutateAsync({
+            badgeId: managingBadge.id,
+            ...data,
+        });
+    };
+
+    const handleAssignBadgeBulk = async (data: {
+        userIds: string[];
+        note?: string;
+    }) => {
+        if (!managingBadge) return;
+        await assignBadgeBulkMutation.mutateAsync({
             badgeId: managingBadge.id,
             ...data,
         });
@@ -211,9 +240,11 @@ export function BadgeManagement({ orgId }: BadgeManagementProps) {
                     badge={managingBadge}
                     users={users}
                     onAssign={handleAssignBadge}
+                    onAssignBulk={handleAssignBadgeBulk}
                     onUnassign={handleUnassignBadge}
                     isSubmitting={
                         assignBadgeMutation.isPending ||
+                        assignBadgeBulkMutation.isPending ||
                         unassignBadgeMutation.isPending
                     }
                 />

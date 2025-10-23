@@ -48,5 +48,30 @@ export default function manifest(): MetadataRoute.Manifest {
                 purpose: 'maskable',
             },
         ],
+        share_target: {
+            action: '/share-target', // Route in your app to handle shared content
+            method: 'POST',
+            enctype: 'multipart/form-data',
+            params: {
+                title: 'title',
+                text: 'text',
+                url: 'url',
+            },
+        },
+        categories: ['social', 'productivity', 'utilities'],
+        shortcuts: [
+            {
+                name: 'Share Content',
+                short_name: 'Share',
+                description: 'Share content to other apps',
+                url: '/share-target',
+                icons: [
+                    {
+                        src: '/diamond-96.png',
+                        sizes: '96x96',
+                    },
+                ],
+            },
+        ],
     };
 }

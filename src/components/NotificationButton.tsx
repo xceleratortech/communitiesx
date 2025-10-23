@@ -49,7 +49,6 @@ export function NotificationButton({
     }, []);
 
     const handleSubscribe = async () => {
-        console.log('handleSubscribe called');
         if (!isSupported) {
             toast.error('Push notifications are not supported in this browser');
             return;

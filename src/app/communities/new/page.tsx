@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { z } from 'zod';
@@ -23,7 +23,7 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form';
-import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -33,6 +33,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
+import { usePermission } from '@/hooks/use-permission';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 // Form schema
 const formSchema = z.object({
@@ -74,26 +77,49 @@ const formSchema = z.object({
         .optional(),
     avatar: z
         .string()
-        .url({ message: 'Please enter a valid URL' })
-        .or(z.literal(''))
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
         .optional()
         .nullable(),
     banner: z
         .string()
-        .url({ message: 'Please enter a valid URL' })
-        .or(z.literal(''))
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
         .optional()
         .nullable(),
-    orgId: z.string().min(1, { message: 'Please select an organization.' }),
+    orgId: z
+        .string()
+        .trim()
+        .min(1, { message: 'Please select an organization.' }),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-export default function NewCommunityPage() {
+// Separate component that uses useSearchParams
+function NewCommunityForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const sessionData = useSession();
     const session = sessionData.data;
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Get user permissions
+    const { appRole } = usePermission();
+
+    // Get orgId from URL params if provided
+    const orgIdFromUrl = searchParams.get('orgId');
 
     // Use client-side flag to avoid hydration mismatch
     const [isClient, setIsClient] = useState(false);
@@ -122,7 +148,7 @@ export default function NewCommunityPage() {
             },
         );
 
-    // Initialize form
+    // Initialize form with orgId if provided
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
@@ -134,9 +160,35 @@ export default function NewCommunityPage() {
             rules: '',
             avatar: '',
             banner: '',
-            orgId: '',
+            orgId: orgIdFromUrl || '',
         },
     });
+
+    const selectedOrganization = useMemo(() => {
+        const currentOrgId = form.watch('orgId');
+        if (!organizations?.length || !currentOrgId) return null;
+        return organizations.find((org) => org.id === currentOrgId) || null;
+    }, [organizations, form.watch('orgId')]);
+
+    useEffect(() => {
+        if (orgIdFromUrl) {
+            const currentOrgId = form.getValues('orgId');
+            if (currentOrgId !== orgIdFromUrl) {
+                form.setValue('orgId', orgIdFromUrl);
+            }
+        } else if (organizations && organizations.length > 0) {
+            const currentOrgId = form.getValues('orgId');
+            if (!currentOrgId || currentOrgId === '') {
+                form.setValue('orgId', organizations[0].id);
+
+                if (organizations.length === 1 && appRole === 'admin') {
+                    toast.success(
+                        `Organization automatically set to ${organizations[0].name}`,
+                    );
+                }
+            }
+        }
+    }, [orgIdFromUrl, organizations, form, appRole]);
 
     // Handle form submission
     const onSubmit = async (values: FormValues) => {
@@ -144,6 +196,7 @@ export default function NewCommunityPage() {
             toast.error('You must be signed in to create a community');
             return;
         }
+
         setIsSubmitting(true);
         createCommunity.mutate({
             name: values.name,
@@ -219,6 +272,17 @@ export default function NewCommunityPage() {
             </div>
 
             <div>
+                {organizations && organizations.length === 0 && (
+                    <div className="mb-6 rounded-md border border-yellow-200 bg-yellow-50 p-4">
+                        <p className="text-sm text-yellow-800">
+                            <strong>Note:</strong> You don't have access to any
+                            organizations. Communities must be created under an
+                            organization. Please contact your administrator to
+                            get access to an organization.
+                        </p>
+                    </div>
+                )}
+
                 <Form {...form}>
                     <form
                         onSubmit={form.handleSubmit(onSubmit)}
@@ -248,29 +312,110 @@ export default function NewCommunityPage() {
                             render={({ field }) => (
                                 <FormItem className="w-full">
                                     <FormLabel>Organization</FormLabel>
+                                    <FormDescription className="text-muted-foreground">
+                                        The community will be created under this
+                                        organization.
+                                        {appRole === 'admin' ? (
+                                            <>
+                                                If you have access to multiple
+                                                organizations, you can select
+                                                which one to use.
+                                                {field.value &&
+                                                    organizations && (
+                                                        <span className="mt-1 block font-medium text-green-700">
+                                                            ✓ Selected:{' '}
+                                                            {
+                                                                selectedOrganization?.name
+                                                            }
+                                                        </span>
+                                                    )}
+                                                {organizations &&
+                                                    organizations.length >
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-blue-600">
+                                                            You can change this
+                                                            selection if needed
+                                                        </span>
+                                                    )}
+                                                {organizations &&
+                                                    organizations.length ===
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-green-600">
+                                                            This is your only
+                                                            organization
+                                                        </span>
+                                                    )}
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground mt-1 block text-xs">
+                                                Organization selection is
+                                                automatically managed for you.
+                                                {organizations &&
+                                                    organizations.length ===
+                                                        1 && (
+                                                        <span className="mt-1 block text-xs text-blue-600">
+                                                            Your community will
+                                                            be created under{' '}
+                                                            {
+                                                                selectedOrganization?.name
+                                                            }
+                                                        </span>
+                                                    )}
+                                            </span>
+                                        )}
+                                    </FormDescription>
                                     <FormControl>
                                         <div className="w-full">
-                                            <Select
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                                disabled={isLoadingOrgs}
-                                            >
-                                                <SelectTrigger className="w-full">
-                                                    <SelectValue placeholder="Select organization" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {organizations?.map(
-                                                        (org) => (
-                                                            <SelectItem
-                                                                key={org.id}
-                                                                value={org.id}
-                                                            >
-                                                                {org.name}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
-                                                </SelectContent>
-                                            </Select>
+                                            {isLoadingOrgs ? (
+                                                <div className="border-input bg-background flex h-10 w-full items-center rounded-md border px-3 py-2 text-sm">
+                                                    <span className="text-muted-foreground">
+                                                        Loading organizations...
+                                                    </span>
+                                                </div>
+                                            ) : organizations &&
+                                              organizations.length === 0 ? (
+                                                <div className="flex h-10 w-full items-center rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm">
+                                                    <span className="text-red-600">
+                                                        No organizations
+                                                        available
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <Select
+                                                    key={field.value}
+                                                    value={field.value}
+                                                    onValueChange={
+                                                        field.onChange
+                                                    }
+                                                    disabled={isLoadingOrgs}
+                                                >
+                                                    <SelectTrigger className="w-full">
+                                                        <SelectValue
+                                                            placeholder={
+                                                                organizations &&
+                                                                organizations.length >
+                                                                    0
+                                                                    ? 'Select organization'
+                                                                    : 'No organizations available'
+                                                            }
+                                                        />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {organizations?.map(
+                                                            (org) => (
+                                                                <SelectItem
+                                                                    key={org.id}
+                                                                    value={
+                                                                        org.id
+                                                                    }
+                                                                >
+                                                                    {org.name}
+                                                                </SelectItem>
+                                                            ),
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
                                         </div>
                                     </FormControl>
                                     <FormMessage />
@@ -345,8 +490,8 @@ export default function NewCommunityPage() {
                                                             Public
                                                         </p>
                                                         <p className="text-muted-foreground text-sm">
-                                                            Anyone can view,
-                                                            post, and comment
+                                                            Anyone can view and
+                                                            join this community
                                                         </p>
                                                     </div>
                                                 </Label>
@@ -367,9 +512,8 @@ export default function NewCommunityPage() {
                                                             Private
                                                         </p>
                                                         <p className="text-muted-foreground text-sm">
-                                                            Only approved
-                                                            members can view and
-                                                            post
+                                                            Only invited members
+                                                            can view and join
                                                         </p>
                                                     </div>
                                                 </Label>
@@ -483,18 +627,19 @@ export default function NewCommunityPage() {
                             name="avatar"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Avatar URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/avatar.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Avatar (Optional)"
+                                            placeholder="https://example.com/avatar.png"
+                                            description="Upload an avatar image for your community or provide a URL"
+                                            maxSize={5}
+                                            enableCropping={true}
+                                            cropAspectRatio={1}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -506,33 +651,65 @@ export default function NewCommunityPage() {
                             name="banner"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Banner URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/banner.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Banner (Optional)"
+                                            placeholder="https://example.com/banner.png"
+                                            description="Upload a banner image for your community or provide a URL"
+                                            maxSize={10}
+                                            enableCropping={true}
+                                            cropAspectRatio={16 / 5}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
 
-                        <div className="pt-4">
+                        <div className="space-y-4 pt-4">
+                            {/* Only show summary card to super admins */}
+                            {appRole === 'admin' &&
+                                form.watch('orgId') &&
+                                organizations && (
+                                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                                        <p className="text-sm text-green-800">
+                                            <strong>
+                                                Ready to create community:
+                                            </strong>{' '}
+                                            Your community will be created under{' '}
+                                            <span className="font-medium">
+                                                {selectedOrganization?.name}
+                                            </span>
+                                        </p>
+                                    </div>
+                                )}
+
                             <Button
                                 type="submit"
-                                disabled={isSubmitting}
+                                disabled={
+                                    isSubmitting ||
+                                    isLoadingOrgs ||
+                                    !organizations ||
+                                    organizations.length === 0
+                                }
                                 className="w-full"
                             >
-                                {isSubmitting
-                                    ? 'Creating...'
-                                    : 'Create Community'}
+                                {(() => {
+                                    if (isSubmitting) return 'Creating...';
+                                    if (isLoadingOrgs) return 'Loading...';
+                                    if (
+                                        !organizations ||
+                                        organizations.length === 0
+                                    )
+                                        return 'No Organizations Available';
+                                    if (appRole === 'admin')
+                                        return 'Create Community';
+                                    return 'Create Community in Your Organization';
+                                })()}
                             </Button>
                         </div>
                     </form>
@@ -542,65 +719,29 @@ export default function NewCommunityPage() {
     );
 }
 
+// Main component with Suspense boundary
+export default function NewCommunityPage() {
+    return (
+        <Suspense fallback={<NewCommunityPageSkeleton />}>
+            <NewCommunityForm />
+        </Suspense>
+    );
+}
+
 // Skeleton loader for the new community page
 function NewCommunityPageSkeleton() {
     return (
-        <div className="container mx-auto px-4 py-8 md:px-6">
+        <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
                 <Skeleton className="mb-2 h-8 w-64" />
                 <Skeleton className="h-4 w-96" />
             </div>
-
-            <div className="mx-auto max-w-2xl">
-                <div className="space-y-6">
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-48" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-72" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-32" />
-                        <Skeleton className="h-24 w-full" />
-                        <Skeleton className="h-4 w-60" />
-                    </div>
-
-                    <div className="space-y-3">
-                        <Skeleton className="h-5 w-32" />
-                        <div className="space-y-3">
-                            <Skeleton className="h-20 w-full" />
-                            <Skeleton className="h-20 w-full" />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-32 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <Skeleton className="h-5 w-40" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-4 w-56" />
-                    </div>
-
-                    <div className="pt-4">
-                        <Skeleton className="h-10 w-full" />
-                    </div>
-                </div>
+            <div className="space-y-6">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-10 w-full" />
             </div>
         </div>
     );

@@ -1,15 +1,22 @@
+import { sendEmail } from '@/lib/email';
+import {
+    createOTPEmail,
+    createResetPasswordEmail,
+} from '@/lib/email-templates';
+import { env } from '@/lib/env';
+import { db, getUser } from '@/server/db';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
-import { admin, customSession } from 'better-auth/plugins';
-import { sendEmail } from '@/lib/email';
-import {
-    createVerificationEmail,
-    createResetPasswordEmail,
-} from '@/lib/email-templates';
-import { db, getUser } from '@/server/db';
+import { admin, customSession, emailOTP } from 'better-auth/plugins';
 
-if (!process.env.DATABASE_URL) {
+// Skip validation during build time
+const isBuildTime =
+    process.env.SKIP_ENV_VALIDATION === 'true' ||
+    process.argv.includes('build') ||
+    process.env.CI === 'true';
+
+if (!isBuildTime && !env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set');
 }
 
@@ -18,7 +25,15 @@ export const auth = betterAuth({
         provider: 'pg',
         usePlural: true,
     }),
-    selectUserFields: ['id', 'name', 'email', ['org_id', 'orgId'], 'role'],
+    selectUserFields: [
+        'id',
+        'name',
+        'email',
+        'image',
+        ['org_id', 'orgId'],
+        'role',
+        'appRole',
+    ],
     socialProviders: {
         google: {
             clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -31,6 +46,16 @@ export const auth = betterAuth({
             defaultRole: 'user',
             impersonationSessionDuration: 60 * 60 * 24,
         }),
+        emailOTP({
+            otpLength: 6,
+            expiresIn: 300, // 5 minutes
+            allowedAttempts: 3,
+            disableSignUp: true, // Only for existing users
+            async sendVerificationOTP({ email, otp, type }) {
+                const { subject, html } = createOTPEmail(email, otp, type);
+                await sendEmail({ to: email, subject, html });
+            },
+        }),
         customSession(async ({ session, user }) => {
             // Custom session logic can be added here
             const userData = await getUser(user.id);
@@ -40,6 +65,7 @@ export const auth = betterAuth({
                     ...user,
                     orgId: userData?.orgId, // Ensure orgId is always set from userData
                     appRole: userData?.appRole || 'user',
+                    image: userData?.image, // Include image from userData
                 },
                 session,
             };

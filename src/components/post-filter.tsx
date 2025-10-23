@@ -21,8 +21,11 @@ import {
     X,
     Building,
     Users,
+    User,
     Tag,
+    Clock,
 } from 'lucide-react';
+import { DateFilter, type DateFilterState } from './date-filter';
 
 // Types based on your existing code
 type UserCommunity = {
@@ -43,12 +46,15 @@ type FilterState = {
     communities: number[];
     tags: number[];
     showOrgOnly: boolean;
+    showMyPosts: boolean;
+    dateFilter: DateFilterState;
 };
 
 interface PostsFilterProps {
     userCommunities: UserCommunity[];
     availableTags: PostTag[];
     onFilterChange: (filters: FilterState) => void;
+    onDateFilterChange: (dateFilter: DateFilterState) => void;
     isLoading?: boolean;
 }
 
@@ -56,12 +62,15 @@ export function PostsFilter({
     userCommunities,
     availableTags,
     onFilterChange,
+    onDateFilterChange,
     isLoading = false,
 }: PostsFilterProps) {
     const [filters, setFilters] = useState<FilterState>({
         communities: [],
         tags: [],
         showOrgOnly: false,
+        showMyPosts: false,
+        dateFilter: { type: 'all' },
     });
 
     const [isOpen, setIsOpen] = useState(false);
@@ -93,22 +102,47 @@ export function PostsFilter({
         setFilters((prev) => ({
             ...prev,
             showOrgOnly: !prev.showOrgOnly,
+            showMyPosts: false, // Clear My Posts when All Posts is selected
         }));
     };
 
+    const handleMyPostsToggle = () => {
+        setFilters((prev) => ({
+            ...prev,
+            showMyPosts: !prev.showMyPosts,
+            showOrgOnly: false, // Clear All Posts when My Posts is selected
+        }));
+    };
+
+    const handleDateFilterChange = (filter: DateFilterState) => {
+        setFilters((prev) => ({
+            ...prev,
+            dateFilter: filter,
+        }));
+        // Also call the parent's date filter change handler
+        onDateFilterChange(filter);
+    };
+
     const clearAllFilters = () => {
-        setFilters({
+        const clearedFilters: FilterState = {
             communities: [],
             tags: [],
             showOrgOnly: false,
-        });
+            showMyPosts: false,
+            dateFilter: { type: 'all' },
+        };
+        setFilters(clearedFilters);
+        // Also call the parent's date filter change handler
+        onDateFilterChange(clearedFilters.dateFilter);
     };
 
     const getActiveFiltersCount = () => {
         return (
             filters.communities.length +
             filters.tags.length +
-            (filters.showOrgOnly ? 1 : 0)
+            (filters.showOrgOnly ? 1 : 0) +
+            (filters.showMyPosts ? 1 : 0) +
+            (filters.dateFilter.type !== 'all' ? 1 : 0)
         );
     };
 
@@ -138,11 +172,12 @@ export function PostsFilter({
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="outline"
-                            className="h-9 border-dashed bg-transparent"
+                            size="sm"
+                            className="w-auto min-w-0 justify-center bg-transparent sm:min-w-[100px] sm:justify-between"
                             disabled={isLoading}
                         >
-                            <Filter className="mr-2 h-4 w-4" />
-                            Filters
+                            <Filter className="mr-2 h-4 w-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Filters</span>
                             {getActiveFiltersCount() > 0 && (
                                 <Badge
                                     variant="secondary"
@@ -151,7 +186,7 @@ export function PostsFilter({
                                     {getActiveFiltersCount()}
                                 </Badge>
                             )}
-                            <ChevronDown className="ml-2 h-4 w-4" />
+                            <ChevronDown className="hidden h-4 w-4 sm:block" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-64" align="end">
@@ -163,6 +198,23 @@ export function PostsFilter({
                             <Building className="h-4 w-4" />
                             <span>All Posts</span>
                             {filters.showOrgOnly && (
+                                <Badge
+                                    variant="secondary"
+                                    className="ml-2 text-xs"
+                                >
+                                    Active
+                                </Badge>
+                            )}
+                        </DropdownMenuItem>
+
+                        {/* My Posts Filter */}
+                        <DropdownMenuItem
+                            onClick={handleMyPostsToggle}
+                            className="flex items-center space-x-2 py-2"
+                        >
+                            <User className="h-4 w-4" />
+                            <span>My Posts</span>
+                            {filters.showMyPosts && (
                                 <Badge
                                     variant="secondary"
                                     className="ml-2 text-xs"
@@ -233,7 +285,7 @@ export function PostsFilter({
                         </DropdownMenuSub>
 
                         {/* Tags Filter */}
-                        <DropdownMenuSub>
+                        {/* <DropdownMenuSub>
                             <DropdownMenuSubTrigger className="flex w-full items-center justify-between py-2">
                                 <div className="flex items-center space-x-2">
                                     <Tag className="h-4 w-4" />
@@ -248,7 +300,6 @@ export function PostsFilter({
                                             {filters.tags.length}
                                         </Badge>
                                     )}
-                                    {/* <ChevronRight className="h-4 w-4" /> */}
                                 </div>
                             </DropdownMenuSubTrigger>
                             <DropdownMenuSubContent className="max-h-64 w-56 overflow-y-auto">
@@ -282,7 +333,25 @@ export function PostsFilter({
                                     </DropdownMenuItem>
                                 )}
                             </DropdownMenuSubContent>
-                        </DropdownMenuSub>
+                        </DropdownMenuSub> */}
+
+                        <DateFilter
+                            value={filters.dateFilter}
+                            onChange={handleDateFilterChange}
+                            disabled={isLoading}
+                        />
+
+                        {getActiveFiltersCount() > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={clearAllFilters}
+                                className="h-9 px-2"
+                            >
+                                <X className="mr-1 h-4 w-4" />
+                                Clear all
+                            </Button>
+                        )}
                     </DropdownMenuContent>
                 </DropdownMenu>
 
@@ -309,6 +378,19 @@ export function PostsFilter({
                             Organization Only
                             <button
                                 onClick={handleOrgToggle}
+                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    )}
+
+                    {filters.showMyPosts && (
+                        <Badge variant="secondary" className="gap-1">
+                            <Users className="h-3 w-3" />
+                            My Posts
+                            <button
+                                onClick={handleMyPostsToggle}
                                 className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
                             >
                                 <X className="h-3 w-3" />
@@ -365,6 +447,27 @@ export function PostsFilter({
                             </button>
                         </Badge>
                     ))}
+
+                    {/* Date Filter Badge */}
+                    {filters.dateFilter.type !== 'all' && (
+                        <Badge variant="secondary" className="gap-1">
+                            <Clock className="h-3 w-3" />
+                            {filters.dateFilter.type === 'today' && 'Today'}
+                            {filters.dateFilter.type === 'week' && 'Last Week'}
+                            {filters.dateFilter.type === 'month' &&
+                                'Last Month'}
+                            {filters.dateFilter.type === 'custom' &&
+                                'Custom Range'}
+                            <button
+                                onClick={() =>
+                                    handleDateFilterChange({ type: 'all' })
+                                }
+                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        </Badge>
+                    )}
                 </div>
             )}
         </div>

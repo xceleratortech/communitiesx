@@ -51,13 +51,18 @@ export function UserBadgeDisplay({
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <div
-                                    className="flex h-6 w-6 cursor-help items-center justify-center rounded-full text-xs font-semibold text-white"
+                                    className="flex cursor-help items-center gap-1 rounded-full px-2 py-1 text-xs font-medium text-white"
                                     style={{
                                         backgroundColor: userBadge.badge.color,
                                     }}
                                 >
-                                    {userBadge.badge.icon ||
-                                        userBadge.badge.name[0]}
+                                    <div className="flex h-4 w-4 items-center justify-center text-xs font-semibold">
+                                        {userBadge.badge.icon ||
+                                            userBadge.badge.name[0]}
+                                    </div>
+                                    <span className="text-xs">
+                                        - {userBadge.badge.name}
+                                    </span>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -75,11 +80,11 @@ export function UserBadgeDisplay({
                                             Note: {userBadge.note}
                                         </p>
                                     )}
-                                    <p className="text-muted-foreground text-xs">
+                                    {/* <p className="text-muted-foreground text-xs">
                                         Assigned by{' '}
                                         {userBadge.assignedBy.name ||
                                             userBadge.assignedBy.email}
-                                    </p>
+                                    </p> */}
                                 </div>
                             </TooltipContent>
                         </Tooltip>
@@ -89,8 +94,13 @@ export function UserBadgeDisplay({
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <div className="flex h-6 w-6 cursor-help items-center justify-center rounded-full bg-gray-400 text-xs font-semibold text-white">
-                                    +{remainingCount}
+                                <div className="flex cursor-help items-center gap-1 rounded-full bg-gray-400 px-2 py-1 text-xs font-medium text-white">
+                                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-white/20 text-xs font-semibold">
+                                        +
+                                    </div>
+                                    <span className="text-xs">
+                                        {remainingCount} more
+                                    </span>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
