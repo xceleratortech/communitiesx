@@ -48,3 +48,12 @@ scripts/*.sql
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# PII and sensitive data files
+*.csv
+*user-data*
+*email-list*
+*names*
+*contacts*
+*students*
+*users*
