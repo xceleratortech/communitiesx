@@ -772,3 +772,83 @@ export const communityMembers = pgTable(
         }),
     ],
 );
+
+export const polls = pgTable(
+    'polls',
+    {
+        id: serial().primaryKey().notNull(),
+        postId: integer('post_id').notNull(),
+        question: text().notNull(),
+        pollType: text('poll_type').default('single').notNull(),
+        expiresAt: timestamp('expires_at', { mode: 'string' }),
+        isClosed: boolean('is_closed').default(false).notNull(),
+        createdAt: timestamp('created_at', { mode: 'string' })
+            .defaultNow()
+            .notNull(),
+        updatedAt: timestamp('updated_at', { mode: 'string' })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        foreignKey({
+            columns: [table.postId],
+            foreignColumns: [posts.id],
+            name: 'polls_post_id_posts_id_fk',
+        }).onDelete('cascade'),
+    ],
+);
+
+export const pollOptions = pgTable(
+    'poll_options',
+    {
+        id: serial().primaryKey().notNull(),
+        pollId: integer('poll_id').notNull(),
+        text: text().notNull(),
+        orderIndex: integer('order_index').default(0).notNull(),
+        createdAt: timestamp('created_at', { mode: 'string' })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        foreignKey({
+            columns: [table.pollId],
+            foreignColumns: [polls.id],
+            name: 'poll_options_poll_id_polls_id_fk',
+        }).onDelete('cascade'),
+    ],
+);
+
+export const pollVotes = pgTable(
+    'poll_votes',
+    {
+        id: serial().primaryKey().notNull(),
+        pollId: integer('poll_id').notNull(),
+        pollOptionId: integer('poll_option_id').notNull(),
+        userId: text('user_id').notNull(),
+        createdAt: timestamp('created_at', { mode: 'string' })
+            .defaultNow()
+            .notNull(),
+    },
+    (table) => [
+        foreignKey({
+            columns: [table.pollId],
+            foreignColumns: [polls.id],
+            name: 'poll_votes_poll_id_polls_id_fk',
+        }).onDelete('cascade'),
+        foreignKey({
+            columns: [table.pollOptionId],
+            foreignColumns: [pollOptions.id],
+            name: 'poll_votes_poll_option_id_poll_options_id_fk',
+        }).onDelete('cascade'),
+        foreignKey({
+            columns: [table.userId],
+            foreignColumns: [users.id],
+            name: 'poll_votes_user_id_users_id_fk',
+        }).onDelete('cascade'),
+        unique('poll_votes_user_poll_option_unique').on(
+            table.pollId,
+            table.userId,
+            table.pollOptionId,
+        ),
+    ],
+);

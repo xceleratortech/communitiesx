@@ -352,6 +352,10 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     comments: many(comments),
     postTags: many(postTags),
     attachments: many(attachments), // was images
+    poll: one(polls, {
+        fields: [posts.id],
+        references: [polls.postId],
+    }),
 }));
 
 // Saved posts relations
@@ -719,6 +723,87 @@ export const userBadgeAssignmentsRelations = relations(
 export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
     user: one(users, {
         fields: [userProfiles.userId],
+        references: [users.id],
+    }),
+}));
+
+// Poll tables
+export const polls = pgTable('polls', {
+    id: serial('id').primaryKey(),
+    postId: integer('post_id')
+        .notNull()
+        .references(() => posts.id, { onDelete: 'cascade' }),
+    question: text('question').notNull(),
+    pollType: text('poll_type').default('single').notNull(),
+    expiresAt: timestamp('expires_at'),
+    isClosed: boolean('is_closed').default(false).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const pollOptions = pgTable('poll_options', {
+    id: serial('id').primaryKey(),
+    pollId: integer('poll_id')
+        .notNull()
+        .references(() => polls.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    orderIndex: integer('order_index').default(0).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const pollVotes = pgTable(
+    'poll_votes',
+    {
+        id: serial('id').primaryKey(),
+        pollId: integer('poll_id')
+            .notNull()
+            .references(() => polls.id, { onDelete: 'cascade' }),
+        pollOptionId: integer('poll_option_id')
+            .notNull()
+            .references(() => pollOptions.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            uniqueUserPollOption: unique(
+                'poll_votes_user_poll_option_unique',
+            ).on(table.pollId, table.userId, table.pollOptionId),
+        };
+    },
+);
+
+// Poll relations
+export const pollsRelations = relations(polls, ({ one, many }) => ({
+    post: one(posts, {
+        fields: [polls.postId],
+        references: [posts.id],
+    }),
+    options: many(pollOptions),
+    votes: many(pollVotes),
+}));
+
+export const pollOptionsRelations = relations(pollOptions, ({ one, many }) => ({
+    poll: one(polls, {
+        fields: [pollOptions.pollId],
+        references: [polls.id],
+    }),
+    votes: many(pollVotes),
+}));
+
+export const pollVotesRelations = relations(pollVotes, ({ one }) => ({
+    poll: one(polls, {
+        fields: [pollVotes.pollId],
+        references: [polls.id],
+    }),
+    pollOption: one(pollOptions, {
+        fields: [pollVotes.pollOptionId],
+        references: [pollOptions.id],
+    }),
+    user: one(users, {
+        fields: [pollVotes.userId],
         references: [users.id],
     }),
 }));

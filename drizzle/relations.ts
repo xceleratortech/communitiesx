@@ -25,6 +25,9 @@ import {
     communityAllowedOrgs,
     orgMembers,
     communityMembers,
+    polls,
+    pollOptions,
+    pollVotes,
 } from './schema';
 
 export const communitiesRelations = relations(communities, ({ one, many }) => ({
@@ -171,6 +174,10 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     attachments: many(attachments),
     reactions: many(reactions),
     postTags: many(postTags),
+    poll: one(polls, {
+        fields: [posts.id],
+        references: [polls.postId],
+    }),
 }));
 
 export const pushSubscriptionsRelations = relations(
@@ -405,3 +412,35 @@ export const communityMembersRelations = relations(
         }),
     }),
 );
+
+export const pollsRelations = relations(polls, ({ one, many }) => ({
+    post: one(posts, {
+        fields: [polls.postId],
+        references: [posts.id],
+    }),
+    options: many(pollOptions),
+    votes: many(pollVotes),
+}));
+
+export const pollOptionsRelations = relations(pollOptions, ({ one, many }) => ({
+    poll: one(polls, {
+        fields: [pollOptions.pollId],
+        references: [polls.id],
+    }),
+    votes: many(pollVotes),
+}));
+
+export const pollVotesRelations = relations(pollVotes, ({ one }) => ({
+    poll: one(polls, {
+        fields: [pollVotes.pollId],
+        references: [polls.id],
+    }),
+    pollOption: one(pollOptions, {
+        fields: [pollVotes.pollOptionId],
+        references: [pollOptions.id],
+    }),
+    user: one(users, {
+        fields: [pollVotes.userId],
+        references: [users.id],
+    }),
+}));

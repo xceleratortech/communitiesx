@@ -76,6 +76,23 @@ export type PostDisplay = PostFromDb & {
         createdAt: Date;
         updatedAt: Date;
     }>; // Add attachments to the type
+    poll?: {
+        id: number;
+        postId: number;
+        question: string;
+        pollType: string;
+        expiresAt: Date | null;
+        isClosed: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        options: Array<{
+            id: number;
+            pollId: number;
+            text: string;
+            orderIndex: number;
+            createdAt: Date;
+        }>;
+    } | null; // Add poll to the type
     likeCount?: number; // Add like count
     isLiked?: boolean; // Add user's like status
     isSaved?: boolean; // Add user's saved status

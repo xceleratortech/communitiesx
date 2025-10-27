@@ -12,6 +12,8 @@ import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
 import PostHeader from '@/components/posts/PostHeader';
 import PostActionBar from '@/components/posts/PostActionBar';
 import type { PostDisplay } from '@/app/posts/page';
+import { PollDisplay } from '@/components/polls';
+import { trpc } from '@/providers/trpc-provider';
 
 type SessionLike = { user?: { id: string } | null } | null;
 
@@ -58,6 +60,38 @@ export default function PostCard({
         likeCount: number,
     ) => void;
 }) {
+    const utils = trpc.useUtils();
+
+    // Get poll results if post has a poll
+    const pollResultsQuery = trpc.community.getPollResults.useQuery(
+        { pollId: post.poll?.id! },
+        { enabled: !!post.poll?.id },
+    );
+
+    // Vote on poll mutation
+    const votePollMutation = trpc.community.votePoll.useMutation({
+        onSuccess: () => {
+            // Refetch poll results after voting
+            pollResultsQuery.refetch();
+        },
+    });
+
+    const handlePollVote = (optionIds: number[]) => {
+        if (post.poll?.id) {
+            votePollMutation.mutate({
+                pollId: post.poll.id,
+                optionIds,
+            });
+        } else {
+            console.log('No poll ID found');
+        }
+    };
+
+    const handleJoinCommunity = () => {
+        if (post.community?.id && onJoinCommunity) {
+            onJoinCommunity(post.community.id);
+        }
+    };
     return (
         <Link
             href={
@@ -194,6 +228,96 @@ export default function PostCard({
                                                     ? 'You liked this'
                                                     : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
                                                 : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
+                                            : ''}
+                                    </span>
+                                );
+                            })()
+                        )}
+                    </div>
+
+                    {/* Poll Display - Before PostActionBar */}
+                    {post.poll && (
+                        <div
+                            className="mt-4"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                            }}
+                        >
+                            <PollDisplay
+                                poll={{
+                                    ...post.poll,
+                                    pollType: post.poll.pollType as
+                                        | 'single'
+                                        | 'multiple',
+                                    expiresAt:
+                                        post.poll.expiresAt?.toISOString() ||
+                                        null,
+                                    createdAt:
+                                        post.poll.createdAt.toISOString(),
+                                    updatedAt:
+                                        post.poll.updatedAt.toISOString(),
+                                    options: post.poll.options.map(
+                                        (option) => ({
+                                            ...option,
+                                            createdAt:
+                                                option.createdAt.toISOString(),
+                                        }),
+                                    ),
+                                }}
+                                results={pollResultsQuery.data?.results}
+                                userVotes={pollResultsQuery.data?.userVotes}
+                                canVote={
+                                    pollResultsQuery.data?.canVote || false
+                                }
+                                hasUserVoted={
+                                    pollResultsQuery.data?.hasUserVoted || false
+                                }
+                                totalVotes={
+                                    pollResultsQuery.data?.totalVotes || 0
+                                }
+                                onVote={handlePollVote}
+                                onJoinCommunity={handleJoinCommunity}
+                                isVoting={votePollMutation.isPending}
+                            />
+                        </div>
+                    )}
+
+                    {/* Comments Count - After Poll Display */}
+                    <div className="mt-2 flex items-center justify-between">
+                        {post.source?.reason === 'Based on your interests' ? (
+                            (post.likeCount ?? 0) > 0 ? (
+                                (() => {
+                                    const likeCountNum = post.likeCount ?? 0;
+                                    return (
+                                        <span className="text-muted-foreground text-xs">
+                                            {likeCountNum === 1
+                                                ? 'You liked this'
+                                                : likeCountNum === 2
+                                                  ? `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
+                                                  : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`}
+                                        </span>
+                                    );
+                                })()
+                            ) : (
+                                <span className="text-muted-foreground text-xs">
+                                    {Array.isArray(post.comments)
+                                        ? post.comments.length
+                                        : 0}{' '}
+                                    Comments
+                                </span>
+                            )
+                        ) : (
+                            (() => {
+                                const likeCountNum = post.likeCount ?? 0;
+                                return (
+                                    <span className="text-muted-foreground text-xs">
+                                        {likeCountNum > 0
+                                            ? likeCountNum === 1
+                                                ? '1 person liked this'
+                                                : likeCountNum === 2
+                                                  ? `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
+                                                  : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
                                             : ''}
                                     </span>
                                 );

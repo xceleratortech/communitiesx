@@ -12,6 +12,9 @@ import {
     tags,
     attachments,
     orgs,
+    polls,
+    pollOptions,
+    pollVotes,
 } from '@/server/db/schema';
 import {
     and,
@@ -57,6 +60,11 @@ type UserWithOrg = UserType & {
 
 type PostWithAuthor = PostType & {
     author: UserWithOrg | null;
+    poll?:
+        | (typeof polls.$inferSelect & {
+              options: (typeof pollOptions.$inferSelect)[];
+          })
+        | null;
 };
 
 type CommentWithAuthor = CommentType & {
@@ -70,6 +78,11 @@ type PostWithAuthorAndComments = PostType & {
     community?: typeof communities.$inferSelect | null;
     tags: (typeof tags.$inferSelect)[];
     attachments: (typeof attachments.$inferSelect)[];
+    poll?:
+        | (typeof polls.$inferSelect & {
+              options: (typeof pollOptions.$inferSelect)[];
+          })
+        | null;
 };
 
 type PostWithSource = PostWithAuthor & {
@@ -107,6 +120,13 @@ export const queryProcedures = {
                     orderBy: desc(posts.createdAt),
                     with: {
                         author: true,
+                        poll: {
+                            with: {
+                                options: {
+                                    orderBy: asc(pollOptions.orderIndex),
+                                },
+                            },
+                        },
                     },
                 });
                 return allPostsFromDb as PostWithAuthor[];
@@ -170,6 +190,15 @@ export const queryProcedures = {
                                     with: {
                                         author: true,
                                         community: true,
+                                        poll: {
+                                            with: {
+                                                options: {
+                                                    orderBy: asc(
+                                                        pollOptions.orderIndex,
+                                                    ),
+                                                },
+                                            },
+                                        },
                                     },
                                 }),
                             ]);
@@ -257,6 +286,13 @@ export const queryProcedures = {
                         with: {
                             author: true,
                             community: true,
+                            poll: {
+                                with: {
+                                    options: {
+                                        orderBy: asc(pollOptions.orderIndex),
+                                    },
+                                },
+                            },
                         },
                     });
 
@@ -418,6 +454,15 @@ export const queryProcedures = {
                                         },
                                     },
                                     attachments: true,
+                                    poll: {
+                                        with: {
+                                            options: {
+                                                orderBy: asc(
+                                                    pollOptions.orderIndex,
+                                                ),
+                                            },
+                                        },
+                                    },
                                 },
                             }),
                         ]);
@@ -574,6 +619,13 @@ export const queryProcedures = {
                             postTags: {
                                 with: {
                                     tag: true,
+                                },
+                            },
+                            poll: {
+                                with: {
+                                    options: {
+                                        orderBy: asc(pollOptions.orderIndex),
+                                    },
                                 },
                             },
                             attachments: true,
@@ -782,6 +834,13 @@ export const queryProcedures = {
                             community: true,
                             comments: true,
                             postTags: { with: { tag: true } },
+                            poll: {
+                                with: {
+                                    options: {
+                                        orderBy: asc(pollOptions.orderIndex),
+                                    },
+                                },
+                            },
                             attachments: true,
                         },
                     }),
@@ -956,6 +1015,15 @@ export const queryProcedures = {
                                         },
                                     },
                                     attachments: true,
+                                    poll: {
+                                        with: {
+                                            options: {
+                                                orderBy: asc(
+                                                    pollOptions.orderIndex,
+                                                ),
+                                            },
+                                        },
+                                    },
                                 },
                             }),
                         ]);
@@ -1130,6 +1198,13 @@ export const queryProcedures = {
                                     tag: true,
                                 },
                             },
+                            poll: {
+                                with: {
+                                    options: {
+                                        orderBy: asc(pollOptions.orderIndex),
+                                    },
+                                },
+                            },
                             attachments: true,
                         },
                     }),
@@ -1222,6 +1297,13 @@ export const queryProcedures = {
                         postTags: {
                             with: {
                                 tag: true,
+                            },
+                        },
+                        poll: {
+                            with: {
+                                options: {
+                                    orderBy: asc(pollOptions.orderIndex),
+                                },
                             },
                         },
                     },

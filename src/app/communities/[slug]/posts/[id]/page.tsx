@@ -6,10 +6,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import {
-    Edit,
-    Trash2,
     ArrowLeft,
     Home,
     Users,
@@ -20,7 +17,6 @@ import {
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,6 +26,7 @@ import { isHtmlContentEmpty } from '@/lib/utils';
 import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { LikeButton } from '@/components/ui/like-button';
+import { PollDisplay } from '@/components/polls';
 import { toast } from 'sonner';
 
 // Utility function to format like count message
@@ -84,6 +81,23 @@ type Post = {
         createdAt: Date;
         updatedAt: Date;
     }>;
+    poll?: {
+        id: number;
+        postId: number;
+        question: string;
+        pollType: string;
+        expiresAt: Date | null;
+        isClosed: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        options: Array<{
+            id: number;
+            pollId: number;
+            text: string;
+            orderIndex: number;
+            createdAt: Date;
+        }>;
+    } | null;
 };
 
 export default function CommunityPostPage() {
@@ -137,6 +151,21 @@ export default function CommunityPostPage() {
         { postIds: [postId] },
         { enabled: !!session && !!postId },
     );
+
+    // Poll-related queries
+    const pollResultsQuery = trpc.community.getPollResults.useQuery(
+        { pollId: post?.poll?.id || 0 },
+        { enabled: !!session && !!post?.poll?.id },
+    );
+    const votePollMutation = trpc.community.votePoll.useMutation({
+        onSuccess: () => {
+            pollResultsQuery.refetch();
+            toast.success('Vote recorded!');
+        },
+        onError: (error) => {
+            toast.error(error.message || 'Failed to vote');
+        },
+    });
 
     // Get comment IDs for helpful vote queries
     const commentIds = useMemo(() => {
@@ -208,6 +237,14 @@ export default function CommunityPostPage() {
     const handleToggleHelpful = (commentId: number) => {
         if (!session) return;
         toggleHelpfulMutation.mutate({ commentId });
+    };
+
+    const handlePollVote = (optionIds: number[]) => {
+        if (!session || !post?.poll?.id) return;
+        votePollMutation.mutate({
+            pollId: post.poll.id,
+            optionIds,
+        });
     };
 
     const shareUrl =
@@ -543,6 +580,43 @@ export default function CommunityPostPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Poll Display */}
+                {postData.poll && (
+                    <div className="mt-6">
+                        <PollDisplay
+                            poll={{
+                                ...postData.poll,
+                                pollType: postData.poll.pollType as
+                                    | 'single'
+                                    | 'multiple',
+                                expiresAt:
+                                    postData.poll.expiresAt?.toISOString() ||
+                                    null,
+                                createdAt:
+                                    postData.poll.createdAt.toISOString(),
+                                updatedAt:
+                                    postData.poll.updatedAt.toISOString(),
+                                options: postData.poll.options.map(
+                                    (option) => ({
+                                        ...option,
+                                        createdAt:
+                                            option.createdAt.toISOString(),
+                                    }),
+                                ),
+                            }}
+                            results={pollResultsQuery.data?.results}
+                            userVotes={pollResultsQuery.data?.userVotes}
+                            canVote={!!session && !!community}
+                            hasUserVoted={
+                                !!pollResultsQuery.data?.userVotes?.length
+                            }
+                            totalVotes={pollResultsQuery.data?.totalVotes || 0}
+                            onVote={handlePollVote}
+                            isVoting={votePollMutation.isPending}
+                        />
+                    </div>
+                )}
 
                 {/* Post media */}
                 {postData.attachments && postData.attachments.length > 0 && (
