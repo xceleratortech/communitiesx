@@ -1,12 +1,12 @@
 'use client';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Globe, MessageSquare, Tag, Users, Shield } from 'lucide-react';
+import { Globe, MessageSquare, Shield } from 'lucide-react';
 
 interface CommunityTabsProps {
     activeTab: string;
     onTabChange: (value: string) => void;
-    canManageCommunityMembers: boolean;
+    canManageCommunityMembers?: boolean;
     pendingRequestsCount?: number;
     children: React.ReactNode;
 }
@@ -14,7 +14,7 @@ interface CommunityTabsProps {
 export function CommunityTabs({
     activeTab,
     onTabChange,
-    canManageCommunityMembers,
+    canManageCommunityMembers = false,
     pendingRequestsCount = 0,
     children,
 }: CommunityTabsProps) {
@@ -39,20 +39,6 @@ export function CommunityTabs({
                     >
                         <MessageSquare className="h-4 w-4 sm:hidden" />
                         <span className="hidden sm:inline">Posts</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="tags"
-                        className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                    >
-                        <Tag className="h-4 w-4 sm:hidden" />
-                        <span className="hidden sm:inline">Tags</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                        value="members"
-                        className="data-[state=active]:border-primary flex items-center gap-2 rounded-none border-b-2 border-transparent px-4 py-3 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                    >
-                        <Users className="h-4 w-4 sm:hidden" />
-                        <span className="hidden sm:inline">Members</span>
                     </TabsTrigger>
                     {canManageCommunityMembers && (
                         <TabsTrigger
