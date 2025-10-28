@@ -99,6 +99,49 @@ export function CommunityPosts({
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const utils = trpc.useUtils();
 
+    // Sync PostsFilter selections with existing handlers
+    type MinimalFilterState = {
+        tags: number[];
+        showMyPosts: boolean;
+    };
+
+    const handleFiltersChange = useCallback(
+        (filters: MinimalFilterState) => {
+            // Sync showMyPosts
+            if (
+                typeof filters.showMyPosts === 'boolean' &&
+                filters.showMyPosts !== showMyPosts
+            ) {
+                onPostFilterToggle();
+            }
+
+            // Sync tag selections by diffing against current selectedTagFilters
+            if (Array.isArray(filters.tags)) {
+                const incoming = new Set<number>(filters.tags);
+                const current = new Set<number>(selectedTagFilters);
+
+                // Tags to add
+                for (const tagId of incoming) {
+                    if (!current.has(tagId)) {
+                        onTagFilterToggle(tagId);
+                    }
+                }
+                // Tags to remove
+                for (const tagId of current) {
+                    if (!incoming.has(tagId)) {
+                        onTagFilterToggle(tagId);
+                    }
+                }
+            }
+        },
+        [
+            onPostFilterToggle,
+            onTagFilterToggle,
+            selectedTagFilters,
+            showMyPosts,
+        ],
+    );
+
     // Handle like changes from LikeButton
     const handleLikeChange = useCallback(
         (postId: number, isLiked: boolean, likeCount: number) => {
@@ -425,7 +468,7 @@ export function CommunityPosts({
                                     },
                                 ]}
                                 availableTags={community.tags || []}
-                                onFilterChange={() => {}} // TODO: Wire onFilterChange to community-level filters/state
+                                onFilterChange={handleFiltersChange}
                                 onDateFilterChange={onDateFilterChange}
                                 isLoading={isLoading}
                             />

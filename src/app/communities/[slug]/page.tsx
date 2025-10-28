@@ -646,7 +646,7 @@ export default function CommunityDetailPage() {
 
     // Generate member avatars for display (must be before early returns)
     const memberAvatars = useMemo(() => {
-        const members = (community?.members as any[]) || [];
+        const members = community?.members || [];
         return generateMemberAvatars(members, 3);
     }, [community?.members]);
 

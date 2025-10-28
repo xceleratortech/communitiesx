@@ -15,6 +15,7 @@ import {
     eq,
     desc,
     count,
+    isNull,
     inArray,
     or,
     ilike,
@@ -276,8 +277,8 @@ export const statsProcedures = {
                 baseConditions = and(
                     eq(posts.isDeleted, false),
                     or(
-                        // User's org posts
-                        eq(posts.orgId, orgId),
+                        // User's org posts (where community is null)
+                        and(eq(posts.orgId, orgId), isNull(posts.communityId)),
                         // Community posts user has access to
                         accessibleCommunityIds.length > 0
                             ? inArray(posts.communityId, accessibleCommunityIds)
