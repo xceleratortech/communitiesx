@@ -20,13 +20,9 @@ export function CommunityTagsSidebar({
 }: CommunityTagsSidebarProps) {
     const [createTagDialogOpen, setCreateTagDialogOpen] = useState(false);
 
-    // Get post count for each tag (you may need to adjust this based on your data structure)
+    // Use backend-computed post counts per tag when available
     const getTagPostCount = (tag: any) => {
-        return (
-            community.posts?.filter((post: any) =>
-                post.tags?.some((t: any) => t.id === tag.id),
-            ).length || 0
-        );
+        return typeof tag.postCount === 'number' ? tag.postCount : 0;
     };
 
     return (

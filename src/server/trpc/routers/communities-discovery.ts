@@ -9,6 +9,7 @@ import {
     communityAllowedOrgs,
     tags,
     users,
+    postTags,
 } from '@/server/db/schema';
 import {
     eq,
@@ -756,11 +757,44 @@ export const discoveryProcedures = {
                     comments: post.comments?.filter((c) => !c.isDeleted) || [],
                 }));
 
-                // Return the community with posts that include author information and tags
+                // Compute tag post counts (respecting same filters as posts)
+                const tagCountRows = await db
+                    .select({
+                        tagId: postTags.tagId,
+                        count: sql<number>`count(*)`.as('count'),
+                    })
+                    .from(postTags)
+                    .innerJoin(posts, eq(postTags.postId, posts.id))
+                    .where(
+                        and(
+                            eq(posts.communityId, community.id),
+                            eq(posts.isDeleted, false),
+                            ...dateFilterConditions,
+                            ...orgFilter,
+                        ),
+                    )
+                    .groupBy(postTags.tagId);
+
+                const tagIdToCount = new Map<number, number>(
+                    tagCountRows.map((r) => [r.tagId, r.count]),
+                );
+
+                // Load all tags for the community and attach counts
+                const communityTags = await db.query.tags.findMany({
+                    where: eq(tags.communityId, community.id),
+                    orderBy: desc(tags.createdAt),
+                });
+                const tagsWithCounts = communityTags.map((t) => ({
+                    ...t,
+                    postCount: tagIdToCount.get(t.id) || 0,
+                }));
+
+                // Return the community with posts and tags including counts
                 return {
                     ...community,
-                    orgId: community.orgId, // <-- add this line
+                    orgId: community.orgId,
                     posts: postsWithTags,
+                    tags: tagsWithCounts,
                     members: community.members.map((member) => ({
                         ...member,
                         membershipType: 'member' as const,

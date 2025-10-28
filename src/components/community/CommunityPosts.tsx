@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Building,
-    Users,
     Plus,
     MessageSquare,
     Edit,
@@ -22,7 +21,7 @@ import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
-import { DateFilter, type DateFilterState } from '@/components/date-filter';
+import { type DateFilterState } from '@/components/date-filter';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
@@ -172,11 +171,8 @@ export function CommunityPosts({
         { postIds },
         {
             enabled: postIds.length > 0,
-            staleTime: 0, // Always fetch fresh data
+            staleTime: 0,
             refetchOnWindowFocus: true,
-            // Remove polling to prevent race conditions with immediate refetches
-            // refetchInterval: 5 * 1000,
-            // refetchIntervalInBackground: true,
         },
     );
 
@@ -185,11 +181,8 @@ export function CommunityPosts({
         { postIds },
         {
             enabled: postIds.length > 0 && !!session,
-            staleTime: 0, // Always fetch fresh data
+            staleTime: 0,
             refetchOnWindowFocus: true,
-            // Remove polling to prevent race conditions with immediate refetches
-            // refetchInterval: 5 * 1000,
-            // refetchIntervalInBackground: true,
         },
     );
 
@@ -283,6 +276,7 @@ export function CommunityPosts({
             offset: 0,
             sort: sortOption,
             dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
+            communityId: community.id,
         },
         {
             enabled: !!searchTerm && searchTerm.length >= 2,
@@ -291,7 +285,6 @@ export function CommunityPosts({
         },
     );
 
-    // Track if we're in search mode (have search term)
     const hasSearchTerm = searchTerm.length >= 2;
 
     // Listen for search results
@@ -318,24 +311,16 @@ export function CommunityPosts({
         }
     }, [searchInputValue]);
 
-    // Filter posts based on search and filter to current community only
+    // Filter posts based on search
     const postsToRender = useMemo(() => {
-        // If we have a search term and search results, use them
         if (hasSearchTerm && searchResults !== null) {
-            // Filter search results to only show posts from current community
-            return searchResults.filter(
-                (post: any) =>
-                    post.community?.id === community.id ||
-                    post.communityId === community.id,
-            );
+            return searchResults;
         }
-        // If we have a search term but no results yet, show empty
         if (hasSearchTerm) {
             return [];
         }
-        // Otherwise show regular posts
         return postsWithLikes;
-    }, [hasSearchTerm, searchResults, postsWithLikes, community.id]);
+    }, [hasSearchTerm, searchResults, postsWithLikes]);
 
     // Check if we're still loading like data
     const isLikeDataLoading =
@@ -440,7 +425,7 @@ export function CommunityPosts({
                                     },
                                 ]}
                                 availableTags={community.tags || []}
-                                onFilterChange={() => {}}
+                                onFilterChange={() => {}} // TODO: Wire onFilterChange to community-level filters/state
                                 onDateFilterChange={onDateFilterChange}
                                 isLoading={isLoading}
                             />
