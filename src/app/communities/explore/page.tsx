@@ -426,20 +426,33 @@ function CommunityCard({
                         </Button>
                     </div>
                 ) : (
-                    <Button
-                        className="h-11 w-full rounded-2xl bg-black text-white hover:bg-black/90"
-                        onClick={() => {
-                            setJoiningCommunityId(community.id);
-                            joinCommunityMutation.mutate({
-                                communityId: community.id,
-                            });
-                        }}
-                        disabled={joiningCommunityId === community.id}
-                    >
-                        {joiningCommunityId === community.id
-                            ? 'Joining...'
-                            : 'Join Community'}
-                    </Button>
+                    <div className="flex gap-2">
+                        {(isAppAdmin || isOrgAdmin) && (
+                            <Button
+                                asChild
+                                variant="outline"
+                                className="flex-1"
+                            >
+                                <Link href={`/communities/${community.slug}`}>
+                                    View Community
+                                </Link>
+                            </Button>
+                        )}
+                        <Button
+                            className="flex-1 bg-black text-white hover:bg-black/90"
+                            onClick={() => {
+                                setJoiningCommunityId(community.id);
+                                joinCommunityMutation.mutate({
+                                    communityId: community.id,
+                                });
+                            }}
+                            disabled={joiningCommunityId === community.id}
+                        >
+                            {joiningCommunityId === community.id
+                                ? 'Joining...'
+                                : 'Join Community'}
+                        </Button>
+                    </div>
                 )}
             </div>
         </Card>
