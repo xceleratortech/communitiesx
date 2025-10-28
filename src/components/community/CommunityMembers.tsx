@@ -1,6 +1,5 @@
 'use client';
 
-import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -138,7 +137,7 @@ export function CommunityMembers({
     }, [community.members, currentMembersPage, membersPerPage]);
 
     return (
-        <TabsContent value="members" className="mt-0">
+        <>
             <div className="space-y-6">
                 <div className="flex items-center justify-between">
                     <div className="flex flex-col">
@@ -884,6 +883,6 @@ export function CommunityMembers({
                 communityName={community.name}
                 isAdmin={canManageCommunityAdmins}
             />
-        </TabsContent>
+        </>
     );
 }

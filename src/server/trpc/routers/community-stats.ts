@@ -147,10 +147,12 @@ export const statsProcedures = {
                     })
                     .optional()
                     .default({ type: 'all' }),
+                communityId: z.number().optional(),
             }),
         )
         .query(async ({ ctx, input }) => {
-            const { search, limit, offset, sort, dateFilter } = input;
+            const { search, limit, offset, sort, dateFilter, communityId } =
+                input;
             const userId = ctx.session.user.id;
 
             // Helper function to create date filter conditions
@@ -247,18 +249,43 @@ export const statsProcedures = {
             // Build search conditions using database-level filtering
             const searchTerm = `%${search.toLowerCase()}%`;
 
-            // Create base conditions for posts the user can see
-            const baseConditions = and(
-                eq(posts.isDeleted, false),
-                or(
-                    // User's org posts
-                    eq(posts.orgId, orgId),
-                    // Community posts user has access to
-                    accessibleCommunityIds.length > 0
-                        ? inArray(posts.communityId, accessibleCommunityIds)
-                        : sql`false`,
-                ),
-            );
+            // If communityId is specified, filter to that community only
+            let baseConditions;
+            if (communityId) {
+                // Verify user has access to this community
+                const hasAccess =
+                    accessibleCommunityIds.includes(communityId) ||
+                    (user?.orgId &&
+                        (await db.query.communities.findFirst({
+                            where: and(
+                                eq(communities.id, communityId),
+                                eq(communities.orgId, user.orgId),
+                            ),
+                        })));
+                if (!hasAccess) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message: 'You do not have access to this community',
+                    });
+                }
+                baseConditions = and(
+                    eq(posts.isDeleted, false),
+                    eq(posts.communityId, communityId),
+                );
+            } else {
+                // Create base conditions for posts the user can see
+                baseConditions = and(
+                    eq(posts.isDeleted, false),
+                    or(
+                        // User's org posts (where community is null)
+                        and(eq(posts.orgId, orgId), isNull(posts.communityId)),
+                        // Community posts user has access to
+                        accessibleCommunityIds.length > 0
+                            ? inArray(posts.communityId, accessibleCommunityIds)
+                            : sql`false`,
+                    ),
+                );
+            }
 
             // Add search conditions - use database-level text search for better performance
             const searchConditions = dateFilterCondition

@@ -10,18 +10,26 @@ import { useTypedSession } from '@/server/auth/client';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
-import { isOrgAdminForCommunity } from '@/lib/utils';
+import { isOrgAdminForCommunity, generateMemberAvatars } from '@/lib/utils';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     CommunityBanner,
     CommunityTabs,
     CommunityOverview,
-    CommunityTags,
+    CommunityTagsSidebar,
     CommunityPosts,
     CommunityMembers,
     CommunityManage,
     CommunityDialogs,
     CommunitySkeleton,
 } from '@/components/community';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Plus, Globe, Lock, Users } from 'lucide-react';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { DateFilter, type DateFilterState } from '@/components/date-filter';
 import { CommunityMember } from '@/types/community';
@@ -68,6 +76,9 @@ export default function CommunityDetailPage() {
     // Add Members dialog state
     const [isAddingMembers, setIsAddingMembers] = useState(false);
     const [memberSearchTerm, setMemberSearchTerm] = useState('');
+
+    // Members dialog state
+    const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
 
     const [isClient, setIsClient] = useState(false);
     const { checkCommunityPermission } = usePermission();
@@ -633,6 +644,12 @@ export default function CommunityDetailPage() {
         setSortOption(newSort);
     };
 
+    // Generate member avatars for display (must be before early returns)
+    const memberAvatars = useMemo(() => {
+        const members = community?.members || [];
+        return generateMemberAvatars(members, 3);
+    }, [community?.members]);
+
     if (!isClient) {
         return <CommunitySkeleton />;
     }
@@ -690,18 +707,109 @@ export default function CommunityDetailPage() {
 
     return (
         <div className="container mx-auto py-6">
-            <CommunityBanner
-                community={community!}
-                isMember={isMember}
-                isAdmin={isAdmin}
-                hasPendingJoinRequest={hasPendingJoinRequest}
-                isActionInProgress={isActionInProgress}
-                onJoinCommunity={handleJoinCommunity}
-                onLeaveCommunity={handleLeaveCommunity}
-            />
+            <CommunityBanner community={community!} />
 
-            {/* Add sort control above tabs */}
-            {community && (
+            {/* Header section with visibility, members, and action buttons */}
+            <div className="mb-6 flex flex-wrap items-center gap-4">
+                {/* Visibility indicator */}
+                <div className="text-muted-foreground flex items-center gap-1.5 text-sm">
+                    {community.type === 'private' ? (
+                        <Lock className="h-4 w-4" />
+                    ) : (
+                        <Globe className="h-4 w-4" />
+                    )}
+                    <span className="capitalize">{community.type}</span>
+                </div>
+
+                {/* Separator */}
+                <div className="bg-border h-5 w-px" />
+
+                {/* Member count */}
+                <button
+                    type="button"
+                    onClick={() => setIsMembersDialogOpen(true)}
+                    className="text-muted-foreground hover:text-foreground flex items-center gap-2 text-sm transition-colors"
+                >
+                    <div className="flex -space-x-1">
+                        {(
+                            (memberAvatars.length > 0
+                                ? memberAvatars
+                                : [{}, {}, {}]) as Array<{
+                                src?: string;
+                                initials?: string;
+                            }>
+                        ).map((m, idx) => (
+                            <Avatar
+                                key={idx}
+                                className={`h-7 w-7 border-2 ${
+                                    idx === 0 ? '' : '-ml-1'
+                                }`}
+                            >
+                                {m.src ? (
+                                    <AvatarImage
+                                        src={m.src}
+                                        alt={m.initials || 'Member'}
+                                    />
+                                ) : null}
+                                <AvatarFallback className="bg-gradient-to-br from-blue-400 to-blue-600 text-xs font-medium text-white">
+                                    {m.initials || ''}
+                                </AvatarFallback>
+                            </Avatar>
+                        ))}
+                    </div>
+                    <span>
+                        {community.members?.length || 0}{' '}
+                        {community.members?.length === 1 ? 'Member' : 'Members'}
+                    </span>
+                </button>
+
+                {/* Action buttons */}
+                <div className="ml-auto flex items-center gap-3">
+                    {isMember ? (
+                        <Button
+                            variant="outline"
+                            onClick={handleLeaveCommunity}
+                            disabled={
+                                isActionInProgress ||
+                                isAdmin ||
+                                hasPendingJoinRequest
+                            }
+                        >
+                            {isAdmin ? 'Admin' : 'Leave Community'}
+                        </Button>
+                    ) : (
+                        <>
+                            {hasPendingJoinRequest ? (
+                                <Button disabled variant="secondary">
+                                    Join Request Pending
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={handleJoinCommunity}
+                                    disabled={isActionInProgress}
+                                >
+                                    {isActionInProgress
+                                        ? 'Processing...'
+                                        : 'Join Community'}
+                                </Button>
+                            )}
+                        </>
+                    )}
+                    {canCreatePost && (
+                        <Button asChild>
+                            <Link
+                                href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
+                            >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create Post
+                            </Link>
+                        </Button>
+                    )}
+                </div>
+            </div>
+
+            {/* Filters section */}
+            {/* {community && (
                 <div className="mb-4 flex justify-end space-x-2">
                     <DateFilter
                         value={dateFilter}
@@ -713,73 +821,75 @@ export default function CommunityDetailPage() {
                         onValueChange={handleSortChange}
                     />
                 </div>
-            )}
+            )} */}
 
-            <CommunityTabs
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
-                canManageCommunityMembers={canManageCommunityMembers}
-                pendingRequestsCount={pendingRequests?.length || 0}
-            >
-                <CommunityOverview community={community!} />
-
-                <CommunityPosts
-                    community={community!}
-                    isLoading={isLoading}
-                    isMember={isMember}
-                    canInteract={canInteract}
-                    canCreatePost={canCreatePost}
-                    filteredPosts={filteredPosts}
-                    showMyPosts={showMyPosts}
-                    selectedTagFilters={selectedTagFilters}
-                    onPostFilterToggle={handlePostFilterToggle}
-                    onTagFilterToggle={handleTagFilterToggle}
-                    onClearTagFilters={() => setSelectedTagFilters([])}
-                    onClearPostFilter={() => setShowMyPosts(false)}
-                    onDeletePost={handleDeletePost}
-                    canEditPost={canEditPost}
-                    canDeletePost={canDeletePost}
-                    router={router}
-                    dateFilter={dateFilter}
-                    onDateFilterChange={setDateFilter}
-                />
-
-                <CommunityTags
+            {/* Mobile Tags Sidebar - visible only on mobile */}
+            <div className="mb-6 lg:hidden">
+                <CommunityTagsSidebar
                     community={community!}
                     canCreateTag={canCreateTag}
                     canEditTag={canEditTag}
                     canDeleteTag={canDeleteTag}
                 />
+            </div>
 
-                <CommunityMembers
-                    community={community!}
-                    canManageCommunityMembers={canManageCommunityMembers}
-                    canManageCommunityAdmins={canManageCommunityAdmins}
-                    canRemoveCommunityAdmins={canRemoveCommunityAdmins}
-                    canInviteCommunityMembers={canInviteCommunityMembers}
-                    currentMembersPage={currentMembersPage}
-                    membersPerPage={membersPerPage}
-                    onPageChange={setCurrentMembersPage}
-                    onAssignModerator={handleAssignModerator}
-                    onAssignAdmin={handleAssignAdmin}
-                    onRemoveAdmin={handleRemoveAdmin}
-                    onRemoveModerator={handleRemoveModerator}
-                    onRemoveUserFromCommunity={handleRemoveUserFromCommunity}
-                    canKickMember={canKickMember}
-                    shouldDisableActionButton={shouldDisableActionButton}
-                    availableOrgMembers={availableOrgMembers || []}
-                    onAddMembers={handleAddMember}
-                    isAddingMembers={isAddingMembers}
-                />
+            {/* Main content area with tabs on left and sidebar on right */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+                {/* Left column - Tabs and content */}
+                <div>
+                    <CommunityTabs
+                        activeTab={activeTab}
+                        onTabChange={handleTabChange}
+                        canManageCommunityMembers={canManageCommunityMembers}
+                        pendingRequestsCount={pendingRequests?.length || 0}
+                    >
+                        <CommunityOverview community={community!} />
 
-                {canManageCommunityMembers && (
-                    <CommunityManage
-                        pendingRequests={pendingRequests || []}
-                        onApproveRequest={handleApproveRequest}
-                        onRejectRequest={handleRejectRequest}
-                    />
-                )}
-            </CommunityTabs>
+                        <CommunityPosts
+                            community={community!}
+                            isLoading={isLoading}
+                            isMember={isMember}
+                            canInteract={canInteract}
+                            canCreatePost={canCreatePost}
+                            filteredPosts={filteredPosts}
+                            showMyPosts={showMyPosts}
+                            selectedTagFilters={selectedTagFilters}
+                            onPostFilterToggle={handlePostFilterToggle}
+                            onTagFilterToggle={handleTagFilterToggle}
+                            onClearTagFilters={() => setSelectedTagFilters([])}
+                            onClearPostFilter={() => setShowMyPosts(false)}
+                            onDeletePost={handleDeletePost}
+                            canEditPost={canEditPost}
+                            canDeletePost={canDeletePost}
+                            router={router}
+                            dateFilter={dateFilter}
+                            onDateFilterChange={setDateFilter}
+                            sortOption={sortOption}
+                            onSortChange={handleSortChange}
+                        />
+
+                        {canManageCommunityMembers && (
+                            <CommunityManage
+                                pendingRequests={pendingRequests || []}
+                                onApproveRequest={handleApproveRequest}
+                                onRejectRequest={handleRejectRequest}
+                            />
+                        )}
+                    </CommunityTabs>
+                </div>
+
+                {/* Right column - Tags sidebar */}
+                <div className="hidden pt-28 lg:block">
+                    <div className="sticky top-28">
+                        <CommunityTagsSidebar
+                            community={community!}
+                            canCreateTag={canCreateTag}
+                            canEditTag={canEditTag}
+                            canDeleteTag={canDeleteTag}
+                        />
+                    </div>
+                </div>
+            </div>
 
             <CommunityDialogs
                 isLeaveCommunityDialogOpen={isLeaveCommunityDialogOpen}
@@ -792,6 +902,43 @@ export default function CommunityDetailPage() {
                 onConfirmRemoveModerator={confirmRemoveModerator}
                 onConfirmRemoveUser={confirmRemoveUserFromCommunity}
             />
+
+            {/* Members Dialog */}
+            <Dialog
+                open={isMembersDialogOpen}
+                onOpenChange={setIsMembersDialogOpen}
+            >
+                <DialogContent
+                    className="h-[70vh] max-h-[70vh] w-[90vw] max-w-[90vw] overflow-y-auto"
+                    style={{ maxWidth: '90vw', width: '90vw' }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>Community Members</DialogTitle>
+                    </DialogHeader>
+                    <CommunityMembers
+                        community={community!}
+                        canManageCommunityMembers={canManageCommunityMembers}
+                        canManageCommunityAdmins={canManageCommunityAdmins}
+                        canRemoveCommunityAdmins={canRemoveCommunityAdmins}
+                        canInviteCommunityMembers={canInviteCommunityMembers}
+                        currentMembersPage={currentMembersPage}
+                        membersPerPage={membersPerPage}
+                        onPageChange={setCurrentMembersPage}
+                        onAssignModerator={handleAssignModerator}
+                        onAssignAdmin={handleAssignAdmin}
+                        onRemoveAdmin={handleRemoveAdmin}
+                        onRemoveModerator={handleRemoveModerator}
+                        onRemoveUserFromCommunity={
+                            handleRemoveUserFromCommunity
+                        }
+                        canKickMember={canKickMember}
+                        shouldDisableActionButton={shouldDisableActionButton}
+                        availableOrgMembers={availableOrgMembers || []}
+                        onAddMembers={handleAddMember}
+                        isAddingMembers={isAddingMembers}
+                    />
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
