@@ -155,14 +155,10 @@ export function PollDisplay({
             (results || []).map((r) => [r.optionId, r]),
         );
 
-        // For multiple choice, use radio buttons with RadioGroup but handle toggling manually
         if (poll.pollType === 'multiple') {
             return (
                 <div className="space-y-3">
-                    <RadioGroup
-                        value=""
-                        onValueChange={() => {}} // Controlled by our click handlers
-                    >
+                    <RadioGroup value="" onValueChange={() => {}}>
                         {poll.options?.map((option) => {
                             const isSelected = selectedOptions.includes(
                                 option.id,

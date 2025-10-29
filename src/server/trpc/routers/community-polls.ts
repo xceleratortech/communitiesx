@@ -15,7 +15,6 @@ import {
 import { isOrgAdminForCommunity } from '@/lib/utils';
 
 export const pollProcedures = {
-    // Create a poll for a post
     createPoll: authProcedure
         .input(
             z.object({
@@ -132,12 +131,11 @@ export const pollProcedures = {
             return result;
         }),
 
-    // Vote on a poll
     votePoll: authProcedure
         .input(
             z.object({
                 pollId: z.number(),
-                optionIds: z.array(z.number()), // Allow empty array for vote retraction
+                optionIds: z.array(z.number()),
             }),
         )
         .mutation(async ({ input, ctx }) => {
