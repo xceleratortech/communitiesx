@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -38,15 +38,48 @@ export function PollDisplay({
 }: PollDisplayProps) {
     const [selectedOptions, setSelectedOptions] = useState<number[]>([]);
 
+    // Initialize/sync selectedOptions with userVotes when they change
+    useEffect(() => {
+        const normalized = Array.isArray(userVotes) ? userVotes : [];
+        setSelectedOptions((prev) => {
+            // Avoid state updates if arrays are equal (order-insensitive)
+            if (prev.length === normalized.length) {
+                const a = [...prev].sort((x, y) => x - y);
+                const b = [...normalized].sort((x, y) => x - y);
+                let same = true;
+                for (let i = 0; i < a.length; i++) {
+                    if (a[i] !== b[i]) {
+                        same = false;
+                        break;
+                    }
+                }
+                if (same) return prev;
+            }
+            return normalized;
+        });
+    }, [userVotes]);
+
     const isExpired = poll.expiresAt && new Date(poll.expiresAt) < new Date();
     const isClosed = poll.isClosed || isExpired;
-    const showResults = isClosed || hasUserVoted;
+    // Show voting interface if poll is open, even if user has voted
+    // Only show results-only view if poll is closed/expired
+    const showResultsOnly = isClosed;
+    const showVotingInterface = !isClosed && canVote;
 
     const handleOptionSelect = (optionId: number) => {
         if (poll.pollType === 'single') {
-            setSelectedOptions([optionId]);
+            // For single choice, allow toggling to deselect
+            setSelectedOptions((prev) => {
+                if (prev.includes(optionId)) {
+                    // Deselect if already selected
+                    return [];
+                } else {
+                    // Select the new option
+                    return [optionId];
+                }
+            });
         } else {
-            // For multiple choice with radio buttons, toggle the option
+            // For multiple choice, toggle the option
             setSelectedOptions((prev) => {
                 if (prev.includes(optionId)) {
                     // Remove the option if already selected
@@ -63,9 +96,8 @@ export function PollDisplay({
         e.preventDefault(); // Prevent default button behavior
         e.stopPropagation(); // Stop event from bubbling up
 
-        if (selectedOptions.length > 0) {
-            onVote(selectedOptions);
-        }
+        // Allow voting with empty array (retract vote) or with selections
+        onVote(selectedOptions);
     };
 
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -119,43 +151,135 @@ export function PollDisplay({
             );
         }
 
+        const resultsByOptionId = new Map(
+            (results || []).map((r) => [r.optionId, r]),
+        );
+
+        // For multiple choice, use radio buttons with RadioGroup but handle toggling manually
+        if (poll.pollType === 'multiple') {
+            return (
+                <div className="space-y-3">
+                    <RadioGroup
+                        value=""
+                        onValueChange={() => {}} // Controlled by our click handlers
+                    >
+                        {poll.options?.map((option) => {
+                            const isSelected = selectedOptions.includes(
+                                option.id,
+                            );
+                            const isUserVoted = userVotes?.includes(option.id);
+                            const res = resultsByOptionId.get(option.id);
+                            return (
+                                <div key={option.id} className="space-y-1">
+                                    <div className="flex items-center space-x-3">
+                                        <RadioGroupItem
+                                            value={option.id.toString()}
+                                            id={option.id.toString()}
+                                            checked={isSelected}
+                                            className="h-4 w-4"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                handleOptionSelect(option.id);
+                                            }}
+                                        />
+                                        <Label
+                                            htmlFor={option.id.toString()}
+                                            className="flex-1 cursor-pointer font-medium text-black"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                handleOptionSelect(option.id);
+                                            }}
+                                        >
+                                            {option.text}
+                                            {isUserVoted ? (
+                                                <Check className="ml-2 inline h-4 w-4 text-green-600" />
+                                            ) : (
+                                                isSelected && (
+                                                    <span className="ml-2 text-sm text-green-600">
+                                                        ✓
+                                                    </span>
+                                                )
+                                            )}
+                                        </Label>
+                                        {res && (
+                                            <div className="text-sm text-gray-500">
+                                                {res.percentage}% (
+                                                {res.voteCount} votes)
+                                            </div>
+                                        )}
+                                    </div>
+                                    {res && (
+                                        <Progress
+                                            value={res.percentage}
+                                            className="h-2"
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </RadioGroup>
+                </div>
+            );
+        }
+
+        // Single choice uses RadioGroup
         return (
             <div className="space-y-3">
                 <RadioGroup
-                    value={
-                        poll.pollType === 'single'
-                            ? selectedOptions[0]?.toString()
-                            : undefined
-                    }
+                    value={selectedOptions[0]?.toString()}
                     onValueChange={(value) =>
                         handleOptionSelect(parseInt(value))
                     }
                 >
-                    {poll.options?.map((option) => (
-                        <div
-                            key={option.id}
-                            className="flex items-center space-x-3"
-                        >
-                            <RadioGroupItem
-                                value={option.id.toString()}
-                                id={option.id.toString()}
-                                checked={selectedOptions.includes(option.id)}
-                                className="h-4 w-4"
-                            />
-                            <Label
-                                htmlFor={option.id.toString()}
-                                className="flex-1 cursor-pointer font-medium text-black"
-                            >
-                                {option.text}
-                                {poll.pollType === 'multiple' &&
-                                    selectedOptions.includes(option.id) && (
-                                        <span className="ml-2 text-sm text-green-600">
-                                            ✓
-                                        </span>
+                    {poll.options?.map((option) => {
+                        const isSelected = selectedOptions.includes(option.id);
+                        const isUserVoted = userVotes?.includes(option.id);
+                        const handleClick = (e: React.MouseEvent) => {
+                            // For single choice, allow deselection by clicking the selected option again
+                            if (isSelected) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleOptionSelect(option.id);
+                            }
+                        };
+                        const res = resultsByOptionId.get(option.id);
+                        return (
+                            <div key={option.id} className="space-y-1">
+                                <div className="flex items-center space-x-3">
+                                    <RadioGroupItem
+                                        value={option.id.toString()}
+                                        id={option.id.toString()}
+                                        checked={isSelected}
+                                        className="h-4 w-4"
+                                        onClick={handleClick}
+                                    />
+                                    <Label
+                                        htmlFor={option.id.toString()}
+                                        className="flex-1 cursor-pointer font-medium text-black"
+                                        onClick={handleClick}
+                                    >
+                                        {option.text}
+                                        {isUserVoted && (
+                                            <Check className="ml-2 inline h-4 w-4 text-green-600" />
+                                        )}
+                                    </Label>
+                                    {res && (
+                                        <div className="text-sm text-gray-500">
+                                            {res.percentage}% ({res.voteCount}{' '}
+                                            votes)
+                                        </div>
                                     )}
-                            </Label>
-                        </div>
-                    ))}
+                                </div>
+                                {res && (
+                                    <Progress
+                                        value={res.percentage}
+                                        className="h-2"
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
                 </RadioGroup>
             </div>
         );
@@ -164,15 +288,33 @@ export function PollDisplay({
     const renderResults = () => {
         if (!results) return null;
 
+        const userVotedIds = userVotes ?? [];
+        const radioValue =
+            poll.pollType === 'single' && userVotedIds.length > 0
+                ? userVotedIds[0]?.toString()
+                : undefined;
+
         return (
-            <div className="space-y-3">
+            <RadioGroup value={radioValue} className="space-y-3">
                 {results.map((result) => (
                     <div key={result.optionId} className="space-y-2">
                         <div className="flex items-center justify-between">
-                            <div className="flex items-center space-x-2">
-                                <span className="font-medium text-black">
+                            <div className="flex items-center space-x-3">
+                                <RadioGroupItem
+                                    value={result.optionId.toString()}
+                                    id={`result-${result.optionId}`}
+                                    checked={userVotedIds.includes(
+                                        result.optionId,
+                                    )}
+                                    disabled
+                                    className="h-4 w-4"
+                                />
+                                <Label
+                                    htmlFor={`result-${result.optionId}`}
+                                    className="cursor-default font-medium text-black"
+                                >
                                     {result.optionText}
-                                </span>
+                                </Label>
                                 {result.isUserVoted && (
                                     <Check className="h-4 w-4 text-green-600" />
                                 )}
@@ -184,7 +326,7 @@ export function PollDisplay({
                         <Progress value={result.percentage} className="h-2" />
                     </div>
                 ))}
-            </div>
+            </RadioGroup>
         );
     };
 
@@ -208,7 +350,11 @@ export function PollDisplay({
                     </div>
 
                     {/* Poll Options */}
-                    {showResults ? renderResults() : renderVotingInterface()}
+                    {showResultsOnly
+                        ? renderResults()
+                        : showVotingInterface
+                          ? renderVotingInterface()
+                          : renderResults()}
 
                     {/* Poll Footer */}
                     <div className="flex items-center justify-between pt-2">
@@ -224,18 +370,27 @@ export function PollDisplay({
                             <span>{totalVotes} total votes</span>
                         </div>
 
-                        {!showResults && canVote && (
+                        {showVotingInterface && (
                             <Button
                                 onClick={handleVote}
                                 onMouseDown={handleMouseDown}
                                 onMouseUp={handleMouseUp}
                                 disabled={
-                                    selectedOptions.length === 0 || isVoting
+                                    isVoting ||
+                                    (selectedOptions.length === 0 &&
+                                        !hasUserVoted)
                                 }
-                                className="rounded-full bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                                type="button"
+                                className="bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-800"
                             >
-                                {isVoting ? 'Voting...' : 'Vote'}
+                                {isVoting
+                                    ? 'Voting...'
+                                    : selectedOptions.length === 0
+                                      ? hasUserVoted
+                                          ? 'Retract Vote'
+                                          : 'Vote'
+                                      : hasUserVoted
+                                        ? 'Update Vote'
+                                        : 'Vote'}
                             </Button>
                         )}
                     </div>

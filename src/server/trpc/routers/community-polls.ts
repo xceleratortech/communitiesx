@@ -137,7 +137,7 @@ export const pollProcedures = {
         .input(
             z.object({
                 pollId: z.number(),
-                optionIds: z.array(z.number()).min(1),
+                optionIds: z.array(z.number()), // Allow empty array for vote retraction
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -174,40 +174,27 @@ export const pollProcedures = {
                 });
             }
 
-            // Validate option IDs belong to this poll
-            const validOptionIds = poll.options.map((opt) => opt.id);
-            const invalidOptions = input.optionIds.filter(
-                (id) => !validOptionIds.includes(id),
-            );
+            // Validate option IDs belong to this poll (only if optionIds is not empty)
+            if (input.optionIds.length > 0) {
+                const validOptionIds = poll.options.map((opt) => opt.id);
+                const invalidOptions = input.optionIds.filter(
+                    (id) => !validOptionIds.includes(id),
+                );
 
-            if (invalidOptions.length > 0) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'Invalid poll options',
-                });
-            }
+                if (invalidOptions.length > 0) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Invalid poll options',
+                    });
+                }
 
-            // For single choice polls, only allow one option
-            if (poll.pollType === 'single' && input.optionIds.length > 1) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'Single choice polls only allow one option',
-                });
-            }
-
-            // Check if user has already voted
-            const existingVotes = await db.query.pollVotes.findMany({
-                where: and(
-                    eq(pollVotes.pollId, input.pollId),
-                    eq(pollVotes.userId, userId),
-                ),
-            });
-
-            if (existingVotes.length > 0) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'You have already voted on this poll',
-                });
+                // For single choice polls, only allow one option
+                if (poll.pollType === 'single' && input.optionIds.length > 1) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'Single choice polls only allow one option',
+                    });
+                }
             }
 
             // Check voting permissions
@@ -224,15 +211,27 @@ export const pollProcedures = {
                 });
             }
 
-            // Create votes in a transaction
-            const votes = input.optionIds.map((optionId) => ({
-                pollId: input.pollId,
-                pollOptionId: optionId,
-                userId,
-                createdAt: new Date(),
-            }));
+            // Delete existing votes first (allows vote updates and retractions)
+            await db
+                .delete(pollVotes)
+                .where(
+                    and(
+                        eq(pollVotes.pollId, input.pollId),
+                        eq(pollVotes.userId, userId),
+                    ),
+                );
 
-            await db.insert(pollVotes).values(votes);
+            // If optionIds is not empty, create new votes
+            if (input.optionIds.length > 0) {
+                const votes = input.optionIds.map((optionId) => ({
+                    pollId: input.pollId,
+                    pollOptionId: optionId,
+                    userId,
+                    createdAt: new Date(),
+                }));
+
+                await db.insert(pollVotes).values(votes);
+            }
 
             return { success: true };
         }),
