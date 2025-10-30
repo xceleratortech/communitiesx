@@ -12,6 +12,7 @@ import {
     attachments,
     polls,
     pollOptions,
+    pollVotes,
 } from '@/server/db/schema';
 import { and, eq, isNull, gte, inArray } from 'drizzle-orm';
 import { ServerPermissions } from '@/server/utils/permission';
@@ -385,8 +386,17 @@ export const postProcedures = {
                         .object({
                             question: z.string().min(1).max(500),
                             pollType: z.enum(['single', 'multiple']),
+                            // For edit, allow granular updates: options can be strings or { id?, text }
                             options: z
-                                .array(z.string().min(1).max(200))
+                                .array(
+                                    z.union([
+                                        z.string().min(1).max(200),
+                                        z.object({
+                                            id: z.number().optional(),
+                                            text: z.string().min(1).max(200),
+                                        }),
+                                    ]),
+                                )
                                 .min(2)
                                 .max(10),
                             expiresAt: z.date().optional(),
@@ -480,21 +490,95 @@ export const postProcedures = {
                             })
                             .where(eq(polls.id, existingPoll.id));
 
-                        // Delete existing poll options
-                        await db
-                            .delete(pollOptions)
-                            .where(eq(pollOptions.pollId, existingPoll.id));
-
-                        // Insert new poll options
-                        const pollOptionValues = input.poll.options.map(
-                            (optionText, index) => ({
-                                pollId: existingPoll.id,
-                                text: optionText.trim(),
-                                orderIndex: index,
-                                createdAt: new Date(),
-                            }),
+                        // Normalize options: allow both strings and { id?, text }
+                        const normalizedOptions = input.poll.options.map(
+                            (opt) =>
+                                typeof opt === 'string'
+                                    ? {
+                                          id: undefined as number | undefined,
+                                          text: opt,
+                                      }
+                                    : { id: opt.id, text: opt.text },
                         );
-                        await db.insert(pollOptions).values(pollOptionValues);
+
+                        // Fetch existing options
+                        const existingOptions =
+                            await db.query.pollOptions.findMany({
+                                where: eq(pollOptions.pollId, existingPoll.id),
+                            });
+                        const existingById = new Map(
+                            existingOptions.map((o) => [o.id, o]),
+                        );
+
+                        // Determine sets
+                        const incomingWithIds = normalizedOptions
+                            .map((o, index) => ({ ...o, orderIndex: index }))
+                            .filter((o) => !!o.id) as Array<{
+                            id: number;
+                            text: string;
+                            orderIndex: number;
+                        }>;
+                        const incomingIds = new Set(
+                            incomingWithIds.map((o) => o.id),
+                        );
+
+                        const toUpdate = incomingWithIds.filter((o) =>
+                            existingById.has(o.id),
+                        );
+                        const toInsert = normalizedOptions
+                            .map((o, index) => ({ ...o, orderIndex: index }))
+                            .filter((o) => !o.id);
+                        const toDeleteIds = existingOptions
+                            .filter((o) => !incomingIds.has(o.id))
+                            .map((o) => o.id);
+
+                        // Prevent deleting options that already have votes
+                        if (toDeleteIds.length > 0) {
+                            const voted = await db.query.pollVotes.findMany({
+                                where: inArray(
+                                    pollVotes.pollOptionId,
+                                    toDeleteIds,
+                                ),
+                                columns: { id: true },
+                            });
+                            if (voted.length > 0) {
+                                throw new TRPCError({
+                                    code: 'BAD_REQUEST',
+                                    message:
+                                        'Cannot remove poll options that already have votes. Consider closing the poll or creating a new one.',
+                                });
+                            }
+                        }
+
+                        // Apply updates
+                        for (const u of toUpdate) {
+                            await db
+                                .update(pollOptions)
+                                .set({
+                                    text: u.text.trim(),
+                                    orderIndex: u.orderIndex,
+                                })
+                                .where(eq(pollOptions.id, u.id));
+                        }
+
+                        // Apply inserts
+                        if (toInsert.length > 0) {
+                            await db.insert(pollOptions).values(
+                                toInsert.map((o) => ({
+                                    pollId: existingPoll.id,
+                                    text: o.text.trim(),
+                                    orderIndex: o.orderIndex,
+                                    createdAt: new Date(),
+                                })),
+                            );
+                        }
+
+                        // Apply deletes (safe - no votes)
+                        if (toDeleteIds.length > 0) {
+                            await db
+                                .delete(pollOptions)
+                                .where(inArray(pollOptions.id, toDeleteIds));
+                        }
                     } else {
                         // Create new poll
                         const [newPoll] = await db
@@ -510,14 +594,18 @@ export const postProcedures = {
                             })
                             .returning();
 
-                        // Insert poll options
+                        // Insert poll options (normalize string | { id?, text })
                         const pollOptionValues = input.poll.options.map(
-                            (optionText, index) => ({
-                                pollId: newPoll.id,
-                                text: optionText.trim(),
-                                orderIndex: index,
-                                createdAt: new Date(),
-                            }),
+                            (opt, index) => {
+                                const text =
+                                    typeof opt === 'string' ? opt : opt.text;
+                                return {
+                                    pollId: newPoll.id,
+                                    text: text.trim(),
+                                    orderIndex: index,
+                                    createdAt: new Date(),
+                                };
+                            },
                         );
                         await db.insert(pollOptions).values(pollOptionValues);
                     }

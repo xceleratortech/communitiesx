@@ -396,19 +396,6 @@ export default function EditCommunityPostPage() {
                             initialPoll={pollCreationState}
                             onPollChange={(poll) => {
                                 setPollData(poll);
-                                // Also update the creation state to keep them in sync
-                                if (poll) {
-                                    setPollCreationState({
-                                        isCreating: true,
-                                        question: poll.question,
-                                        pollType: poll.pollType,
-                                        options: poll.options,
-                                        expiresAt: poll.expiresAt,
-                                        hasExpiration: !!poll.expiresAt,
-                                        expirationValue: 24,
-                                        expirationUnit: 'hours' as const,
-                                    });
-                                }
                             }}
                         />
                     )}

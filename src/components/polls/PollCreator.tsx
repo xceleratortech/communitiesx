@@ -131,7 +131,7 @@ export function PollCreator({ onPollChange, initialPoll }: PollCreatorProps) {
         if (
             state.isCreating &&
             state.question.trim() &&
-            state.options.every((opt) => opt.trim())
+            state.options.filter((opt) => opt.trim()).length >= 2
         ) {
             const pollData: CreatePollData = {
                 question: state.question.trim(),

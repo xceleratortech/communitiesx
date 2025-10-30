@@ -155,66 +155,55 @@ export function PollDisplay({
             (results || []).map((r) => [r.optionId, r]),
         );
 
+        // For multiple choice, use checkboxes styled as circular "radios"
         if (poll.pollType === 'multiple') {
+            const resultsByOptionId = new Map(
+                (results || []).map((r) => [r.optionId, r]),
+            );
+
             return (
                 <div className="space-y-3">
-                    <RadioGroup value="" onValueChange={() => {}}>
-                        {poll.options?.map((option) => {
-                            const isSelected = selectedOptions.includes(
-                                option.id,
-                            );
-                            const isUserVoted = userVotes?.includes(option.id);
-                            const res = resultsByOptionId.get(option.id);
-                            return (
-                                <div key={option.id} className="space-y-1">
-                                    <div className="flex items-center space-x-3">
-                                        <RadioGroupItem
-                                            value={option.id.toString()}
-                                            id={option.id.toString()}
-                                            checked={isSelected}
-                                            className="h-4 w-4"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                handleOptionSelect(option.id);
-                                            }}
-                                        />
-                                        <Label
-                                            htmlFor={option.id.toString()}
-                                            className="flex-1 cursor-pointer font-medium text-black"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                handleOptionSelect(option.id);
-                                            }}
-                                        >
-                                            {option.text}
-                                            {isUserVoted ? (
-                                                <Check className="ml-2 inline h-4 w-4 text-green-600" />
-                                            ) : (
-                                                isSelected && (
-                                                    <span className="ml-2 text-sm text-green-600">
-                                                        ✓
-                                                    </span>
-                                                )
-                                            )}
-                                        </Label>
-                                        {res && (
-                                            <div className="text-sm text-gray-500">
-                                                {res.percentage}% (
-                                                {res.voteCount} votes)
-                                            </div>
+                    {poll.options?.map((option) => {
+                        const isSelected = selectedOptions.includes(option.id);
+                        const isUserVoted = userVotes?.includes(option.id);
+                        const res = resultsByOptionId.get(option.id);
+
+                        return (
+                            <div key={option.id} className="space-y-1">
+                                <div className="flex items-center space-x-3">
+                                    <Checkbox
+                                        id={option.id.toString()}
+                                        checked={isSelected}
+                                        onCheckedChange={() =>
+                                            handleOptionSelect(option.id)
+                                        }
+                                        className="h-4 w-4 rounded-full border border-gray-400"
+                                    />
+                                    <Label
+                                        htmlFor={option.id.toString()}
+                                        className="flex-1 cursor-pointer font-medium text-black"
+                                    >
+                                        {option.text}
+                                        {isUserVoted && (
+                                            <Check className="ml-2 inline h-4 w-4 text-green-600" />
                                         )}
-                                    </div>
+                                    </Label>
                                     {res && (
-                                        <Progress
-                                            value={res.percentage}
-                                            className="h-2"
-                                        />
+                                        <div className="text-sm text-gray-500">
+                                            {res.percentage}% ({res.voteCount}{' '}
+                                            votes)
+                                        </div>
                                     )}
                                 </div>
-                            );
-                        })}
-                    </RadioGroup>
+                                {res && (
+                                    <Progress
+                                        value={res.percentage}
+                                        className="h-2"
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             );
         }
@@ -366,29 +355,49 @@ export function PollDisplay({
                             <span>{totalVotes} total votes</span>
                         </div>
 
-                        {showVotingInterface && (
-                            <Button
-                                onClick={handleVote}
-                                onMouseDown={handleMouseDown}
-                                onMouseUp={handleMouseUp}
-                                disabled={
+                        {showVotingInterface &&
+                            (() => {
+                                const normalize = (arr: number[]) =>
+                                    [...arr].sort((a, b) => a - b);
+                                const sel = normalize(selectedOptions);
+                                const user = normalize(userVotes || []);
+                                const isDirty =
+                                    sel.length !== user.length ||
+                                    sel.some((v, i) => v !== user[i]);
+
+                                const disabled =
                                     isVoting ||
-                                    (selectedOptions.length === 0 &&
-                                        !hasUserVoted)
+                                    (!hasUserVoted && sel.length === 0) ||
+                                    (hasUserVoted && !isDirty);
+
+                                let label = 'Vote';
+                                if (isVoting) {
+                                    label = 'Voting...';
+                                } else if (hasUserVoted) {
+                                    if (isDirty) {
+                                        label =
+                                            sel.length === 0
+                                                ? 'Retract Vote'
+                                                : 'Update Vote';
+                                    } else {
+                                        label = 'Vote';
+                                    }
+                                } else {
+                                    label = 'Vote';
                                 }
-                                className="bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                            >
-                                {isVoting
-                                    ? 'Voting...'
-                                    : selectedOptions.length === 0
-                                      ? hasUserVoted
-                                          ? 'Retract Vote'
-                                          : 'Vote'
-                                      : hasUserVoted
-                                        ? 'Update Vote'
-                                        : 'Vote'}
-                            </Button>
-                        )}
+
+                                return (
+                                    <Button
+                                        onClick={handleVote}
+                                        onMouseDown={handleMouseDown}
+                                        onMouseUp={handleMouseUp}
+                                        disabled={disabled}
+                                        className="bg-black px-6 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                                    >
+                                        {label}
+                                    </Button>
+                                );
+                            })()}
                     </div>
                 </div>
             </CardContent>
