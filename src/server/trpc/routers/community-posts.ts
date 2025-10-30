@@ -10,6 +10,9 @@ import {
     tags,
     postTags,
     attachments,
+    polls,
+    pollOptions,
+    pollVotes,
 } from '@/server/db/schema';
 import { and, eq, isNull, gte, inArray } from 'drizzle-orm';
 import { ServerPermissions } from '@/server/utils/permission';
@@ -24,13 +27,34 @@ export const postProcedures = {
     // Create a new post
     createPost: authProcedure
         .input(
-            z.object({
-                title: z.string().min(1).max(200),
-                content: z.string(),
-                communityId: z.number().nullable().optional(),
-                orgId: z.string().optional().nullable(),
-                tagIds: z.array(z.number()).optional(),
-            }),
+            z
+                .object({
+                    title: z.string().min(1).max(200).optional(),
+                    content: z.string(),
+                    communityId: z.number().nullable().optional(),
+                    orgId: z.string().optional().nullable(),
+                    tagIds: z.array(z.number()).optional(),
+                    poll: z
+                        .object({
+                            question: z.string().min(1).max(200),
+                            pollType: z.enum(['single', 'multiple']),
+                            options: z
+                                .array(z.string().min(1).max(100))
+                                .min(2)
+                                .max(10),
+                            expiresAt: z.date().optional(),
+                        })
+                        .optional(),
+                })
+                .refine(
+                    (data) => {
+                        // Either title or poll must be provided
+                        return data.title || data.poll;
+                    },
+                    {
+                        message: 'Either title or poll must be provided',
+                    },
+                ),
         )
         .mutation(async ({ input, ctx }) => {
             try {
@@ -178,16 +202,31 @@ export const postProcedures = {
                 });
 
                 // Allow media-only posts if there are pending attachments
+                // Also allow polls without content
                 const textOnlyContent = (input.content || '')
                     .replace(/<[^>]*>/g, '')
                     .trim();
-                if (!textOnlyContent && pendingAttachments.length === 0) {
+                const hasPoll =
+                    input.poll &&
+                    input.poll.question.trim() &&
+                    input.poll.options.length > 0;
+
+                if (
+                    !textOnlyContent &&
+                    pendingAttachments.length === 0 &&
+                    !hasPoll
+                ) {
                     throw new TRPCError({
                         code: 'BAD_REQUEST',
                         message:
-                            'Post must have text content or at least one image/video.',
+                            'Post must have text content, at least one image/video, or a poll.',
                     });
                 }
+
+                // Determine the post title
+                const postTitle =
+                    input.title?.trim() ||
+                    (input.poll ? input.poll.question.trim() : 'Untitled Post');
 
                 // Use a transaction to create post and link tags
                 const result = await db.transaction(async (tx) => {
@@ -217,7 +256,7 @@ export const postProcedures = {
                     const [post] = await tx
                         .insert(posts)
                         .values({
-                            title: input.title.trim(),
+                            title: postTitle,
                             content: input.content,
                             authorId: ctx.session?.user?.id ?? '',
                             orgId: postOrgId,
@@ -246,7 +285,36 @@ export const postProcedures = {
                         .set({ postId: post.id, updatedAt: new Date() })
                         .where(and(...baseAttachmentConds));
 
-                    return post;
+                    // Create poll if provided
+                    let poll = null;
+                    if (input.poll) {
+                        const [createdPoll] = await tx
+                            .insert(polls)
+                            .values({
+                                postId: post.id,
+                                question: input.poll.question,
+                                pollType: input.poll.pollType,
+                                expiresAt: input.poll.expiresAt || null,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                            })
+                            .returning();
+
+                        // Create poll options
+                        const options = input.poll.options.map(
+                            (text, index) => ({
+                                pollId: createdPoll.id,
+                                text,
+                                orderIndex: index,
+                                createdAt: new Date(),
+                            }),
+                        );
+
+                        await tx.insert(pollOptions).values(options);
+                        poll = createdPoll;
+                    }
+
+                    return { post, poll };
                 });
 
                 // Send notifications if post is in a community
@@ -269,19 +337,19 @@ export const postProcedures = {
                             // Send push notifications
                             await sendCommunityPostNotification(
                                 input.communityId,
-                                input.title.trim(),
+                                postTitle,
                                 author.name || 'Unknown User',
                                 community.name,
-                                result.id,
+                                result.post.id,
                                 ctx.session?.user?.id ?? '', // Pass authorId to exclude post creator
                             );
 
                             // Save notifications to database for all eligible users
                             await saveCommunityPostNotifications(
-                                input.title.trim(),
+                                postTitle,
                                 author.name || 'Unknown User',
                                 community.name,
-                                result.id,
+                                result.post.id,
                                 input.communityId,
                                 ctx.session?.user?.id ?? '', // Pass authorId to exclude post creator
                             );
@@ -295,7 +363,7 @@ export const postProcedures = {
                     }
                 }
 
-                return result;
+                return result.post;
             } catch (error) {
                 console.error('Error creating post:', error);
                 throw new TRPCError({
@@ -308,12 +376,36 @@ export const postProcedures = {
     // Edit a post
     editPost: authProcedure
         .input(
-            z.object({
-                postId: z.number(),
-                title: z.string().min(1).max(200),
-                content: z.string().min(1),
-                tagIds: z.array(z.number()).optional(),
-            }),
+            z
+                .object({
+                    postId: z.number(),
+                    title: z.string().min(1).max(200).optional(),
+                    content: z.string().min(1),
+                    tagIds: z.array(z.number()).optional(),
+                    poll: z
+                        .object({
+                            question: z.string().min(1).max(500),
+                            pollType: z.enum(['single', 'multiple']),
+                            // For edit, allow granular updates: options can be strings or { id?, text }
+                            options: z
+                                .array(
+                                    z.union([
+                                        z.string().min(1).max(200),
+                                        z.object({
+                                            id: z.number().optional(),
+                                            text: z.string().min(1).max(200),
+                                        }),
+                                    ]),
+                                )
+                                .min(2)
+                                .max(10),
+                            expiresAt: z.date().optional(),
+                        })
+                        .optional(),
+                })
+                .refine((data) => data.title || data.poll, {
+                    message: 'Either title or poll must be provided',
+                }),
         )
         .mutation(async ({ input, ctx }) => {
             try {
@@ -363,16 +455,161 @@ export const postProcedures = {
                     });
                 }
 
+                // Determine the post title
+                const postTitle =
+                    input.title?.trim() ||
+                    (input.poll ? input.poll.question.trim() : 'Untitled Post');
+
                 // Update post content/title
                 const [updatedPost] = await db
                     .update(posts)
                     .set({
-                        title: input.title,
+                        title: postTitle,
                         content: input.content,
                         updatedAt: new Date(),
                     })
                     .where(eq(posts.id, input.postId))
                     .returning();
+
+                // Handle poll update if provided
+                if (input.poll) {
+                    // Check if poll already exists
+                    const existingPoll = await db.query.polls.findFirst({
+                        where: eq(polls.postId, input.postId),
+                    });
+
+                    if (existingPoll) {
+                        // Update existing poll
+                        await db
+                            .update(polls)
+                            .set({
+                                question: input.poll.question.trim(),
+                                pollType: input.poll.pollType,
+                                expiresAt: input.poll.expiresAt || null,
+                                updatedAt: new Date(),
+                            })
+                            .where(eq(polls.id, existingPoll.id));
+
+                        // Normalize options: allow both strings and { id?, text }
+                        const normalizedOptions = input.poll.options.map(
+                            (opt) =>
+                                typeof opt === 'string'
+                                    ? {
+                                          id: undefined as number | undefined,
+                                          text: opt,
+                                      }
+                                    : { id: opt.id, text: opt.text },
+                        );
+
+                        // Fetch existing options
+                        const existingOptions =
+                            await db.query.pollOptions.findMany({
+                                where: eq(pollOptions.pollId, existingPoll.id),
+                            });
+                        const existingById = new Map(
+                            existingOptions.map((o) => [o.id, o]),
+                        );
+
+                        // Determine sets
+                        const incomingWithIds = normalizedOptions
+                            .map((o, index) => ({ ...o, orderIndex: index }))
+                            .filter((o) => !!o.id) as Array<{
+                            id: number;
+                            text: string;
+                            orderIndex: number;
+                        }>;
+                        const incomingIds = new Set(
+                            incomingWithIds.map((o) => o.id),
+                        );
+
+                        const toUpdate = incomingWithIds.filter((o) =>
+                            existingById.has(o.id),
+                        );
+                        const toInsert = normalizedOptions
+                            .map((o, index) => ({ ...o, orderIndex: index }))
+                            .filter((o) => !o.id);
+                        const toDeleteIds = existingOptions
+                            .filter((o) => !incomingIds.has(o.id))
+                            .map((o) => o.id);
+
+                        // Prevent deleting options that already have votes
+                        if (toDeleteIds.length > 0) {
+                            const voted = await db.query.pollVotes.findMany({
+                                where: inArray(
+                                    pollVotes.pollOptionId,
+                                    toDeleteIds,
+                                ),
+                                columns: { id: true },
+                            });
+                            if (voted.length > 0) {
+                                throw new TRPCError({
+                                    code: 'BAD_REQUEST',
+                                    message:
+                                        'Cannot remove poll options that already have votes. Consider closing the poll or creating a new one.',
+                                });
+                            }
+                        }
+
+                        // Apply updates
+                        for (const u of toUpdate) {
+                            await db
+                                .update(pollOptions)
+                                .set({
+                                    text: u.text.trim(),
+                                    orderIndex: u.orderIndex,
+                                })
+                                .where(eq(pollOptions.id, u.id));
+                        }
+
+                        // Apply inserts
+                        if (toInsert.length > 0) {
+                            await db.insert(pollOptions).values(
+                                toInsert.map((o) => ({
+                                    pollId: existingPoll.id,
+                                    text: o.text.trim(),
+                                    orderIndex: o.orderIndex,
+                                    createdAt: new Date(),
+                                })),
+                            );
+                        }
+
+                        // Apply deletes (safe - no votes)
+                        if (toDeleteIds.length > 0) {
+                            await db
+                                .delete(pollOptions)
+                                .where(inArray(pollOptions.id, toDeleteIds));
+                        }
+                    } else {
+                        // Create new poll
+                        const [newPoll] = await db
+                            .insert(polls)
+                            .values({
+                                postId: input.postId,
+                                question: input.poll.question.trim(),
+                                pollType: input.poll.pollType,
+                                expiresAt: input.poll.expiresAt || null,
+                                isClosed: false,
+                                createdAt: new Date(),
+                                updatedAt: new Date(),
+                            })
+                            .returning();
+
+                        // Insert poll options (normalize string | { id?, text })
+                        const pollOptionValues = input.poll.options.map(
+                            (opt, index) => {
+                                const text =
+                                    typeof opt === 'string' ? opt : opt.text;
+                                return {
+                                    pollId: newPoll.id,
+                                    text: text.trim(),
+                                    orderIndex: index,
+                                    createdAt: new Date(),
+                                };
+                            },
+                        );
+                        await db.insert(pollOptions).values(pollOptionValues);
+                    }
+                }
 
                 // Update tags if provided
                 if (input.tagIds) {

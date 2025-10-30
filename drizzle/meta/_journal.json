@@ -204,6 +204,13 @@
             "when": 1759734052867,
             "tag": "0028_magical_hawkeye",
             "breakpoints": true
+        },
+        {
+            "idx": 29,
+            "version": "7",
+            "when": 1761221323197,
+            "tag": "0029_add_poll_tables",
+            "breakpoints": true
         }
     ]
 }

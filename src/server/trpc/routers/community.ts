@@ -17,6 +17,7 @@ import { postProcedures } from './community-posts';
 import { queryProcedures } from './community-queries';
 import { managementProcedures } from './community-management';
 import { statsProcedures } from './community-stats';
+import { pollProcedures } from './community-polls';
 import _ from 'lodash';
 
 // Helper function to check if user is SuperAdmin
@@ -123,4 +124,10 @@ export const communityRouter = router({
     getCommentHelpfulCounts: commentProcedures.getCommentHelpfulCounts,
     getUserHelpfulVotes: commentProcedures.getUserHelpfulVotes,
     toggleCommentHelpful: commentProcedures.toggleCommentHelpful,
+
+    // Poll procedures
+    createPoll: pollProcedures.createPoll,
+    votePoll: pollProcedures.votePoll,
+    getPollResults: pollProcedures.getPollResults,
+    closePoll: pollProcedures.closePoll,
 });

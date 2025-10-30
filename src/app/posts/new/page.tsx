@@ -32,6 +32,8 @@ import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { isHtmlContentEmpty } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { PollCreator } from '@/components/polls';
+import type { CreatePollData, PollCreationState } from '@/types/poll';
 
 interface Tag {
     id: number;
@@ -53,6 +55,7 @@ function NewPostForm() {
     const [hasMedia, setHasMedia] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
+    const [pollData, setPollData] = useState<CreatePollData | null>(null);
 
     // Fetch community to check membership status if communityId is provided
     const { data: community, isLoading: isLoadingCommunity } =
@@ -253,15 +256,23 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || (isHtmlContentEmpty(content) && !hasMedia)) {
+
+        // Allow submission if there's a poll, even without title/content
+        const hasPoll =
+            pollData && pollData.question.trim() && pollData.options.length > 0;
+        const hasTitleOrContent =
+            title.trim() || !isHtmlContentEmpty(content) || hasMedia;
+
+        if (!hasPoll && !hasTitleOrContent) {
             return;
         }
 
         createPost.mutate({
-            title: title.trim(),
+            title: title.trim() || (hasPoll ? pollData.question.trim() : ''),
             content: content,
             communityId: communityId,
             tagIds: selectedTags.map((tag) => tag.id), // Send the selected tag IDs
+            poll: pollData || undefined, // Include poll data if present
         });
     };
 
@@ -282,14 +293,24 @@ function NewPostForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <Label htmlFor="title">Title</Label>
+                    <Label htmlFor="title">
+                        Title{' '}
+                        {pollData && (
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
+                        )}
+                    </Label>
                     <Input
                         type="text"
                         id="title"
-                        placeholder="Enter post title"
+                        placeholder={
+                            pollData
+                                ? 'Enter post title (optional)'
+                                : 'Enter post title'
+                        }
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        required
                     />
                 </div>
 
@@ -392,12 +413,17 @@ function NewPostForm() {
                     </div>
                 )}
 
+                {/* Poll Creation */}
+                <PollCreator onPollChange={setPollData} />
+
                 <Button
                     type="submit"
                     disabled={
                         createPost.isPending ||
-                        !title.trim() ||
-                        (isHtmlContentEmpty(content) && !hasMedia)
+                        (!pollData &&
+                            !title.trim() &&
+                            isHtmlContentEmpty(content) &&
+                            !hasMedia)
                     }
                     className="w-full"
                 >
