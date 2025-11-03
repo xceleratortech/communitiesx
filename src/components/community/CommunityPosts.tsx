@@ -6,13 +6,13 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Building,
-    Users,
     Plus,
     MessageSquare,
     Edit,
     Trash2,
     Ellipsis,
     Bookmark,
+    Search,
 } from 'lucide-react';
 import { ShareButton } from '@/components/ui/share-button';
 import { LikeButton } from '@/components/ui/like-button';
@@ -21,10 +21,10 @@ import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
-import { DateFilter, type DateFilterState } from '@/components/date-filter';
+import { type DateFilterState } from '@/components/date-filter';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     DropdownMenu,
@@ -38,6 +38,9 @@ import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
 import { PollDisplay } from '@/components/polls';
+import { Input } from '@/components/ui/input';
+import { SortSelect, type SortOption } from '@/components/ui/sort-select';
+import { PostsFilter } from '@/components/post-filter';
 
 interface CommunityPostsProps {
     community: any;
@@ -58,6 +61,8 @@ interface CommunityPostsProps {
     canEditPost: (post: any) => boolean;
     canDeletePost: (post: any) => boolean;
     router: any;
+    sortOption: SortOption;
+    onSortChange: (sort: SortOption) => void;
 }
 
 export function CommunityPosts({
@@ -79,6 +84,8 @@ export function CommunityPosts({
     canEditPost,
     canDeletePost,
     router,
+    sortOption,
+    onSortChange,
 }: CommunityPostsProps) {
     const sessionData = useSession();
     const session = sessionData.data;
@@ -86,7 +93,55 @@ export function CommunityPosts({
     const [expandedCommentPostIds, setExpandedCommentPostIds] = useState<
         Set<number>
     >(new Set());
+    const [searchInputValue, setSearchInputValue] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
+    const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const utils = trpc.useUtils();
+
+    // Sync PostsFilter selections with existing handlers
+    type MinimalFilterState = {
+        tags: number[];
+        showMyPosts: boolean;
+    };
+
+    const handleFiltersChange = useCallback(
+        (filters: MinimalFilterState) => {
+            // Sync showMyPosts
+            if (
+                typeof filters.showMyPosts === 'boolean' &&
+                filters.showMyPosts !== showMyPosts
+            ) {
+                onPostFilterToggle();
+            }
+
+            // Sync tag selections by diffing against current selectedTagFilters
+            if (Array.isArray(filters.tags)) {
+                const incoming = new Set<number>(filters.tags);
+                const current = new Set<number>(selectedTagFilters);
+
+                // Tags to add
+                for (const tagId of incoming) {
+                    if (!current.has(tagId)) {
+                        onTagFilterToggle(tagId);
+                    }
+                }
+                // Tags to remove
+                for (const tagId of current) {
+                    if (!incoming.has(tagId)) {
+                        onTagFilterToggle(tagId);
+                    }
+                }
+            }
+        },
+        [
+            onPostFilterToggle,
+            onTagFilterToggle,
+            selectedTagFilters,
+            showMyPosts,
+        ],
+    );
 
     // Handle like changes from LikeButton
     const handleLikeChange = useCallback(
@@ -160,11 +215,8 @@ export function CommunityPosts({
         { postIds },
         {
             enabled: postIds.length > 0,
-            staleTime: 0, // Always fetch fresh data
+            staleTime: 0,
             refetchOnWindowFocus: true,
-            // Remove polling to prevent race conditions with immediate refetches
-            // refetchInterval: 5 * 1000,
-            // refetchIntervalInBackground: true,
         },
     );
 
@@ -173,11 +225,8 @@ export function CommunityPosts({
         { postIds },
         {
             enabled: postIds.length > 0 && !!session,
-            staleTime: 0, // Always fetch fresh data
+            staleTime: 0,
             refetchOnWindowFocus: true,
-            // Remove polling to prevent race conditions with immediate refetches
-            // refetchInterval: 5 * 1000,
-            // refetchIntervalInBackground: true,
         },
     );
 
@@ -239,6 +288,84 @@ export function CommunityPosts({
         refetchLikeCounts,
         refetchUserReactions,
     ]);
+    // Debounced search handler
+    const handleSearchInputChange = useCallback((value: string) => {
+        setSearchInputValue(value);
+
+        // Clear existing timer
+        if (debounceTimerRef.current) {
+            clearTimeout(debounceTimerRef.current);
+        }
+
+        // Set new timer
+        debounceTimerRef.current = setTimeout(() => {
+            setSearchTerm(value.trim());
+        }, 300);
+    }, []);
+
+    // Cleanup timer on unmount
+    useEffect(() => {
+        return () => {
+            if (debounceTimerRef.current) {
+                clearTimeout(debounceTimerRef.current);
+            }
+        };
+    }, []);
+
+    // Search API call
+    const searchQuery = trpc.community.searchRelevantPost.useQuery(
+        {
+            search: searchTerm,
+            limit: 50,
+            offset: 0,
+            sort: sortOption,
+            dateFilter: dateFilter.type !== 'all' ? dateFilter : undefined,
+            communityId: community.id,
+        },
+        {
+            enabled: !!searchTerm && searchTerm.length >= 2,
+            staleTime: 5 * 60 * 1000,
+            refetchOnWindowFocus: false,
+        },
+    );
+
+    const hasSearchTerm = searchTerm.length >= 2;
+
+    // Listen for search results
+    useEffect(() => {
+        if (hasSearchTerm) {
+            if (searchQuery.data) {
+                setSearchResults(searchQuery.data.posts);
+                setIsSearching(false);
+            } else if (searchQuery.isLoading) {
+                setIsSearching(true);
+            }
+        } else {
+            setIsSearching(false);
+            setSearchResults(null);
+        }
+    }, [hasSearchTerm, searchQuery.data, searchQuery.isLoading]);
+
+    // Clear search when input is cleared
+    useEffect(() => {
+        if (searchInputValue.length === 0) {
+            setSearchTerm('');
+            setSearchResults(null);
+            setIsSearching(false);
+        }
+    }, [searchInputValue]);
+
+    // Filter posts based on search
+    const postsToRender = useMemo(() => {
+        if (hasSearchTerm && searchResults !== null) {
+            return searchResults;
+        }
+        if (hasSearchTerm) {
+            return [];
+        }
+        return postsWithLikes;
+    }, [hasSearchTerm, searchResults, postsWithLikes]);
+
     // Check if we're still loading like data
     const isLikeDataLoading =
         postsWithLikes.length > 0 && !likeCountsQuery.data;
@@ -358,91 +485,59 @@ export function CommunityPosts({
                         );
                     })()}
 
-                    {/* Posts header and tag filters */}
-                    <div className="mb-6 flex items-center justify-between">
-                        <div className="flex flex-col">
-                            <h2 className="text-xl font-semibold">Posts</h2>
-                            <p className="text-muted-foreground text-sm">
-                                All the posts in this community
-                            </p>
-                        </div>
-                        {canCreatePost && (
-                            <Button asChild>
-                                <Link
-                                    href={`/posts/new?communityId=${community.id}&communitySlug=${community.slug}`}
-                                >
-                                    Create Post
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
+                    {/* Posts header */}
+                    {/* <div className="mb-6">
+                        <h2 className="text-xl font-semibold">Posts</h2>
+                        <p className="text-muted-foreground text-sm">
+                            All the posts in this community
+                        </p>
+                    </div> */}
 
-                    {/* Post Filter */}
-                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={onPostFilterToggle}
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                    !showMyPosts
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                }`}
-                            >
-                                <Building className="h-4 w-4" />
-                                All Posts
-                            </button>
-                            <button
-                                onClick={onPostFilterToggle}
-                                className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                    showMyPosts
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                }`}
-                            >
-                                <Users className="h-4 w-4" />
-                                My Posts
-                            </button>
-                        </div>
-                        <DateFilter
-                            value={dateFilter}
-                            onChange={onDateFilterChange}
-                        />
-                    </div>
-                    {/* Tag Filter */}
-                    {community.tags && community.tags.length > 0 && (
-                        <div className="mt-4 mb-6">
-                            <div className="flex flex-wrap gap-2">
-                                {community.tags.map((tag: any) => (
-                                    <button
-                                        key={tag.id}
-                                        onClick={() =>
-                                            onTagFilterToggle(tag.id)
-                                        }
-                                        className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                                            selectedTagFilters.includes(tag.id)
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
-                                        }`}
-                                    >
-                                        {tag.name}
-                                    </button>
-                                ))}
-                                {selectedTagFilters.length > 0 && (
-                                    <button
-                                        onClick={onClearTagFilters}
-                                        className="bg-muted text-muted-foreground hover:bg-muted/80 inline-flex items-center rounded-full px-3 py-1 text-sm font-medium"
-                                    >
-                                        Clear Filters
-                                    </button>
-                                )}
+                    {/* Search, Sort, and Filter Controls */}
+                    <div className="mb-4 flex flex-wrap items-center gap-2">
+                        <div className="min-w-0 flex-1 md:basis-1/3">
+                            <div className="relative">
+                                <Input
+                                    type="text"
+                                    placeholder="Search..."
+                                    className="h-8 w-full pr-9 text-sm"
+                                    value={searchInputValue}
+                                    onChange={(e) =>
+                                        handleSearchInputChange(e.target.value)
+                                    }
+                                />
+                                <Search className="text-muted-foreground absolute top-1/2 right-2.5 h-4 w-4 -translate-y-1/2" />
                             </div>
                         </div>
-                    )}
+                        <div className="md:basis-auto">
+                            <SortSelect
+                                value={sortOption}
+                                onValueChange={onSortChange}
+                            />
+                        </div>
+                        <div className="md:basis-auto">
+                            <PostsFilter
+                                userCommunities={[
+                                    {
+                                        id: community.id,
+                                        name: community.name,
+                                        slug: community.slug,
+                                        avatar: community.avatar,
+                                        userRole: 'member',
+                                    },
+                                ]}
+                                availableTags={community.tags || []}
+                                onFilterChange={handleFiltersChange}
+                                onDateFilterChange={onDateFilterChange}
+                                isLoading={isLoading}
+                            />
+                        </div>
+                    </div>
 
                     {/* Render posts for everyone (viewing allowed for non-members) */}
-                    {postsWithLikes && postsWithLikes.length > 0 && (
+                    {postsToRender && postsToRender.length > 0 && (
                         <div className="space-y-4">
-                            {postsWithLikes.map((post: any) => (
+                            {postsToRender.map((post: any) => (
                                 <Link
                                     key={post.id}
                                     href={`/communities/${community.slug}/posts/${post.id}`}
@@ -884,17 +979,29 @@ export function CommunityPosts({
 
                     {/* Empty state for members */}
                     {isMember &&
-                        (!postsWithLikes || postsWithLikes.length === 0) && (
+                        (!postsToRender || postsToRender.length === 0) && (
                             <div className="py-12 text-center">
                                 <Building className="text-muted-foreground mx-auto mb-4 h-12 w-12 opacity-50" />
                                 <p className="text-muted-foreground">
-                                    {selectedTagFilters.length > 0
-                                        ? 'No posts match the selected tags.'
-                                        : showMyPosts
-                                          ? "You haven't created any posts in this community yet."
-                                          : 'No posts yet.'}
+                                    {hasSearchTerm && searchInputValue
+                                        ? `No posts found for "${searchInputValue}"`
+                                        : selectedTagFilters.length > 0
+                                          ? 'No posts match the selected tags.'
+                                          : showMyPosts
+                                            ? "You haven't created any posts in this community yet."
+                                            : 'No posts yet.'}
                                 </p>
-                                {selectedTagFilters.length > 0 ? (
+                                {hasSearchTerm && searchInputValue ? (
+                                    <Button
+                                        onClick={() => {
+                                            setSearchInputValue('');
+                                            setSearchTerm('');
+                                        }}
+                                        className="mt-4"
+                                    >
+                                        Clear Search
+                                    </Button>
+                                ) : selectedTagFilters.length > 0 ? (
                                     <Button
                                         onClick={onClearTagFilters}
                                         className="mt-4"
