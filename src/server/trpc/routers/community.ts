@@ -18,6 +18,7 @@ import { queryProcedures } from './community-queries';
 import { managementProcedures } from './community-management';
 import { statsProcedures } from './community-stats';
 import { pollProcedures } from './community-polls';
+import { qaProcedures } from './community-qa';
 import _ from 'lodash';
 
 // Helper function to check if user is SuperAdmin
@@ -130,4 +131,19 @@ export const communityRouter = router({
     votePoll: pollProcedures.votePoll,
     getPollResults: pollProcedures.getPollResults,
     closePoll: pollProcedures.closePoll,
+
+    // Q&A procedures
+    getQuestion: qaProcedures.getQuestion,
+    submitAnswer: qaProcedures.submitAnswer,
+    listAnswers: qaProcedures.listAnswers,
+    markHelpfulAnswer: qaProcedures.markHelpful,
+    unmarkHelpfulAnswer: qaProcedures.unmarkHelpful,
+    getAnswerHelpfulCounts: qaProcedures.getHelpfulCounts,
+    saveAnswer: qaProcedures.saveAnswer,
+    unsaveAnswer: qaProcedures.unsaveAnswer,
+    getUserSavedAnswersMap: qaProcedures.getUserSavedAnswersMap,
+    listAnswerComments: qaProcedures.listAnswerComments,
+    createAnswerComment: qaProcedures.createAnswerComment,
+    updateAnswerComment: qaProcedures.updateAnswerComment,
+    deleteAnswerComment: qaProcedures.deleteAnswerComment,
 });

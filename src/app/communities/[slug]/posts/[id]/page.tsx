@@ -28,6 +28,7 @@ import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images'
 import { LikeButton } from '@/components/ui/like-button';
 import { PollDisplay } from '@/components/polls';
 import { toast } from 'sonner';
+import { QnADisplay } from '@/components/qna/QnADisplay';
 
 // Utility function to format like count message
 function formatLikeMessage(likeCount: number, isLiked: boolean): string {
@@ -98,6 +99,7 @@ type Post = {
             createdAt: Date;
         }>;
     } | null;
+    qa?: any | null;
 };
 
 export default function CommunityPostPage() {
@@ -628,6 +630,9 @@ export default function CommunityPostPage() {
                     </div>
                 )}
             </div>
+
+            {/* Q&A Section */}
+            {postData.qa && <QnADisplay postId={postId} />}
 
             {/* Like count and comments summary */}
             <div className="mt-2 flex items-center justify-between">

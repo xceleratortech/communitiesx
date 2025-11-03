@@ -7,7 +7,13 @@ import { useSession } from '@/server/auth/client';
 import { Button } from '@/components/ui/button';
 import { ChevronDown, Loader2, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import type { posts, users, communities, comments } from '@/server/db/schema';
+import type {
+    posts,
+    users,
+    communities,
+    comments,
+    qaQuestions,
+} from '@/server/db/schema';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { PostsFilter } from '@/components/post-filter';
@@ -96,6 +102,7 @@ export type PostDisplay = PostFromDb & {
     likeCount?: number; // Add like count
     isLiked?: boolean; // Add user's like status
     isSaved?: boolean; // Add user's saved status
+    qa?: typeof qaQuestions.$inferSelect | null;
 };
 
 // Filter state type

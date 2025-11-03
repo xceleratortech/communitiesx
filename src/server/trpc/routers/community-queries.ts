@@ -15,6 +15,7 @@ import {
     polls,
     pollOptions,
     pollVotes,
+    qaQuestions,
 } from '@/server/db/schema';
 import {
     and,
@@ -83,6 +84,7 @@ type PostWithAuthorAndComments = PostType & {
               options: (typeof pollOptions.$inferSelect)[];
           })
         | null;
+    qa?: typeof qaQuestions.$inferSelect | null;
 };
 
 type PostWithSource = PostWithAuthor & {
@@ -127,6 +129,7 @@ export const queryProcedures = {
                                 },
                             },
                         },
+                        qa: true,
                     },
                 });
                 return allPostsFromDb as PostWithAuthor[];
@@ -199,6 +202,7 @@ export const queryProcedures = {
                                                 },
                                             },
                                         },
+                                        qa: true,
                                     },
                                 }),
                             ]);
@@ -293,6 +297,7 @@ export const queryProcedures = {
                                     },
                                 },
                             },
+                            qa: true,
                         },
                     });
 
@@ -628,6 +633,7 @@ export const queryProcedures = {
                                     },
                                 },
                             },
+                            qa: true,
                             attachments: true,
                         },
                     }),
@@ -841,6 +847,7 @@ export const queryProcedures = {
                                     },
                                 },
                             },
+                            qa: true,
                             attachments: true,
                         },
                     }),
@@ -1206,6 +1213,7 @@ export const queryProcedures = {
                                 },
                             },
                             attachments: true,
+                            qa: true,
                         },
                     }),
                 ]);
@@ -1306,6 +1314,7 @@ export const queryProcedures = {
                                 },
                             },
                         },
+                        qa: true,
                     },
                 });
 
@@ -1392,6 +1401,7 @@ export const queryProcedures = {
                     ), // Ensure top-level comments are sorted as before
                     tags: postFromDb.postTags?.map((pt) => pt.tag) || [],
                     attachments: postFromDb.attachments || [],
+                    qa: (postFromDb as any).qa || null,
                 };
 
                 return result;

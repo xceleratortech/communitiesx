@@ -45,6 +45,12 @@ export const postProcedures = {
                             expiresAt: z.date().optional(),
                         })
                         .optional(),
+                    qa: z
+                        .object({
+                            answersVisibleAt: z.date().optional(),
+                            allowEditsUntil: z.date().optional(),
+                        })
+                        .optional(),
                 })
                 .refine(
                     (data) => {
@@ -312,6 +318,20 @@ export const postProcedures = {
 
                         await tx.insert(pollOptions).values(options);
                         poll = createdPoll;
+                    }
+
+                    // Create Q&A configuration if provided
+                    if (input.qa) {
+                        const { qaQuestions } = await import(
+                            '@/server/db/schema'
+                        );
+                        await tx.insert(qaQuestions).values({
+                            postId: post.id,
+                            answersVisibleAt: input.qa.answersVisibleAt || null,
+                            allowEditsUntil: input.qa.allowEditsUntil || null,
+                            createdAt: new Date(),
+                            updatedAt: new Date(),
+                        });
                     }
 
                     return { post, poll };

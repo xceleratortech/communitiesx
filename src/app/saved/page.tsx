@@ -1143,7 +1143,11 @@ export default function SavedPage() {
                 sort: 'latest',
             });
             const withSaved = data.posts.map((p) => ({ ...p, isSaved: true }));
-            setPosts((prev) => [...prev, ...withSaved]);
+            setPosts((prev) => {
+                const seen = new Set(prev.map((p) => p.id));
+                const deduped = withSaved.filter((p) => !seen.has(p.id));
+                return [...prev, ...deduped];
+            });
             setOffset((prev) => prev + data.posts.length);
             setHasNextPage(data.hasNextPage);
             setTotalCount(data.totalCount);
@@ -1234,9 +1238,9 @@ export default function SavedPage() {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {posts.map((post) => (
+                    {posts.map((post, idx) => (
                         <Link
-                            key={post.id}
+                            key={`${post.id}-${idx}`}
                             href={
                                 post.community
                                     ? `/communities/${post.community.slug}/posts/${post.id}`

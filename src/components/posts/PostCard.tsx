@@ -14,6 +14,12 @@ import PostActionBar from '@/components/posts/PostActionBar';
 import type { PostDisplay } from '@/app/posts/page';
 import { PollDisplay } from '@/components/polls';
 import { trpc } from '@/providers/trpc-provider';
+import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
+import { Button } from '../ui/button';
+import TipTapEditor from '@/components/TipTapEditor';
+import { isHtmlContentEmpty } from '@/lib/utils';
 
 type SessionLike = { user?: { id: string } | null } | null;
 
@@ -61,6 +67,42 @@ export default function PostCard({
     ) => void;
 }) {
     const utils = trpc.useUtils();
+    const router = useRouter();
+    const [ansOffset, setAnsOffset] = React.useState(0);
+    const [answers, setAnswers] = React.useState<any[]>([]);
+    const [hasNext, setHasNext] = React.useState(false);
+    const [showEditor, setShowEditor] = React.useState(false);
+    const [answerContent, setAnswerContent] = React.useState('');
+    const ansLimit = 2;
+    const answersQuery = trpc.community.listAnswers.useQuery(
+        { postId: post.id, limit: ansLimit, offset: ansOffset },
+        { enabled: !!post.qa },
+    );
+
+    React.useEffect(() => {
+        if (!answersQuery.data) return;
+        if (ansOffset === 0) {
+            setAnswers(answersQuery.data.answers);
+        } else {
+            setAnswers((prev) => {
+                const seen = new Set(prev.map((a: any) => a.id));
+                const next = answersQuery.data.answers.filter(
+                    (a: any) => !seen.has(a.id),
+                );
+                return [...prev, ...next];
+            });
+        }
+        setHasNext(!!answersQuery.data.hasNextPage);
+    }, [answersQuery.data, ansOffset]);
+
+    const submitAnswer = trpc.community.submitAnswer.useMutation({
+        onSuccess: async () => {
+            setShowEditor(false);
+            setAnswerContent('');
+            setAnsOffset(0);
+            await answersQuery.refetch();
+        },
+    });
 
     // Get poll results if post has a poll
     const pollResultsQuery = trpc.community.getPollResults.useQuery(
@@ -121,6 +163,12 @@ export default function PostCard({
                 />
 
                 <div className="px-4 py-0">
+                    {/* Q&A chip */}
+                    {post.qa && (
+                        <div className="mb-1">
+                            <Badge variant="secondary">Q&A</Badge>
+                        </div>
+                    )}
                     <h3 className="mt-0 mb-2 text-base font-medium">
                         {post.isDeleted ? '[Deleted]' : post.title}
                     </h3>
@@ -234,6 +282,119 @@ export default function PostCard({
                             })()
                         )}
                     </div>
+
+                    {/* Q&A summary row */}
+                    {post.qa && (
+                        <div className="mt-2">
+                            <div className="bg-muted/20 flex items-center justify-between rounded-md px-3 py-2">
+                                <span className="text-sm">
+                                    {answersQuery.data?.reveal
+                                        ? `${answersQuery.data?.totalCount ?? 0} Answers`
+                                        : 'Answers are hidden until deadline'}
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        className="text-sm"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setShowEditor((v) => !v);
+                                        }}
+                                    >
+                                        Answer
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Inline Answer editor */}
+                            {showEditor && (
+                                <div
+                                    className="mt-2"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }}
+                                >
+                                    <TipTapEditor
+                                        content={answerContent}
+                                        onChange={setAnswerContent}
+                                        placeholder="Write your answer..."
+                                        variant="compact"
+                                        postId={post.id}
+                                        communityId={
+                                            post.community?.id || undefined
+                                        }
+                                    />
+                                    <div className="mt-2 flex justify-end">
+                                        <Button
+                                            size="sm"
+                                            disabled={
+                                                submitAnswer.isPending ||
+                                                isHtmlContentEmpty(
+                                                    answerContent,
+                                                )
+                                            }
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                submitAnswer.mutate({
+                                                    postId: post.id,
+                                                    content: answerContent,
+                                                });
+                                            }}
+                                        >
+                                            {submitAnswer.isPending
+                                                ? 'Submitting...'
+                                                : 'Submit Answer'}
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {answersQuery.data && answers.length > 0 && (
+                                <div className="mt-2 space-y-2">
+                                    {answers.map((a: any) => (
+                                        <div
+                                            key={a.id}
+                                            className="rounded-md border p-2"
+                                        >
+                                            <div className="text-muted-foreground mb-1 text-xs">
+                                                {a.author?.name || 'Unknown'}
+                                            </div>
+                                            <SafeHtml
+                                                html={a.content}
+                                                className="prose prose-sm dark:prose-invert max-w-none"
+                                            />
+                                        </div>
+                                    ))}
+                                    {hasNext && (
+                                        <div className="text-center">
+                                            <button
+                                                type="button"
+                                                className="text-sm underline"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const nextOffset =
+                                                        ansOffset + ansLimit;
+                                                    setAnsOffset(nextOffset);
+                                                    utils.community.listAnswers.prefetch(
+                                                        {
+                                                            postId: post.id,
+                                                            limit: ansLimit,
+                                                            offset: nextOffset,
+                                                        },
+                                                    );
+                                                }}
+                                            >
+                                                Load more answers
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Poll Display - Before PostActionBar */}
                     {post.poll && (
