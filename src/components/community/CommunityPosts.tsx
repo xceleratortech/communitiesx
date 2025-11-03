@@ -37,9 +37,61 @@ import { CommunityPopover } from '@/components/ui/community-popover';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
+import { PollDisplay } from '@/components/polls';
 import { Input } from '@/components/ui/input';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { PostsFilter } from '@/components/post-filter';
+import type { PostDisplay } from '@/app/posts/page';
+
+const PostPoll = ({ post }: { post: PostDisplay; communitySlug: string }) => {
+    const pollResultsQuery = trpc.community.getPollResults.useQuery(
+        { pollId: post.poll?.id || 0 },
+        { enabled: !!post.poll?.id },
+    );
+    const votePollMutation = trpc.community.votePoll.useMutation({
+        onSuccess: () => {
+            pollResultsQuery.refetch();
+        },
+    });
+
+    if (!post.poll) return null;
+
+    return (
+        <div
+            className="mt-4"
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+        >
+            <PollDisplay
+                poll={{
+                    ...post.poll,
+                    pollType: post.poll.pollType as 'single' | 'multiple',
+                    expiresAt: post.poll.expiresAt?.toISOString() || null,
+                    createdAt: post.poll.createdAt.toISOString(),
+                    updatedAt: post.poll.updatedAt.toISOString(),
+                    options: post.poll.options.map((option) => ({
+                        ...option,
+                        createdAt: option.createdAt.toISOString(),
+                    })),
+                }}
+                results={pollResultsQuery.data?.results}
+                userVotes={pollResultsQuery.data?.userVotes}
+                canVote={pollResultsQuery.data?.canVote || false}
+                hasUserVoted={pollResultsQuery.data?.hasUserVoted || false}
+                totalVotes={pollResultsQuery.data?.totalVotes || 0}
+                onVote={(optionIds) => {
+                    votePollMutation.mutate({
+                        pollId: post.poll!.id,
+                        optionIds,
+                    });
+                }}
+                isVoting={votePollMutation.isPending}
+            />
+        </div>
+    );
+};
 
 interface CommunityPostsProps {
     community: any;
@@ -47,7 +99,7 @@ interface CommunityPostsProps {
     isMember: boolean;
     canInteract: boolean;
     canCreatePost: boolean;
-    filteredPosts: any[];
+    filteredPosts: PostDisplay[];
     showMyPosts: boolean;
     selectedTagFilters: number[];
     dateFilter: DateFilterState;
@@ -88,13 +140,15 @@ export function CommunityPosts({
 }: CommunityPostsProps) {
     const sessionData = useSession();
     const session = sessionData.data;
-    const [postsWithLikes, setPostsWithLikes] = useState<any[]>([]);
+    const [postsWithLikes, setPostsWithLikes] = useState<PostDisplay[]>([]);
     const [expandedCommentPostIds, setExpandedCommentPostIds] = useState<
         Set<number>
     >(new Set());
     const [searchInputValue, setSearchInputValue] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+    const [searchResults, setSearchResults] = useState<PostDisplay[] | null>(
+        null,
+    );
     const [isSearching, setIsSearching] = useState(false);
     const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
     const utils = trpc.useUtils();
@@ -355,7 +409,7 @@ export function CommunityPosts({
     }, [searchInputValue]);
 
     // Filter posts based on search
-    const postsToRender = useMemo(() => {
+    const postsToRender: PostDisplay[] = useMemo(() => {
         if (hasSearchTerm && searchResults !== null) {
             return searchResults;
         }
@@ -368,6 +422,8 @@ export function CommunityPosts({
     // Check if we're still loading like data
     const isLikeDataLoading =
         postsWithLikes.length > 0 && !likeCountsQuery.data;
+
+    // PostPoll moved to top-level component
 
     return (
         <TabsContent value="posts" className="mt-0 space-y-6">
@@ -478,7 +534,7 @@ export function CommunityPosts({
                     {/* Render posts for everyone (viewing allowed for non-members) */}
                     {postsToRender && postsToRender.length > 0 && (
                         <div className="space-y-4">
-                            {postsToRender.map((post: any) => (
+                            {postsToRender.map((post: PostDisplay) => (
                                 <Link
                                     key={post.id}
                                     href={`/communities/${community.slug}/posts/${post.id}`}
@@ -675,6 +731,16 @@ export function CommunityPosts({
                                                             />
                                                         )}
                                                 </div>
+                                            )}
+
+                                            {/* Poll (if present) */}
+                                            {post.poll && (
+                                                <PostPoll
+                                                    post={post}
+                                                    communitySlug={
+                                                        community.slug
+                                                    }
+                                                />
                                             )}
 
                                             {/* Tags display */}
