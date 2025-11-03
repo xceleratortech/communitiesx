@@ -9,6 +9,7 @@ import {
     communityAllowedOrgs,
     tags,
     users,
+    pollOptions,
 } from '@/server/db/schema';
 import {
     eq,
@@ -728,7 +729,7 @@ export const discoveryProcedures = {
                         ? [eq(posts.orgId, viewerOrgId)]
                         : [];
 
-                // Load posts with authors, tags, and comments (include org filter for public communities)
+                // Load posts with authors, tags, comments, and poll (include org filter for public communities)
                 const postsWithAuthors = await db.query.posts.findMany({
                     where: and(
                         eq(posts.communityId, community.id),
@@ -744,6 +745,13 @@ export const discoveryProcedures = {
                             },
                         },
                         comments: true, // <-- include comments
+                        poll: {
+                            with: {
+                                options: {
+                                    orderBy: asc(pollOptions.orderIndex),
+                                },
+                            },
+                        },
                         attachments: true,
                     },
                     orderBy: orderByClause,

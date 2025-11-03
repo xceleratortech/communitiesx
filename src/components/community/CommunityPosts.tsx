@@ -37,6 +37,7 @@ import { CommunityPopover } from '@/components/ui/community-popover';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
 import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
+import { PollDisplay } from '@/components/polls';
 
 interface CommunityPostsProps {
     community: any;
@@ -241,6 +242,64 @@ export function CommunityPosts({
     // Check if we're still loading like data
     const isLikeDataLoading =
         postsWithLikes.length > 0 && !likeCountsQuery.data;
+
+    // Local component to render poll with data fetching per post
+    const PostPoll = ({
+        post,
+        communitySlug,
+    }: {
+        post: any;
+        communitySlug: string;
+    }) => {
+        const pollResultsQuery = trpc.community.getPollResults.useQuery(
+            { pollId: post.poll?.id || 0 },
+            { enabled: !!post.poll?.id },
+        );
+        const votePollMutation = trpc.community.votePoll.useMutation({
+            onSuccess: () => {
+                pollResultsQuery.refetch();
+            },
+        });
+
+        if (!post.poll) return null;
+
+        return (
+            <div
+                className="mt-4"
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }}
+            >
+                <PollDisplay
+                    poll={{
+                        ...post.poll,
+                        pollType: post.poll.pollType as 'single' | 'multiple',
+                        expiresAt: post.poll.expiresAt?.toISOString() || null,
+                        createdAt: post.poll.createdAt.toISOString(),
+                        updatedAt: post.poll.updatedAt.toISOString(),
+                        options: post.poll.options.map((option: any) => ({
+                            ...option,
+                            createdAt: option.createdAt.toISOString(),
+                        })),
+                    }}
+                    results={pollResultsQuery.data?.results}
+                    userVotes={pollResultsQuery.data?.userVotes}
+                    canVote={pollResultsQuery.data?.canVote || false}
+                    hasUserVoted={pollResultsQuery.data?.hasUserVoted || false}
+                    totalVotes={pollResultsQuery.data?.totalVotes || 0}
+                    onVote={(optionIds) => {
+                        if (!post.poll?.id) return;
+                        votePollMutation.mutate({
+                            pollId: post.poll.id,
+                            optionIds,
+                        });
+                    }}
+                    isVoting={votePollMutation.isPending}
+                />
+            </div>
+        );
+    };
 
     return (
         <TabsContent value="posts" className="mt-0 space-y-6">
@@ -580,6 +639,16 @@ export function CommunityPosts({
                                                             />
                                                         )}
                                                 </div>
+                                            )}
+
+                                            {/* Poll (if present) */}
+                                            {post.poll && (
+                                                <PostPoll
+                                                    post={post}
+                                                    communitySlug={
+                                                        community.slug
+                                                    }
+                                                />
                                             )}
 
                                             {/* Tags display */}
