@@ -937,7 +937,9 @@ export const qaAnswerComments = pgTable('qa_answer_comments', {
     authorId: text('author_id')
         .notNull()
         .references(() => users.id, { onDelete: 'cascade' }),
-    parentId: integer('parent_id').references((): any => qaAnswerComments.id),
+    parentId: integer('parent_id').references((): any => qaAnswerComments.id, {
+        onDelete: 'set null',
+    }),
     content: text('content').notNull(),
     isDeleted: boolean('is_deleted').notNull().default(false),
     createdAt: timestamp('created_at').notNull().defaultNow(),

@@ -16,15 +16,19 @@ import { PollDisplay } from '@/components/polls';
 import { trpc } from '@/providers/trpc-provider';
 import { Badge } from '@/components/ui/badge';
 import { useRouter } from 'next/navigation';
-import { BadgeCheck, Bookmark, ChevronDown, NotebookPen } from 'lucide-react';
+import { ChevronDown, NotebookPen } from 'lucide-react';
 import { Button } from '../ui/button';
 import { ShareButton } from '@/components/ui/share-button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ThumbsUp, MessageSquare } from 'lucide-react';
 import TipTapEditor from '@/components/TipTapEditor';
 import { isHtmlContentEmpty } from '@/lib/utils';
+import { AnswerInline } from '@/components/qna/AnswerInline';
+import { qaAnswers, users } from '@/server/db/schema';
 
 type SessionLike = { user?: { id: string } | null } | null;
+
+type AnswerWithAuthor = typeof qaAnswers.$inferSelect & {
+    author: typeof users.$inferSelect | null;
+};
 
 export default function PostCard({
     post,
@@ -59,7 +63,7 @@ export default function PostCard({
     onToggleComments: () => void;
     onToggleSave: () => void;
     shareUrl: string;
-    formatRelativeTime: (date: any) => string;
+    formatRelativeTime: (date: Date | string) => string;
     joiningCommunityId: number | null;
     isJoinPending: boolean;
     onJoinCommunity?: (communityId: number) => void;
@@ -72,7 +76,7 @@ export default function PostCard({
     const utils = trpc.useUtils();
     const router = useRouter();
     const [ansOffset, setAnsOffset] = React.useState(0);
-    const [answers, setAnswers] = React.useState<any[]>([]);
+    const [answers, setAnswers] = React.useState<AnswerWithAuthor[]>([]);
     const [hasNext, setHasNext] = React.useState(false);
     const [showEditor, setShowEditor] = React.useState(false);
     const [answerContent, setAnswerContent] = React.useState('');
@@ -91,9 +95,9 @@ export default function PostCard({
             setAnswers(answersQuery.data.answers);
         } else {
             setAnswers((prev) => {
-                const seen = new Set(prev.map((a: any) => a.id));
+                const seen = new Set(prev.map((a) => a.id));
                 const next = answersQuery.data.answers.filter(
-                    (a: any) => !seen.has(a.id),
+                    (a) => !seen.has(a.id),
                 );
                 return [...prev, ...next];
             });
@@ -111,10 +115,7 @@ export default function PostCard({
     });
 
     // Helpful / Saved maps for visible answers
-    const answerIds = React.useMemo(
-        () => answers.map((a: any) => a.id),
-        [answers],
-    );
+    const answerIds = React.useMemo(() => answers.map((a) => a.id), [answers]);
     const helpfulCountsQuery = trpc.community.getAnswerHelpfulCounts.useQuery(
         { answerIds },
         { enabled: answerIds.length > 0 },
@@ -190,311 +191,6 @@ export default function PostCard({
         }
     };
 
-    // Inline component to render each answer with its own hooks safely
-    function AnswerInline({ a }: { a: any }) {
-        const isHelpful = !!userHelpfulMapQuery.data?.[a.id];
-        const helpfulCount = helpfulCountsQuery.data?.[a.id] ?? 0;
-        const isSaved = !!savedMapQuery.data?.[a.id];
-        const postUrl = post.community
-            ? `/communities/${post.community.slug}/posts/${post.id}`
-            : `/posts/${post.id}`;
-        const shareUrlForAnswer = `${
-            typeof window !== 'undefined' ? window.location.origin : ''
-        }${postUrl}?answerId=${a.id}`;
-
-        const [commentContent, setCommentContent] = React.useState('');
-        const isCommentsExpanded = expandedAnswerComments.has(a.id);
-
-        // Fetch comments - always enabled to show count, but only fetch full data when expanded
-        const commentsQuery = trpc.community.listAnswerComments.useQuery(
-            { answerId: a.id },
-            { enabled: true },
-        );
-        const comments = isCommentsExpanded ? commentsQuery.data || [] : [];
-        const commentsCount = (commentsQuery.data?.length || 0) as number;
-
-        return (
-            <div className="rounded-md border p-3">
-                <div className="text-muted-foreground mb-1 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                        <Avatar className="h-5 w-5">
-                            <AvatarImage
-                                src={
-                                    a.author?.avatar ||
-                                    a.author?.image ||
-                                    undefined
-                                }
-                            />
-                            <AvatarFallback className="text-[10px]">
-                                {(a.author?.name || 'U')
-                                    .substring(0, 2)
-                                    .toUpperCase()}
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className="text-foreground font-medium">
-                            {a.author?.name || 'Unknown'}
-                        </span>
-                    </div>
-                    <span className="whitespace-nowrap">
-                        {formatRelativeTime
-                            ? formatRelativeTime(a.createdAt)
-                            : ''}
-                    </span>
-                </div>
-                <SafeHtml
-                    html={a.content}
-                    className="prose prose-sm dark:prose-invert max-w-none"
-                />
-
-                {/* Stats row */}
-                <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
-                    <span>
-                        {helpfulCount}{' '}
-                        {helpfulCount === 1 ? 'person' : 'people'} found this
-                        helpful
-                    </span>
-                    <span
-                        className="cursor-pointer hover:underline"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setExpandedAnswerComments((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(a.id)) {
-                                    next.delete(a.id);
-                                } else {
-                                    next.add(a.id);
-                                }
-                                return next;
-                            });
-                        }}
-                    >
-                        {commentsCount}{' '}
-                        {commentsCount === 1 ? 'Comment' : 'Comments'}
-                    </span>
-                </div>
-
-                <div className="bg-border my-2 h-px w-full" />
-
-                {/* Action row */}
-                <div className="mt-1 flex items-center gap-3 text-xs">
-                    {session && (
-                        <Button
-                            variant="ghost"
-                            className="hover:text-foreground inline-flex items-center gap-1"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (isHelpful) {
-                                    unmarkHelpfulMutation.mutate({
-                                        answerId: a.id,
-                                    });
-                                } else {
-                                    markHelpfulMutation.mutate({
-                                        answerId: a.id,
-                                    });
-                                }
-                            }}
-                        >
-                            <BadgeCheck
-                                className={`h-4 w-4 ${isHelpful ? 'fill-current' : ''}`}
-                            />
-                            <span>Helpful</span>
-                        </Button>
-                    )}
-                    <Button
-                        variant="ghost"
-                        className="hover:text-foreground inline-flex items-center gap-1"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setExpandedAnswerComments((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(a.id)) {
-                                    next.delete(a.id);
-                                } else {
-                                    next.add(a.id);
-                                }
-                                return next;
-                            });
-                        }}
-                    >
-                        <MessageSquare className="h-4 w-4" />
-                        <span>Comment</span>
-                    </Button>
-                    {session && (
-                        <Button
-                            variant="ghost"
-                            className="hover:text-foreground inline-flex items-center gap-1"
-                            onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (isSaved) {
-                                    unsaveAnswerMutation.mutate({
-                                        answerId: a.id,
-                                    });
-                                } else {
-                                    saveAnswerMutation.mutate({
-                                        answerId: a.id,
-                                    });
-                                }
-                            }}
-                        >
-                            <Bookmark
-                                className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`}
-                            />
-                            <span>{isSaved ? 'Saved' : 'Save'}</span>
-                        </Button>
-                    )}
-                    <ShareButton
-                        title={post.title}
-                        text={`Answer to: ${post.title}`}
-                        url={shareUrlForAnswer}
-                        variant="ghost"
-                        size="sm"
-                        showLabel={true}
-                    />
-                </div>
-
-                {/* Inline Comments Section */}
-                {isCommentsExpanded && (
-                    <div
-                        className="mt-4 space-y-3 border-t pt-3"
-                        onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                        onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }}
-                    >
-                        {/* Comment Editor */}
-                        {session && (
-                            <div className="space-y-2">
-                                <TipTapEditor
-                                    content={commentContent}
-                                    onChange={setCommentContent}
-                                    placeholder="Write a comment..."
-                                    variant="compact"
-                                    postId={post.id}
-                                    communityId={
-                                        post.community?.id || undefined
-                                    }
-                                />
-                                <div className="flex justify-end gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setCommentContent('');
-                                        }}
-                                    >
-                                        Cancel
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            if (
-                                                !isHtmlContentEmpty(
-                                                    commentContent,
-                                                )
-                                            ) {
-                                                createAnswerComment.mutate({
-                                                    answerId: a.id,
-                                                    content: commentContent,
-                                                });
-                                                setCommentContent('');
-                                            }
-                                        }}
-                                        disabled={
-                                            createAnswerComment.isPending ||
-                                            isHtmlContentEmpty(commentContent)
-                                        }
-                                    >
-                                        {createAnswerComment.isPending
-                                            ? 'Posting...'
-                                            : 'Post Comment'}
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Comments List */}
-                        {commentsQuery.isLoading ? (
-                            <div className="text-muted-foreground text-xs">
-                                Loading comments...
-                            </div>
-                        ) : comments.length > 0 ? (
-                            <div className="space-y-2">
-                                {comments
-                                    .filter((c: any) => !c.isDeleted)
-                                    .map((comment: any) => (
-                                        <div
-                                            key={comment.id}
-                                            className="rounded-md border p-2"
-                                        >
-                                            <div className="mb-1 flex items-center gap-2">
-                                                <Avatar className="h-4 w-4">
-                                                    <AvatarImage
-                                                        src={
-                                                            comment.author
-                                                                ?.avatar ||
-                                                            comment.author
-                                                                ?.image ||
-                                                            undefined
-                                                        }
-                                                    />
-                                                    <AvatarFallback className="text-[8px]">
-                                                        {(
-                                                            comment.author
-                                                                ?.name || 'U'
-                                                        )
-                                                            .substring(0, 2)
-                                                            .toUpperCase()}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <span className="text-xs font-medium">
-                                                    {comment.author?.name ||
-                                                        'Unknown'}
-                                                </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    {formatRelativeTime
-                                                        ? formatRelativeTime(
-                                                              comment.createdAt,
-                                                          )
-                                                        : ''}
-                                                </span>
-                                            </div>
-                                            <SafeHtml
-                                                html={comment.content}
-                                                className="prose prose-sm dark:prose-invert max-w-none text-xs"
-                                            />
-                                        </div>
-                                    ))}
-                            </div>
-                        ) : (
-                            <p className="text-muted-foreground text-xs">
-                                No comments yet.
-                            </p>
-                        )}
-                    </div>
-                )}
-            </div>
-        );
-    }
     return (
         <Link
             href={
@@ -725,9 +421,100 @@ export default function PostCard({
 
                             {answersQuery.data && answers.length > 0 && (
                                 <div className="mt-2 space-y-2">
-                                    {answers.map((a: any) => (
-                                        <AnswerInline key={a.id} a={a} />
-                                    ))}
+                                    {answers.map((a) => {
+                                        const isHelpful =
+                                            !!userHelpfulMapQuery.data?.[a.id];
+                                        const helpfulCount =
+                                            helpfulCountsQuery.data?.[a.id] ??
+                                            0;
+                                        const isSaved =
+                                            !!savedMapQuery.data?.[a.id];
+                                        const isCommentsExpanded =
+                                            expandedAnswerComments.has(a.id);
+
+                                        return (
+                                            <AnswerInline
+                                                key={a.id}
+                                                answer={a}
+                                                postId={post.id}
+                                                postTitle={post.title}
+                                                postCommunity={post.community}
+                                                session={session}
+                                                formatRelativeTime={
+                                                    formatRelativeTime
+                                                }
+                                                isCommentsExpanded={
+                                                    isCommentsExpanded
+                                                }
+                                                onToggleComments={() => {
+                                                    setExpandedAnswerComments(
+                                                        (prev) => {
+                                                            const next =
+                                                                new Set(prev);
+                                                            if (
+                                                                next.has(a.id)
+                                                            ) {
+                                                                next.delete(
+                                                                    a.id,
+                                                                );
+                                                            } else {
+                                                                next.add(a.id);
+                                                            }
+                                                            return next;
+                                                        },
+                                                    );
+                                                }}
+                                                isHelpful={isHelpful}
+                                                helpfulCount={helpfulCount}
+                                                isSaved={isSaved}
+                                                onMarkHelpful={() => {
+                                                    if (isHelpful) {
+                                                        unmarkHelpfulMutation.mutate(
+                                                            {
+                                                                answerId: a.id,
+                                                            },
+                                                        );
+                                                    } else {
+                                                        markHelpfulMutation.mutate(
+                                                            {
+                                                                answerId: a.id,
+                                                            },
+                                                        );
+                                                    }
+                                                }}
+                                                onSave={() => {
+                                                    if (isSaved) {
+                                                        unsaveAnswerMutation.mutate(
+                                                            {
+                                                                answerId: a.id,
+                                                            },
+                                                        );
+                                                    } else {
+                                                        saveAnswerMutation.mutate(
+                                                            {
+                                                                answerId: a.id,
+                                                            },
+                                                        );
+                                                    }
+                                                }}
+                                                markHelpfulMutation={
+                                                    markHelpfulMutation
+                                                }
+                                                unmarkHelpfulMutation={
+                                                    unmarkHelpfulMutation
+                                                }
+                                                saveAnswerMutation={
+                                                    saveAnswerMutation
+                                                }
+                                                unsaveAnswerMutation={
+                                                    unsaveAnswerMutation
+                                                }
+                                                createAnswerComment={
+                                                    createAnswerComment
+                                                }
+                                            />
+                                        );
+                                    })}
                                     {hasNext && (
                                         <div className="text-center">
                                             <button

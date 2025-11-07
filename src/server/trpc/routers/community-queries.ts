@@ -1401,7 +1401,7 @@ export const queryProcedures = {
                     ), // Ensure top-level comments are sorted as before
                     tags: postFromDb.postTags?.map((pt) => pt.tag) || [],
                     attachments: postFromDb.attachments || [],
-                    qa: (postFromDb as any).qa || null,
+                    qa: postFromDb.qa || null,
                 };
 
                 return result;

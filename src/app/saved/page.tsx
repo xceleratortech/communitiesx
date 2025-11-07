@@ -1238,9 +1238,9 @@ export default function SavedPage() {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {posts.map((post, idx) => (
+                    {posts.map((post) => (
                         <Link
-                            key={`${post.id}-${idx}`}
+                            key={post.id}
                             href={
                                 post.community
                                     ? `/communities/${post.community.slug}/posts/${post.id}`
