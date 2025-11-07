@@ -34,6 +34,7 @@ import { isHtmlContentEmpty } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { PollCreator } from '@/components/polls';
 import type { CreatePollData, PollCreationState } from '@/types/poll';
+import { QnACreator, type QnAConfig } from '@/components/qna/QnACreator';
 
 interface Tag {
     id: number;
@@ -56,6 +57,7 @@ function NewPostForm() {
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
     const [pollData, setPollData] = useState<CreatePollData | null>(null);
+    const [qaData, setQaData] = useState<QnAConfig | null>(null);
 
     // Fetch community to check membership status if communityId is provided
     const { data: community, isLoading: isLoadingCommunity } =
@@ -273,6 +275,12 @@ function NewPostForm() {
             communityId: communityId,
             tagIds: selectedTags.map((tag) => tag.id), // Send the selected tag IDs
             poll: pollData || undefined, // Include poll data if present
+            qa: qaData
+                ? {
+                      answersVisibleAt: qaData.answersVisibleAt ?? undefined,
+                      allowEditsUntil: qaData.allowEditsUntil ?? undefined,
+                  }
+                : undefined,
         });
     };
 
@@ -414,6 +422,7 @@ function NewPostForm() {
                 )}
 
                 {/* Poll Creation */}
+                <QnACreator onChange={setQaData} />
                 <PollCreator onPollChange={setPollData} />
 
                 <Button

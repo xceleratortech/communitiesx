@@ -14,6 +14,7 @@ import { Loading } from '@/components/ui/loading';
 import { isHtmlContentEmpty } from '@/lib/utils';
 import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
 import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { QnADisplay } from '@/components/qna/QnADisplay';
 
 type User = {
     id: string;
@@ -341,6 +342,15 @@ export default function PostPage() {
                 </div>
 
                 <div className="mb-8">
+                    {/* Q&A section (if this post has Q&A config) */}
+                    {post?.qa && (
+                        <QnADisplay
+                            postId={postId}
+                            postTitle={postData.title}
+                            communitySlug={post?.community?.slug || null}
+                        />
+                    )}
+
                     <h2 className="mb-4 text-2xl font-bold dark:text-white">
                         Comments
                     </h2>
