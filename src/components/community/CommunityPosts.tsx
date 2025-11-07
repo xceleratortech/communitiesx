@@ -4,94 +4,19 @@ import { TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Building,
-    Plus,
-    MessageSquare,
-    Edit,
-    Trash2,
-    Ellipsis,
-    Bookmark,
-    Search,
-} from 'lucide-react';
-import { ShareButton } from '@/components/ui/share-button';
-import { LikeButton } from '@/components/ui/like-button';
+import { Building, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
-import { SafeHtml } from '@/lib/sanitize';
-import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
-import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
 import { type DateFilterState } from '@/components/date-filter';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
-import { CommunityPopover } from '@/components/ui/community-popover';
 import { formatRelativeTime } from '@/lib/utils';
 import { toast } from 'sonner';
-import InlineCommentsPreview from '@/components/posts/InlineCommentsPreview';
-import { PollDisplay } from '@/components/polls';
 import { Input } from '@/components/ui/input';
 import { SortSelect, type SortOption } from '@/components/ui/sort-select';
 import { PostsFilter } from '@/components/post-filter';
 import type { PostDisplay } from '@/app/posts/page';
-
-const PostPoll = ({ post }: { post: PostDisplay; communitySlug: string }) => {
-    const pollResultsQuery = trpc.community.getPollResults.useQuery(
-        { pollId: post.poll?.id || 0 },
-        { enabled: !!post.poll?.id },
-    );
-    const votePollMutation = trpc.community.votePoll.useMutation({
-        onSuccess: () => {
-            pollResultsQuery.refetch();
-        },
-    });
-
-    if (!post.poll) return null;
-
-    return (
-        <div
-            className="mt-4"
-            onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }}
-        >
-            <PollDisplay
-                poll={{
-                    ...post.poll,
-                    pollType: post.poll.pollType as 'single' | 'multiple',
-                    expiresAt: post.poll.expiresAt?.toISOString() || null,
-                    createdAt: post.poll.createdAt.toISOString(),
-                    updatedAt: post.poll.updatedAt.toISOString(),
-                    options: post.poll.options.map((option) => ({
-                        ...option,
-                        createdAt: option.createdAt.toISOString(),
-                    })),
-                }}
-                results={pollResultsQuery.data?.results}
-                userVotes={pollResultsQuery.data?.userVotes}
-                canVote={pollResultsQuery.data?.canVote || false}
-                hasUserVoted={pollResultsQuery.data?.hasUserVoted || false}
-                totalVotes={pollResultsQuery.data?.totalVotes || 0}
-                onVote={(optionIds) => {
-                    votePollMutation.mutate({
-                        pollId: post.poll!.id,
-                        optionIds,
-                    });
-                }}
-                isVoting={votePollMutation.isPending}
-            />
-        </div>
-    );
-};
+import PostCard from '@/components/posts/PostCard';
 
 interface CommunityPostsProps {
     community: any;
@@ -484,10 +409,10 @@ export function CommunityPosts({
 
                     {/* Posts header */}
                     {/* <div className="mb-6">
-                        <h2 className="text-xl font-semibold">Posts</h2>
-                        <p className="text-muted-foreground text-sm">
-                            All the posts in this community
-                        </p>
+                            <h2 className="text-xl font-semibold">Posts</h2>
+                            <p className="text-muted-foreground text-sm">
+                                All the posts in this community
+                            </p>
                     </div> */}
 
                     {/* Search, Sort, and Filter Controls */}
@@ -534,443 +459,75 @@ export function CommunityPosts({
                     {/* Render posts for everyone (viewing allowed for non-members) */}
                     {postsToRender && postsToRender.length > 0 && (
                         <div className="space-y-4">
-                            {postsToRender.map((post: PostDisplay) => (
-                                <Link
-                                    key={post.id}
-                                    href={`/communities/${community.slug}/posts/${post.id}`}
-                                    className="block"
-                                    style={{
-                                        textDecoration: 'none',
-                                    }}
-                                >
-                                    <Card className="relative gap-2 overflow-hidden p-0 transition-shadow hover:shadow-md">
-                                        {/* Header: community avatar, author & community, time + actions */}
-                                        <div className="border-b px-4 py-2">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center">
-                                                    <CommunityPopover
-                                                        communityId={
-                                                            community.id
-                                                        }
-                                                    >
-                                                        <div className="flex cursor-pointer items-center">
-                                                            <Avatar className="mr-2 h-6 w-6">
-                                                                <AvatarImage
-                                                                    src={
-                                                                        community.avatar ||
-                                                                        undefined
-                                                                    }
-                                                                />
-                                                                <AvatarFallback className="text-[10px]">
-                                                                    {community.name
-                                                                        .substring(
-                                                                            0,
-                                                                            2,
-                                                                        )
-                                                                        .toUpperCase()}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                        </div>
-                                                    </CommunityPopover>
-                                                    <div className="flex flex-col leading-tight">
-                                                        <span className="text-sm font-medium">
-                                                            {post.author?.id ? (
-                                                                <UserProfilePopover
-                                                                    userId={
-                                                                        post
-                                                                            .author
-                                                                            .id
-                                                                    }
-                                                                >
-                                                                    <span className="cursor-pointer hover:underline">
-                                                                        {post
-                                                                            .author
-                                                                            ?.name ||
-                                                                            'Unknown'}
-                                                                    </span>
-                                                                </UserProfilePopover>
-                                                            ) : (
-                                                                'Unknown'
-                                                            )}
-                                                        </span>
-                                                        <span className="text-muted-foreground text-xs">
-                                                            {community.name}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {formatRelativeTime(
-                                                            post.createdAt,
-                                                        )}
-                                                    </span>
-                                                    {(canEditPost(post) ||
-                                                        canDeletePost(
-                                                            post,
-                                                        )) && (
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger
-                                                                asChild
-                                                            >
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 rounded-full"
-                                                                    onClick={(
-                                                                        e,
-                                                                    ) => {
-                                                                        e.preventDefault();
-                                                                        e.stopPropagation();
-                                                                    }}
-                                                                >
-                                                                    <Ellipsis className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent
-                                                                align="end"
-                                                                onClick={(e) =>
-                                                                    e.stopPropagation()
-                                                                }
-                                                            >
-                                                                {canEditPost(
-                                                                    post,
-                                                                ) && (
-                                                                    <DropdownMenuItem
-                                                                        onClick={(
-                                                                            e,
-                                                                        ) => {
-                                                                            e.preventDefault();
-                                                                            e.stopPropagation();
-                                                                            router.push(
-                                                                                `/communities/${community.slug}/posts/${post.id}/edit`,
-                                                                            );
-                                                                        }}
-                                                                    >
-                                                                        <Edit className="mr-2 h-4 w-4" />{' '}
-                                                                        Edit
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                {canDeletePost(
-                                                                    post,
-                                                                ) && (
-                                                                    <DropdownMenuItem
-                                                                        onClick={(
-                                                                            e,
-                                                                        ) =>
-                                                                            onDeletePost(
-                                                                                post.id,
-                                                                                e as unknown as React.MouseEvent,
-                                                                            )
-                                                                        }
-                                                                    >
-                                                                        <Trash2 className="mr-2 h-4 w-4" />{' '}
-                                                                        Delete
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Post content */}
-                                        <div className="px-4 py-0">
-                                            {/* Post title */}
-                                            <h3 className="mt-0 mb-2 text-base font-medium">
-                                                {post.isDeleted
-                                                    ? '[Deleted]'
-                                                    : post.title}
-                                            </h3>
-
-                                            {/* Post content */}
-                                            {post.isDeleted ? (
-                                                <div className="space-y-1">
-                                                    <span className="text-muted-foreground text-sm italic">
-                                                        [Content deleted]
-                                                    </span>
-                                                    <span className="text-muted-foreground block text-xs">
-                                                        Removed on{' '}
-                                                        {new Date(
-                                                            post.updatedAt,
-                                                        ).toLocaleString()}
-                                                    </span>
-                                                </div>
-                                            ) : (
-                                                <div className="space-y-3">
-                                                    {/* Post description - truncated to 2 lines */}
-                                                    <div className="text-muted-foreground text-sm">
-                                                        {post.attachments &&
-                                                        post.attachments
-                                                            .length > 0 ? (
-                                                            <SafeHtmlWithoutImages
-                                                                html={
-                                                                    post.content
-                                                                }
-                                                                className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                                            />
-                                                        ) : (
-                                                            <SafeHtml
-                                                                html={
-                                                                    post.content
-                                                                }
-                                                                className="line-clamp-2 overflow-hidden leading-5 text-ellipsis"
-                                                            />
-                                                        )}
-                                                    </div>
-
-                                                    {/* Post media */}
-                                                    {post.attachments &&
-                                                        post.attachments
-                                                            .length > 0 && (
-                                                            <MixedMediaCarousel
-                                                                media={
-                                                                    post.attachments
-                                                                }
-                                                                className="max-w-xs"
-                                                            />
-                                                        )}
-                                                </div>
-                                            )}
-
-                                            {/* Poll (if present) */}
-                                            {post.poll && (
-                                                <PostPoll
-                                                    post={post}
-                                                    communitySlug={
-                                                        community.slug
-                                                    }
-                                                />
-                                            )}
-
-                                            {/* Tags display */}
-                                            {post.tags &&
-                                                post.tags.length > 0 && (
-                                                    <div className="mt-2 flex flex-wrap gap-1">
-                                                        {post.tags
-                                                            .slice(0, 3)
-                                                            .map((tag: any) => (
-                                                                <span
-                                                                    key={tag.id}
-                                                                    className="bg-secondary inline-flex items-center rounded-full px-2 py-1 text-xs font-medium"
-                                                                    style={{
-                                                                        backgroundColor:
-                                                                            tag.color
-                                                                                ? `${tag.color}20`
-                                                                                : undefined,
-                                                                        color:
-                                                                            tag.color ||
-                                                                            undefined,
-                                                                    }}
-                                                                >
-                                                                    {tag.name}
-                                                                </span>
-                                                            ))}
-                                                        {post.tags.length >
-                                                            3 && (
-                                                            <span className="bg-secondary text-muted-foreground inline-flex items-center rounded-full px-2 py-1 text-xs font-medium">
-                                                                +
-                                                                {post.tags
-                                                                    .length -
-                                                                    3}{' '}
-                                                                more
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                            {/* Likes/comments summary row */}
-                                            <div className="mt-2 flex items-center justify-between">
-                                                {canInteract ? (
-                                                    (() => {
-                                                        const likeCountNum =
-                                                            post.likeCount ?? 0;
-                                                        const isLiked =
-                                                            post.isLiked ??
-                                                            false;
-                                                        return (
-                                                            <span className="text-muted-foreground text-xs">
-                                                                {likeCountNum >
-                                                                0
-                                                                    ? isLiked
-                                                                        ? likeCountNum ===
-                                                                          1
-                                                                            ? 'You liked this'
-                                                                            : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
-                                                                        : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
-                                                                    : ''}
-                                                            </span>
-                                                        );
-                                                    })()
-                                                ) : (post.likeCount ?? 0) >
-                                                  0 ? (
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {post.likeCount ?? 0}{' '}
-                                                        {(post.likeCount ??
-                                                            0) === 1
-                                                            ? 'person'
-                                                            : 'people'}{' '}
-                                                        liked this
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-xs" />
-                                                )}
-                                                <span className="text-muted-foreground text-xs">
-                                                    {Array.isArray(
-                                                        post.comments,
-                                                    )
-                                                        ? post.comments.length
-                                                        : 0}{' '}
-                                                    Comments
-                                                </span>
-                                            </div>
-
-                                            {/* Bottom action bar */}
-                                            {canInteract && (
-                                                <>
-                                                    <Separator className="my-2" />
-                                                    <div className="mb-2 grid grid-cols-4">
-                                                        <div
-                                                            className="col-span-1 flex items-center justify-center gap-0 md:gap-2"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                            }}
-                                                        >
-                                                            <LikeButton
-                                                                key={`${post.id}-${post.isLiked}-${post.likeCount}`}
-                                                                postId={post.id}
-                                                                initialLikeCount={
-                                                                    post.likeCount ??
-                                                                    0
-                                                                }
-                                                                initialIsLiked={
-                                                                    post.isLiked ??
-                                                                    false
-                                                                }
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                disabled={
-                                                                    !canInteract
-                                                                }
-                                                                showCount={
-                                                                    false
-                                                                }
-                                                                onLikeChange={
-                                                                    handleLikeChange
-                                                                }
-                                                            />
-                                                        </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="col-span-1 justify-center"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                setExpandedCommentPostIds(
-                                                                    (prev) => {
-                                                                        const next =
-                                                                            new Set(
-                                                                                prev,
-                                                                            );
-                                                                        if (
-                                                                            next.has(
-                                                                                post.id,
-                                                                            )
-                                                                        ) {
-                                                                            next.delete(
-                                                                                post.id,
-                                                                            );
-                                                                        } else {
-                                                                            next.add(
-                                                                                post.id,
-                                                                            );
-                                                                        }
-                                                                        return next;
-                                                                    },
-                                                                );
-                                                            }}
-                                                        >
-                                                            <MessageSquare className="h-4 w-4 md:mr-2" />
-                                                            <span className="hidden md:inline">
-                                                                Comment
-                                                            </span>
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="col-span-1 justify-center"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                if (!session)
-                                                                    return;
-                                                                if (
-                                                                    post.isSaved
-                                                                ) {
-                                                                    unsavePostMutation.mutate(
-                                                                        {
-                                                                            postId: post.id,
-                                                                        },
-                                                                    );
-                                                                } else {
-                                                                    savePostMutation.mutate(
-                                                                        {
-                                                                            postId: post.id,
-                                                                        },
-                                                                    );
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Bookmark
-                                                                className={`h-4 w-4 md:mr-2 ${post.isSaved ? 'fill-current' : ''}`}
-                                                            />
-                                                            <span className="hidden md:inline">
-                                                                {post.isSaved
-                                                                    ? 'Saved'
-                                                                    : 'Save'}
-                                                            </span>
-                                                        </Button>
-                                                        <div
-                                                            className="col-span-1 flex items-center justify-center"
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                            }}
-                                                        >
-                                                            <ShareButton
-                                                                title={
-                                                                    post.title
-                                                                }
-                                                                text={`Check out this post: ${post.title}`}
-                                                                url={`${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${community.slug}/posts/${post.id}`}
-                                                                variant="ghost"
-                                                                size="sm"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </>
-                                            )}
-
-                                            {/* Inline comments preview */}
-                                            {expandedCommentPostIds.has(
+                            {postsToRender.map((post: PostDisplay) => {
+                                const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/communities/${community.slug}/posts/${post.id}`;
+                                const isExpanded = expandedCommentPostIds.has(
+                                    post.id,
+                                );
+                                return (
+                                    <PostCard
+                                        key={post.id}
+                                        post={post}
+                                        session={session}
+                                        canEdit={canEditPost(post)}
+                                        canDelete={canDeletePost(post)}
+                                        canInteract={canInteract}
+                                        onEdit={() => {
+                                            router.push(
+                                                `/communities/${community.slug}/posts/${post.id}/edit`,
+                                            );
+                                        }}
+                                        onDelete={(e) =>
+                                            onDeletePost(
                                                 post.id,
-                                            ) && (
-                                                <div className="px-2 pt-1 pb-2">
-                                                    <InlineCommentsPreview
-                                                        postId={post.id}
-                                                        communitySlug={
-                                                            community.slug
-                                                        }
-                                                        session={session}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    </Card>
-                                </Link>
-                            ))}
+                                                e as unknown as React.MouseEvent,
+                                            )
+                                        }
+                                        onAuthorClick={() => {
+                                            if (post.author?.id) {
+                                                router.push(
+                                                    `/userProfile-details/${post.author.id}`,
+                                                );
+                                            }
+                                        }}
+                                        onCommunityClick={() => {
+                                            router.push(
+                                                `/communities/${community.slug}`,
+                                            );
+                                        }}
+                                        isCommentsExpanded={isExpanded}
+                                        onToggleComments={() => {
+                                            setExpandedCommentPostIds(
+                                                (prev) => {
+                                                    const next = new Set(prev);
+                                                    if (next.has(post.id))
+                                                        next.delete(post.id);
+                                                    else next.add(post.id);
+                                                    return next;
+                                                },
+                                            );
+                                        }}
+                                        onToggleSave={() => {
+                                            if (!session) return;
+                                            if (post.isSaved) {
+                                                unsavePostMutation.mutate({
+                                                    postId: post.id,
+                                                });
+                                            } else {
+                                                savePostMutation.mutate({
+                                                    postId: post.id,
+                                                });
+                                            }
+                                        }}
+                                        shareUrl={shareUrl}
+                                        formatRelativeTime={formatRelativeTime}
+                                        joiningCommunityId={null}
+                                        isJoinPending={false}
+                                        onJoinCommunity={undefined}
+                                        onLikeChange={handleLikeChange}
+                                    />
+                                );
+                            })}
                         </div>
                     )}
 

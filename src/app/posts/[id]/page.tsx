@@ -343,7 +343,13 @@ export default function PostPage() {
 
                 <div className="mb-8">
                     {/* Q&A section (if this post has Q&A config) */}
-                    {post?.qa && <QnADisplay postId={postId} />}
+                    {post?.qa && (
+                        <QnADisplay
+                            postId={postId}
+                            postTitle={postData.title}
+                            communitySlug={post?.community?.slug || null}
+                        />
+                    )}
 
                     <h2 className="mb-4 text-2xl font-bold dark:text-white">
                         Comments

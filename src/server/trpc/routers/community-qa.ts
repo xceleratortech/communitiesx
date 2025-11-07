@@ -323,13 +323,11 @@ export const qaProcedures = {
         .mutation(async ({ input, ctx }) => {
             const userId = ctx.session.user.id;
             try {
-                await db
-                    .insert(qaAnswerSaves)
-                    .values({
-                        answerId: input.answerId,
-                        userId,
-                        createdAt: now(),
-                    });
+                await db.insert(qaAnswerSaves).values({
+                    answerId: input.answerId,
+                    userId,
+                    createdAt: now(),
+                });
             } catch {}
             return { success: true };
         }),
@@ -360,6 +358,24 @@ export const qaProcedures = {
                     and(
                         inArray(qaAnswerSaves.answerId, input.answerIds),
                         eq(qaAnswerSaves.userId, userId),
+                    ),
+                );
+            const map: Record<number, boolean> = {};
+            for (const r of rows) map[r.id] = true;
+            return map;
+        }),
+
+    getUserHelpfulAnswersMap: authProcedure
+        .input(z.object({ answerIds: z.array(z.number()).min(1) }))
+        .query(async ({ input, ctx }) => {
+            const userId = ctx.session.user.id;
+            const rows = await db
+                .select({ id: qaAnswerHelpful.answerId })
+                .from(qaAnswerHelpful)
+                .where(
+                    and(
+                        inArray(qaAnswerHelpful.answerId, input.answerIds),
+                        eq(qaAnswerHelpful.userId, userId),
                     ),
                 );
             const map: Record<number, boolean> = {};

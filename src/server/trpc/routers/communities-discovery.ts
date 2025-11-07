@@ -753,6 +753,7 @@ export const discoveryProcedures = {
                                 },
                             },
                         },
+                        qa: true,
                         attachments: true,
                     },
                     orderBy: orderByClause,

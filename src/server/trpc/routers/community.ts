@@ -139,6 +139,7 @@ export const communityRouter = router({
     markHelpfulAnswer: qaProcedures.markHelpful,
     unmarkHelpfulAnswer: qaProcedures.unmarkHelpful,
     getAnswerHelpfulCounts: qaProcedures.getHelpfulCounts,
+    getUserHelpfulAnswersMap: qaProcedures.getUserHelpfulAnswersMap,
     saveAnswer: qaProcedures.saveAnswer,
     unsaveAnswer: qaProcedures.unsaveAnswer,
     getUserSavedAnswersMap: qaProcedures.getUserSavedAnswersMap,

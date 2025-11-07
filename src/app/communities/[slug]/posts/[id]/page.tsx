@@ -632,7 +632,13 @@ export default function CommunityPostPage() {
             </div>
 
             {/* Q&A Section */}
-            {postData.qa && <QnADisplay postId={postId} />}
+            {postData.qa && (
+                <QnADisplay
+                    postId={postId}
+                    postTitle={postData.title}
+                    communitySlug={communitySlug}
+                />
+            )}
 
             {/* Like count and comments summary */}
             <div className="mt-2 flex items-center justify-between">
