@@ -160,7 +160,7 @@ export function AnswerInline({
                         <BadgeCheck
                             className={`h-4 w-4 ${isHelpful ? 'fill-current' : ''}`}
                         />
-                        <span>Helpful</span>
+                        <span className="hidden md:inline">Helpful</span>
                     </Button>
                 )}
                 <Button
@@ -177,7 +177,7 @@ export function AnswerInline({
                     }}
                 >
                     <MessageSquare className="h-4 w-4" />
-                    <span>Comment</span>
+                    <span className="hidden md:inline">Comment</span>
                 </Button>
                 {session && (
                     <Button
@@ -192,7 +192,9 @@ export function AnswerInline({
                         <Bookmark
                             className={`h-4 w-4 ${isSaved ? 'fill-current' : ''}`}
                         />
-                        <span>{isSaved ? 'Saved' : 'Save'}</span>
+                        <span className="hidden md:inline">
+                            {isSaved ? 'Saved' : 'Save'}
+                        </span>
                     </Button>
                 )}
                 <ShareButton
