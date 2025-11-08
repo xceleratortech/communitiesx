@@ -249,7 +249,7 @@ export function AnswerCard({
                     url={buildAnswerShareUrl(answer.id)}
                     variant="ghost"
                     size="sm"
-                    showLabel={false}
+                    showLabel={true}
                 />
             </div>
 
