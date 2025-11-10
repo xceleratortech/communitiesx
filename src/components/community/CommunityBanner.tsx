@@ -12,18 +12,25 @@ export function CommunityBanner({ community }: CommunityBannerProps) {
     return (
         <div className="mb-8">
             {/* Banner Image */}
-            <div className="relative h-32 w-full overflow-hidden rounded-lg bg-gradient-to-r from-blue-400 to-blue-600 sm:h-40 md:h-48 lg:h-56">
-                {community.banner && (
+            <div
+                className={`relative h-32 w-full overflow-hidden rounded-lg sm:h-40 md:h-48 lg:h-56 ${
+                    community.banner
+                        ? 'bg-transparent'
+                        : 'bg-gradient-to-r from-blue-400 to-blue-600'
+                }`}
+            >
+                {community.banner ? (
                     <Image
                         src={community.banner || '/placeholder.svg'}
                         alt={`${community.name} banner`}
                         fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        unoptimized
+                        className="object-cover object-center"
+                        sizes="100vw"
                         priority
                         quality={85}
                     />
-                )}
+                ) : null}
                 {/* Overlay for better text readability */}
                 <div className="absolute inset-0 bg-black/20" />
             </div>
