@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
 import { HtmlImageCarousel } from '@/components/ui/html-image-carousel';
@@ -75,21 +76,22 @@ export default function PostCard({
 }) {
     const utils = trpc.useUtils();
     const router = useRouter();
-    const [ansOffset, setAnsOffset] = React.useState(0);
-    const [answers, setAnswers] = React.useState<AnswerWithAuthor[]>([]);
-    const [hasNext, setHasNext] = React.useState(false);
-    const [showEditor, setShowEditor] = React.useState(false);
-    const [answerContent, setAnswerContent] = React.useState('');
-    const [expandedAnswerComments, setExpandedAnswerComments] = React.useState<
+    const [ansOffset, setAnsOffset] = useState(0);
+    const [answers, setAnswers] = useState<AnswerWithAuthor[]>([]);
+    const [hasNext, setHasNext] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const [answerContent, setAnswerContent] = useState('');
+    const [expandedAnswerComments, setExpandedAnswerComments] = useState<
         Set<number>
     >(new Set());
+    const [showAnswers, setShowAnswers] = useState(false);
     const ansLimit = 2;
     const answersQuery = trpc.community.listAnswers.useQuery(
         { postId: post.id, limit: ansLimit, offset: ansOffset },
         { enabled: !!post.qa },
     );
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (!answersQuery.data) return;
         if (ansOffset === 0) {
             setAnswers(answersQuery.data.answers);
@@ -115,7 +117,7 @@ export default function PostCard({
     });
 
     // Helpful / Saved maps for visible answers
-    const answerIds = React.useMemo(() => answers.map((a) => a.id), [answers]);
+    const answerIds = useMemo(() => answers.map((a) => a.id), [answers]);
     const helpfulCountsQuery = trpc.community.getAnswerHelpfulCounts.useQuery(
         { answerIds },
         { enabled: answerIds.length > 0 },
@@ -308,38 +310,6 @@ export default function PostCard({
                         </div>
                     )}
 
-                    <div className="mt-2 flex items-center justify-between">
-                        {post.source?.reason === 'Based on your interests' ? (
-                            (post.likeCount ?? 0) > 0 ? (
-                                <span className="text-muted-foreground text-xs">
-                                    {post.likeCount ?? 0}{' '}
-                                    {(post.likeCount ?? 0) === 1
-                                        ? 'person'
-                                        : 'people'}{' '}
-                                    liked this
-                                </span>
-                            ) : (
-                                <span className="text-muted-foreground text-xs" />
-                            )
-                        ) : (
-                            (() => {
-                                const likeCountNum = post.likeCount ?? 0;
-                                const isLiked = post.isLiked ?? false;
-                                return (
-                                    <span className="text-muted-foreground text-xs">
-                                        {likeCountNum > 0
-                                            ? isLiked
-                                                ? likeCountNum === 1
-                                                    ? 'You liked this'
-                                                    : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
-                                                : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
-                                            : ''}
-                                    </span>
-                                );
-                            })()
-                        )}
-                    </div>
-
                     {/* Q&A summary row */}
                     {post.qa && (
                         <div
@@ -354,7 +324,20 @@ export default function PostCard({
                             }}
                         >
                             <div className="flex items-center justify-between rounded-md bg-gray-100 px-3 py-2 dark:bg-gray-800">
-                                <span className="text-sm underline">
+                                <span
+                                    className="text-sm underline"
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                    }}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (answersQuery.data?.reveal) {
+                                            setShowAnswers((v) => !v);
+                                        }
+                                    }}
+                                >
                                     {answersQuery.data?.reveal
                                         ? `${answersQuery.data?.totalCount ?? 0} Answers`
                                         : 'Answers are hidden until deadline'}
@@ -419,128 +402,150 @@ export default function PostCard({
                                 </div>
                             )}
 
-                            {answersQuery.data && answers.length > 0 && (
-                                <div className="mt-2 space-y-2">
-                                    {answers.map((a) => {
-                                        const isHelpful =
-                                            !!userHelpfulMapQuery.data?.[a.id];
-                                        const helpfulCount =
-                                            helpfulCountsQuery.data?.[a.id] ??
-                                            0;
-                                        const isSaved =
-                                            !!savedMapQuery.data?.[a.id];
-                                        const isCommentsExpanded =
-                                            expandedAnswerComments.has(a.id);
+                            {answersQuery.data &&
+                                showAnswers &&
+                                answers.length > 0 && (
+                                    <div className="mt-2 space-y-2">
+                                        {answers.map((a) => {
+                                            const isHelpful =
+                                                !!userHelpfulMapQuery.data?.[
+                                                    a.id
+                                                ];
+                                            const helpfulCount =
+                                                helpfulCountsQuery.data?.[
+                                                    a.id
+                                                ] ?? 0;
+                                            const isSaved =
+                                                !!savedMapQuery.data?.[a.id];
+                                            const isCommentsExpanded =
+                                                expandedAnswerComments.has(
+                                                    a.id,
+                                                );
 
-                                        return (
-                                            <AnswerInline
-                                                key={a.id}
-                                                answer={a}
-                                                postId={post.id}
-                                                postTitle={post.title}
-                                                postCommunity={post.community}
-                                                session={session}
-                                                formatRelativeTime={
-                                                    formatRelativeTime
-                                                }
-                                                isCommentsExpanded={
-                                                    isCommentsExpanded
-                                                }
-                                                onToggleComments={() => {
-                                                    setExpandedAnswerComments(
-                                                        (prev) => {
-                                                            const next =
-                                                                new Set(prev);
-                                                            if (
-                                                                next.has(a.id)
-                                                            ) {
-                                                                next.delete(
-                                                                    a.id,
-                                                                );
-                                                            } else {
-                                                                next.add(a.id);
-                                                            }
-                                                            return next;
-                                                        },
-                                                    );
-                                                }}
-                                                isHelpful={isHelpful}
-                                                helpfulCount={helpfulCount}
-                                                isSaved={isSaved}
-                                                onMarkHelpful={() => {
-                                                    if (isHelpful) {
-                                                        unmarkHelpfulMutation.mutate(
-                                                            {
-                                                                answerId: a.id,
-                                                            },
-                                                        );
-                                                    } else {
-                                                        markHelpfulMutation.mutate(
-                                                            {
-                                                                answerId: a.id,
-                                                            },
-                                                        );
+                                            return (
+                                                <AnswerInline
+                                                    key={a.id}
+                                                    answer={a}
+                                                    postId={post.id}
+                                                    postTitle={post.title}
+                                                    postCommunity={
+                                                        post.community
                                                     }
-                                                }}
-                                                onSave={() => {
-                                                    if (isSaved) {
-                                                        unsaveAnswerMutation.mutate(
-                                                            {
-                                                                answerId: a.id,
-                                                            },
-                                                        );
-                                                    } else {
-                                                        saveAnswerMutation.mutate(
-                                                            {
-                                                                answerId: a.id,
-                                                            },
-                                                        );
+                                                    session={session}
+                                                    formatRelativeTime={
+                                                        formatRelativeTime
                                                     }
-                                                }}
-                                                markHelpfulMutation={
-                                                    markHelpfulMutation
-                                                }
-                                                unmarkHelpfulMutation={
-                                                    unmarkHelpfulMutation
-                                                }
-                                                saveAnswerMutation={
-                                                    saveAnswerMutation
-                                                }
-                                                unsaveAnswerMutation={
-                                                    unsaveAnswerMutation
-                                                }
-                                                createAnswerComment={
-                                                    createAnswerComment
-                                                }
-                                            />
-                                        );
-                                    })}
-                                    {hasNext && (
-                                        <div className="text-center">
-                                            <button
-                                                type="button"
-                                                className="text-sm underline"
-                                                onClick={(e) => {
-                                                    e.preventDefault();
-                                                    e.stopPropagation();
-                                                    const nextOffset =
-                                                        ansOffset + ansLimit;
-                                                    setAnsOffset(nextOffset);
-                                                    utils.community.listAnswers.prefetch(
-                                                        {
-                                                            postId: post.id,
-                                                            limit: ansLimit,
-                                                            offset: nextOffset,
-                                                        },
-                                                    );
-                                                }}
-                                            >
-                                                Load more answers
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                                                    isCommentsExpanded={
+                                                        isCommentsExpanded
+                                                    }
+                                                    onToggleComments={() => {
+                                                        setExpandedAnswerComments(
+                                                            (prev) => {
+                                                                const next =
+                                                                    new Set(
+                                                                        prev,
+                                                                    );
+                                                                if (
+                                                                    next.has(
+                                                                        a.id,
+                                                                    )
+                                                                ) {
+                                                                    next.delete(
+                                                                        a.id,
+                                                                    );
+                                                                } else {
+                                                                    next.add(
+                                                                        a.id,
+                                                                    );
+                                                                }
+                                                                return next;
+                                                            },
+                                                        );
+                                                    }}
+                                                    isHelpful={isHelpful}
+                                                    helpfulCount={helpfulCount}
+                                                    isSaved={isSaved}
+                                                    onMarkHelpful={() => {
+                                                        if (isHelpful) {
+                                                            unmarkHelpfulMutation.mutate(
+                                                                {
+                                                                    answerId:
+                                                                        a.id,
+                                                                },
+                                                            );
+                                                        } else {
+                                                            markHelpfulMutation.mutate(
+                                                                {
+                                                                    answerId:
+                                                                        a.id,
+                                                                },
+                                                            );
+                                                        }
+                                                    }}
+                                                    onSave={() => {
+                                                        if (isSaved) {
+                                                            unsaveAnswerMutation.mutate(
+                                                                {
+                                                                    answerId:
+                                                                        a.id,
+                                                                },
+                                                            );
+                                                        } else {
+                                                            saveAnswerMutation.mutate(
+                                                                {
+                                                                    answerId:
+                                                                        a.id,
+                                                                },
+                                                            );
+                                                        }
+                                                    }}
+                                                    markHelpfulMutation={
+                                                        markHelpfulMutation
+                                                    }
+                                                    unmarkHelpfulMutation={
+                                                        unmarkHelpfulMutation
+                                                    }
+                                                    saveAnswerMutation={
+                                                        saveAnswerMutation
+                                                    }
+                                                    unsaveAnswerMutation={
+                                                        unsaveAnswerMutation
+                                                    }
+                                                    createAnswerComment={
+                                                        createAnswerComment
+                                                    }
+                                                />
+                                            );
+                                        })}
+                                        {hasNext && (
+                                            <div className="text-center">
+                                                <button
+                                                    type="button"
+                                                    className="text-sm underline"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        const nextOffset =
+                                                            ansOffset +
+                                                            ansLimit;
+                                                        setAnsOffset(
+                                                            nextOffset,
+                                                        );
+                                                        utils.community.listAnswers.prefetch(
+                                                            {
+                                                                postId: post.id,
+                                                                limit: ansLimit,
+                                                                offset: nextOffset,
+                                                            },
+                                                        );
+                                                    }}
+                                                >
+                                                    Load more answers
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                         </div>
                     )}
 

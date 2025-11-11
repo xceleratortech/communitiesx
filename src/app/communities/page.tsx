@@ -230,6 +230,7 @@ function CommunityCard({
     community,
     showNotificationToggle = false,
 }: CommunityCardProps) {
+    const router = useRouter();
     const [notificationsDisabled, setNotificationsDisabled] = useState(false);
     const [isUpdatingNotification, setIsUpdatingNotification] = useState(false);
 
@@ -294,137 +295,138 @@ function CommunityCard({
     const memberAvatars = generateMemberAvatars(members, 3);
 
     return (
-        <Card className="group relative flex h-[420px] flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md">
-            <div className="relative h-28 w-full">
-                {community.banner ? (
-                    <img
-                        src={community.banner || '/placeholder.svg'}
-                        alt={`${community.name} banner`}
-                        className="h-28 w-full object-cover"
-                    />
-                ) : (
-                    <div className="h-28 w-full bg-gray-200" />
-                )}
+        <Link href={`/communities/${community.slug}`} className="block">
+            <Card
+                className="group relative flex h-[360px] cursor-pointer flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md"
+                role="link"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                    }
+                }}
+            >
+                <div className="relative h-24 w-full">
+                    {community.banner ? (
+                        <img
+                            src={community.banner || '/placeholder.svg'}
+                            alt={`${community.name} banner`}
+                            className="h-24 w-full object-cover"
+                        />
+                    ) : (
+                        <div className="h-24 w-full bg-gray-200" />
+                    )}
 
-                {/* Notification toggle overlay - only show for My Communities */}
-                {showNotificationToggle && (
-                    <div className="absolute top-2 right-2">
-                        <div className="bg-background/90 rounded-lg border p-2 shadow-sm backdrop-blur-sm">
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() =>
-                                        handleNotificationToggle(
-                                            !notificationsDisabled,
-                                        )
-                                    }
-                                    disabled={isUpdatingNotification}
-                                    className="h-6 w-6 p-0"
-                                >
-                                    {notificationsDisabled ? (
-                                        <BellOff className="text-muted-foreground h-4 w-4" />
-                                    ) : (
-                                        <Bell className="text-primary h-4 w-4" />
-                                    )}
-                                </Button>
+                    {/* Notification toggle overlay - only show for My Communities */}
+                    {showNotificationToggle && (
+                        <div className="absolute top-2 right-2">
+                            <div className="bg-background/90 rounded-lg border p-2 shadow-sm backdrop-blur-sm">
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleNotificationToggle(
+                                                !notificationsDisabled,
+                                            );
+                                        }}
+                                        disabled={isUpdatingNotification}
+                                        className="h-6 w-6 p-0"
+                                    >
+                                        {notificationsDisabled ? (
+                                            <BellOff className="text-muted-foreground h-4 w-4" />
+                                        ) : (
+                                            <Bell className="text-primary h-4 w-4" />
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
-            </div>
+                    )}
+                </div>
 
-            <CardHeader className="pt-2 pb-2">
-                <div className="flex items-start gap-4">
-                    <Avatar className="border-background h-20 w-20 border-4">
-                        <AvatarImage
-                            src={community.avatar || undefined}
-                            alt={community.name}
-                        />
-                        <AvatarFallback className="bg-primary text-xl">
-                            {community.name.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col items-center pt-6">
-                        <CardTitle className="group-hover:text-primary flex items-center gap-2 text-lg transition-colors">
-                            {community.name}
+                <CardHeader className="pt-2 pb-2">
+                    <div className="flex items-start gap-4">
+                        <Avatar className="border-background h-20 w-20 border-4">
+                            <AvatarImage
+                                src={community.avatar || undefined}
+                                alt={community.name}
+                            />
+                            <AvatarFallback className="bg-primary text-xl">
+                                {community.name.substring(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col items-center pt-6">
+                            <CardTitle className="group-hover:text-primary flex items-center gap-2 text-lg transition-colors">
+                                {community.name}
+                                {community.type === 'private' ? (
+                                    <Lock className="text-muted-foreground h-4 w-4" />
+                                ) : (
+                                    <Globe className="text-muted-foreground h-4 w-4" />
+                                )}
+                            </CardTitle>
+                            {community.description ? (
+                                <CardDescription className="mt-2 line-clamp-2">
+                                    {community.description}
+                                </CardDescription>
+                            ) : null}
+                        </div>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="pb-2">
+                    <div className="bg-muted my-2 h-px w-full" />
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center">
+                                {(
+                                    ((community as any).memberCount > 0
+                                        ? memberAvatars
+                                        : [{}, {}, {}]) as Array<{
+                                        src?: string;
+                                        initials?: string;
+                                    }>
+                                ).map((m, idx) => (
+                                    <Avatar
+                                        key={idx}
+                                        className={`h-8 w-8 border-2 ${
+                                            idx === 0 ? '' : '-ml-2'
+                                        }`}
+                                    >
+                                        {m.src ? (
+                                            <AvatarImage
+                                                src={m.src}
+                                                alt={m.initials || 'Member'}
+                                            />
+                                        ) : null}
+                                        <AvatarFallback className="bg-muted text-[10px] font-medium">
+                                            {m.initials || ''}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                ))}
+                            </div>
+                            <div className="text-muted-foreground text-sm">
+                                {(community as any).memberCount > 0
+                                    ? `${formatCount((community as any).memberCount)} Members`
+                                    : 'No members yet'}
+                            </div>
+                        </div>
+                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
                             {community.type === 'private' ? (
-                                <Lock className="text-muted-foreground h-4 w-4" />
+                                <>
+                                    <Lock className="h-4 w-4" /> Private
+                                </>
                             ) : (
-                                <Globe className="text-muted-foreground h-4 w-4" />
+                                <>
+                                    <Globe className="h-4 w-4" /> Public
+                                </>
                             )}
-                        </CardTitle>
-                        {community.description ? (
-                            <CardDescription className="mt-2 line-clamp-2">
-                                {community.description}
-                            </CardDescription>
-                        ) : null}
-                    </div>
-                </div>
-            </CardHeader>
-
-            <CardContent className="pb-2">
-                <div className="bg-muted my-2 h-px w-full" />
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="flex items-center">
-                            {(
-                                ((community as any).memberCount > 0
-                                    ? memberAvatars
-                                    : [{}, {}, {}]) as Array<{
-                                    src?: string;
-                                    initials?: string;
-                                }>
-                            ).map((m, idx) => (
-                                <Avatar
-                                    key={idx}
-                                    className={`h-8 w-8 border-2 ${
-                                        idx === 0 ? '' : '-ml-2'
-                                    }`}
-                                >
-                                    {m.src ? (
-                                        <AvatarImage
-                                            src={m.src}
-                                            alt={m.initials || 'Member'}
-                                        />
-                                    ) : null}
-                                    <AvatarFallback className="bg-muted text-[10px] font-medium">
-                                        {m.initials || ''}
-                                    </AvatarFallback>
-                                </Avatar>
-                            ))}
-                        </div>
-                        <div className="text-muted-foreground text-sm">
-                            {(community as any).memberCount > 0
-                                ? `${formatCount((community as any).memberCount)} Members`
-                                : 'No members yet'}
                         </div>
                     </div>
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                        {community.type === 'private' ? (
-                            <>
-                                <Lock className="h-4 w-4" /> Private
-                            </>
-                        ) : (
-                            <>
-                                <Globe className="h-4 w-4" /> Public
-                            </>
-                        )}
-                    </div>
-                </div>
-            </CardContent>
-
-            <div className="mt-auto px-6 pt-2 pb-6">
-                <Button
-                    asChild
-                    className="h-11 w-full rounded-2xl bg-black text-white hover:bg-black/90"
-                >
-                    <Link href={`/communities/${community.slug}`}>
-                        View Community
-                    </Link>
-                </Button>
-            </div>
-        </Card>
+                </CardContent>
+            </Card>
+        </Link>
     );
 }
 
