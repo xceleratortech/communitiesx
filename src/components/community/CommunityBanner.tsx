@@ -9,7 +9,6 @@ interface CommunityBannerProps {
 }
 
 export function CommunityBanner({ community }: CommunityBannerProps) {
-    console.log('community banner:', community.banner);
     return (
         <div className="mb-8">
             {/* Banner Image */}
