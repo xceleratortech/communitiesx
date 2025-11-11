@@ -310,38 +310,6 @@ export default function PostCard({
                         </div>
                     )}
 
-                    <div className="mt-2 flex items-center justify-between">
-                        {post.source?.reason === 'Based on your interests' ? (
-                            (post.likeCount ?? 0) > 0 ? (
-                                <span className="text-muted-foreground text-xs">
-                                    {post.likeCount ?? 0}{' '}
-                                    {(post.likeCount ?? 0) === 1
-                                        ? 'person'
-                                        : 'people'}{' '}
-                                    liked this
-                                </span>
-                            ) : (
-                                <span className="text-muted-foreground text-xs" />
-                            )
-                        ) : (
-                            (() => {
-                                const likeCountNum = post.likeCount ?? 0;
-                                const isLiked = post.isLiked ?? false;
-                                return (
-                                    <span className="text-muted-foreground text-xs">
-                                        {likeCountNum > 0
-                                            ? isLiked
-                                                ? likeCountNum === 1
-                                                    ? 'You liked this'
-                                                    : `You and ${likeCountNum - 1} ${likeCountNum - 1 === 1 ? 'other' : 'others'} liked this`
-                                                : `${likeCountNum} ${likeCountNum === 1 ? 'person' : 'people'} liked this`
-                                            : ''}
-                                    </span>
-                                );
-                            })()
-                        )}
-                    </div>
-
                     {/* Q&A summary row */}
                     {post.qa && (
                         <div

@@ -14,6 +14,7 @@ const nextConfig: NextConfig = {
       "*.xcelerator.in",
       "storage-communityx.xcelerator.in",
       "stroage-dev.xcelerator.work",
+      "storage-dev.xcelerator.work",
     ],
     remotePatterns: [
       {
@@ -28,6 +29,7 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "*.amazonaws.com",
       },
+      // Xcelerator storage (prod)
       {
         protocol: "https",
         hostname: "*.xcelerator.co.in",
@@ -41,8 +43,38 @@ const nextConfig: NextConfig = {
         hostname: "storage-communityx.xcelerator.in",
       },
       {
+        protocol: "http",
+        hostname: "storage-communityx.xcelerator.in",
+      },
+      // Xcelerator storage (dev) - fix typo and allow both protocols
+      {
         protocol: "https",
         hostname: "stroage-dev.xcelerator.work",
+      },
+      {
+        protocol: "http",
+        hostname: "storage-dev.xcelerator.work",
+      },
+
+      {
+        protocol: "https",
+        hostname: "storage-communityx.xcelerator.in",
+      },
+      {
+        protocol: "https",
+        hostname: "storage-dev.xcelerator.work",
+      },
+      {
+        protocol: "https",
+        hostname: "r2.cloudflarestorage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
       },
     ],
   },

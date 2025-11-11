@@ -9,6 +9,7 @@ interface CommunityBannerProps {
 }
 
 export function CommunityBanner({ community }: CommunityBannerProps) {
+    console.log('community banner:', community.banner);
     return (
         <div className="mb-8">
             {/* Banner Image */}
@@ -24,7 +25,6 @@ export function CommunityBanner({ community }: CommunityBannerProps) {
                         src={community.banner || '/placeholder.svg'}
                         alt={`${community.name} banner`}
                         fill
-                        unoptimized
                         className="object-cover object-center"
                         sizes="100vw"
                         priority
