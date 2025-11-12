@@ -1,0 +1,152 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    env:
+      DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN1 }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL1 }}
+      PROJECT_KEY: communitiesx-updates # change if your Sonar project key differs
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Run SonarQube Scan
+        id: sonar
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ env.SONAR_HOST_URL }}
+
+      - name: Wait for SonarQube Processing
+        run: sleep 5
+
+      - name: Fetch SonarQube Project Status
+        id: sonar_status
+        run: |
+          echo "Checking SonarQube API..."
+          http_code=$(curl -s -o sonar_response.json -w "%{http_code}" -u "${{ env.SONAR_TOKEN }}:" \
+            "${{ env.SONAR_HOST_URL }}/api/qualitygates/project_status?projectKey=${{ env.PROJECT_KEY }}" || echo "000")
+
+          if [ "$http_code" -eq 200 ]; then
+            echo "error=NONE" >> $GITHUB_ENV
+          elif [ "$http_code" -eq 401 ]; then
+            echo "error=AUTH_FAILED" >> $GITHUB_ENV
+          elif [ "$http_code" -eq 403 ]; then
+            echo "error=TOKEN_EXPIRED" >> $GITHUB_ENV
+          elif [ "$http_code" -eq 404 ]; then
+            echo "error=INVALID_URL" >> $GITHUB_ENV
+          elif [ "$http_code" -eq 000 ]; then
+            echo "error=CONNECTION_FAILED" >> $GITHUB_ENV
+          else
+            echo "error=UNKNOWN" >> $GITHUB_ENV
+          fi
+
+      - name: Send Final Discord Result
+        if: always() && github.run_attempt == 1
+        run: |
+          build_status=${{ job.status }}
+          error_type=${{ env.error }}
+          repo_name=${{ github.repository }}
+
+          if [ ! -s sonar_response.json ]; then
+            echo '{"projectStatus":{"status":"NO_ANALYSIS"}}' > sonar_response.json
+          fi
+
+          quality_status=$(jq -r '.projectStatus.status // "NO_ANALYSIS"' sonar_response.json 2>/dev/null || echo "NO_ANALYSIS")
+
+          # Replace UNKNOWN or NO_ANALYSIS with user-friendly text
+          if [ "$quality_status" = "UNKNOWN" ] || [ "$quality_status" = "NO_ANALYSIS" ]; then
+            quality_status="No recent analysis (no new code or project not yet analyzed)"
+          fi
+
+          if [ "$build_status" == "success" ] && [ "$error_type" == "NONE" ]; then
+            bugs=$(curl -fs -u "${{ env.SONAR_TOKEN }}:" \
+              "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=${{ env.PROJECT_KEY }}&types=BUG" 2>/dev/null | jq '.total // 0' 2>/dev/null || echo 0)
+            smells=$(curl -fs -u "${{ env.SONAR_TOKEN }}:" \
+              "${{ env.SONAR_HOST_URL }}/api/issues/search?componentKeys=${{ env.PROJECT_KEY }}&types=CODE_SMELL" 2>/dev/null | jq '.total // 0' 2>/dev/null || echo 0)
+            hotspots=$(curl -fs -u "${{ env.SONAR_TOKEN }}:" \
+              "${{ env.SONAR_HOST_URL }}/api/hotspots/search?projectKey=${{ env.PROJECT_KEY }}" 2>/dev/null | jq '.paging.total // 0' 2>/dev/null || echo 0)
+
+            payload=$(jq -n \
+              --arg repo "$repo_name" \
+              --arg project "${{ env.PROJECT_KEY }}" \
+              --arg status "$quality_status" \
+              --arg bugs "$bugs" --arg smells "$smells" --arg hotspots "$hotspots" \
+              --arg url "$(echo "${{ env.SONAR_HOST_URL }}" | sed 's:/*$::')/dashboard?id=${{ env.PROJECT_KEY }}" \
+              '{
+                "username": "GitHub CI Bot",
+                "embeds": [{
+                  "title": "✅ Build Completed Successfully",
+                  "color": 5763719,
+                  "fields": [
+                    {"name": "Repository", "value": $repo, "inline": false},
+                    {"name": "Sonar Project", "value": $project, "inline": false},
+                    {"name": "Quality Gate", "value": $status, "inline": true},
+                    {"name": "Bugs", "value": $bugs, "inline": true},
+                    {"name": "Code Smells", "value": $smells, "inline": true},
+                    {"name": "Security Hotspots", "value": $hotspots, "inline": true},
+                    {"name": "Dashboard", "value": $url, "inline": false}
+                  ]
+                }]
+              }')
+
+          else
+            case "$error_type" in
+              "AUTH_FAILED")
+                reason="❌ SonarQube authentication failed — bad or missing token."
+                ;;
+              "TOKEN_EXPIRED")
+                reason="🔒 SonarQube token expired — please update SONAR_TOKEN secret."
+                ;;
+              "INVALID_URL")
+                reason="🌐 Invalid SonarQube host URL — verify SONAR_HOST_URL."
+                ;;
+              "CONNECTION_FAILED")
+                reason="🚫 Unable to connect to SonarQube — server down or unreachable."
+                ;;
+              "API_FAILED")
+                reason="⚠️ SonarQube API failed — check project key or analysis logs."
+                ;;
+              "UNKNOWN")
+                reason="⚠️ Unknown error — review the workflow logs for details."
+                ;;
+              *)
+                reason="❌ Build failed before analysis could complete — possible misconfiguration or expired token."
+                ;;
+            esac
+
+            payload=$(jq -n \
+              --arg repo "$repo_name" \
+              --arg project "${{ env.PROJECT_KEY }}" \
+              --arg reason "$reason" \
+              '{
+                "username": "GitHub CI Bot",
+                "embeds": [{
+                  "title": "🚨 Build Failed",
+                  "color": 15548997,
+                  "fields": [
+                    {"name": "Repository", "value": $repo, "inline": false},
+                    {"name": "Sonar Project", "value": $project, "inline": false},
+                    {"name": "Failure Reason", "value": $reason, "inline": false}
+                  ]
+                }]
+              }')
+          fi
+
+          curl -H "Content-Type: application/json" \
+               -X POST -d "$payload" \
+               "${{ env.DISCORD_WEBHOOK }}"
+
+
