@@ -12,8 +12,8 @@ jobs:
 
     env:
       DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN1 }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL1 }}
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       PROJECT_KEY: communitiesx-updates # change if your Sonar project key differs
 
     steps:
