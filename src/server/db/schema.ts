@@ -8,6 +8,7 @@ import {
     primaryKey,
     varchar,
     jsonb,
+    unique,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
@@ -103,7 +104,7 @@ export const communityMemberRequests = pgTable('community_member_requests', {
     communityId: integer('community_id')
         .notNull()
         .references(() => communities.id, { onDelete: 'cascade' }),
-    requestType: text('request_type').notNull(), // 'join' | 'follow'
+    requestType: text('request_type').notNull(), // 'join'
     status: text('status').notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
     message: text('message'),
     requestedAt: timestamp('requested_at').notNull().defaultNow(),
@@ -185,17 +186,66 @@ export const comments = pgTable('comments', {
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });
 
-export const reactions = pgTable('reactions', {
-    id: serial('id').primaryKey(),
-    postId: integer('post_id')
-        .notNull()
-        .references(() => posts.id, { onDelete: 'cascade' }),
-    userId: text('user_id')
-        .notNull()
-        .references(() => users.id, { onDelete: 'cascade' }),
-    type: text('type').notNull(),
-    createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+export const commentHelpfulVotes = pgTable(
+    'comment_helpful_votes',
+    {
+        id: serial('id').primaryKey(),
+        commentId: integer('comment_id')
+            .notNull()
+            .references(() => comments.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            uniqueVote: unique().on(table.commentId, table.userId),
+        };
+    },
+);
+
+export const reactions = pgTable(
+    'reactions',
+    {
+        id: serial('id').primaryKey(),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        type: text('type').notNull(),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            // Unique constraint to prevent duplicate reactions from the same user on the same post
+            uniqueUserPostType: unique('unique_user_post_type').on(
+                table.postId,
+                table.userId,
+                table.type,
+            ),
+        };
+    },
+);
+
+// Saved posts (bookmarks)
+export const savedPosts = pgTable(
+    'saved_posts',
+    {
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        pk: primaryKey({ columns: [table.userId, table.postId] }),
+    }),
+);
 
 // Define relations
 export const communitiesRelations = relations(communities, ({ one, many }) => ({
@@ -302,6 +352,20 @@ export const postsRelations = relations(posts, ({ one, many }) => ({
     comments: many(comments),
     postTags: many(postTags),
     attachments: many(attachments), // was images
+    poll: one(polls, {
+        fields: [posts.id],
+        references: [polls.postId],
+    }),
+    qa: one(qaQuestions, {
+        fields: [posts.id],
+        references: [qaQuestions.postId],
+    }),
+}));
+
+// Saved posts relations
+export const savedPostsRelations = relations(savedPosts, ({ one }) => ({
+    user: one(users, { fields: [savedPosts.userId], references: [users.id] }),
+    post: one(posts, { fields: [savedPosts.postId], references: [posts.id] }),
 }));
 
 export const postTagsRelations = relations(postTags, ({ one }) => ({
@@ -325,6 +389,20 @@ export const commentsRelations = relations(comments, ({ one }) => ({
         references: [users.id],
     }),
 }));
+
+export const commentHelpfulVotesRelations = relations(
+    commentHelpfulVotes,
+    ({ one }) => ({
+        comment: one(comments, {
+            fields: [commentHelpfulVotes.commentId],
+            references: [comments.id],
+        }),
+        user: one(users, {
+            fields: [commentHelpfulVotes.userId],
+            references: [users.id],
+        }),
+    }),
+);
 
 // Add extended relations for users and orgs
 export const extendedUsersRelations = relations(users, ({ many }) => ({
@@ -652,3 +730,232 @@ export const userProfilesRelations = relations(userProfiles, ({ one }) => ({
         references: [users.id],
     }),
 }));
+
+// Poll tables
+export const polls = pgTable('polls', {
+    id: serial('id').primaryKey(),
+    postId: integer('post_id')
+        .notNull()
+        .references(() => posts.id, { onDelete: 'cascade' }),
+    question: text('question').notNull(),
+    pollType: text('poll_type').default('single').notNull(),
+    expiresAt: timestamp('expires_at'),
+    isClosed: boolean('is_closed').default(false).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const pollOptions = pgTable('poll_options', {
+    id: serial('id').primaryKey(),
+    pollId: integer('poll_id')
+        .notNull()
+        .references(() => polls.id, { onDelete: 'cascade' }),
+    text: text('text').notNull(),
+    orderIndex: integer('order_index').default(0).notNull(),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+export const pollVotes = pgTable(
+    'poll_votes',
+    {
+        id: serial('id').primaryKey(),
+        pollId: integer('poll_id')
+            .notNull()
+            .references(() => polls.id, { onDelete: 'cascade' }),
+        pollOptionId: integer('poll_option_id')
+            .notNull()
+            .references(() => pollOptions.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => {
+        return {
+            uniqueUserPollOption: unique(
+                'poll_votes_user_poll_option_unique',
+            ).on(table.pollId, table.userId, table.pollOptionId),
+        };
+    },
+);
+
+// Poll relations
+export const pollsRelations = relations(polls, ({ one, many }) => ({
+    post: one(posts, {
+        fields: [polls.postId],
+        references: [posts.id],
+    }),
+    options: many(pollOptions),
+    votes: many(pollVotes),
+}));
+
+export const pollOptionsRelations = relations(pollOptions, ({ one, many }) => ({
+    poll: one(polls, {
+        fields: [pollOptions.pollId],
+        references: [polls.id],
+    }),
+    votes: many(pollVotes),
+}));
+
+export const pollVotesRelations = relations(pollVotes, ({ one }) => ({
+    poll: one(polls, {
+        fields: [pollVotes.pollId],
+        references: [polls.id],
+    }),
+    pollOption: one(pollOptions, {
+        fields: [pollVotes.pollOptionId],
+        references: [pollOptions.id],
+    }),
+    user: one(users, {
+        fields: [pollVotes.userId],
+        references: [users.id],
+    }),
+}));
+
+// =============================
+// Q&A tables
+// =============================
+
+export const qaQuestions = pgTable('qa_questions', {
+    id: serial('id').primaryKey(),
+    postId: integer('post_id')
+        .notNull()
+        .references(() => posts.id, { onDelete: 'cascade' })
+        .unique(),
+    answersVisibleAt: timestamp('answers_visible_at'),
+    allowEditsUntil: timestamp('allow_edits_until'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const qaAnswers = pgTable(
+    'qa_answers',
+    {
+        id: serial('id').primaryKey(),
+        postId: integer('post_id')
+            .notNull()
+            .references(() => posts.id, { onDelete: 'cascade' }),
+        authorId: text('author_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        content: text('content').notNull(),
+        isDeleted: boolean('is_deleted').notNull().default(false),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+        updatedAt: timestamp('updated_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        uniqueAuthorPerPost: unique('qa_answers_post_author_unique').on(
+            table.postId,
+            table.authorId,
+        ),
+    }),
+);
+
+export const qaAnswerHelpful = pgTable(
+    'qa_answer_helpful',
+    {
+        id: serial('id').primaryKey(),
+        answerId: integer('answer_id')
+            .notNull()
+            .references(() => qaAnswers.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        uniqueHelpful: unique('qa_answer_helpful_unique').on(
+            table.answerId,
+            table.userId,
+        ),
+    }),
+);
+
+export const qaAnswerSaves = pgTable(
+    'qa_answer_saves',
+    {
+        id: serial('id').primaryKey(),
+        answerId: integer('answer_id')
+            .notNull()
+            .references(() => qaAnswers.id, { onDelete: 'cascade' }),
+        userId: text('user_id')
+            .notNull()
+            .references(() => users.id, { onDelete: 'cascade' }),
+        createdAt: timestamp('created_at').notNull().defaultNow(),
+    },
+    (table) => ({
+        uniqueSave: unique('qa_answer_save_unique').on(
+            table.answerId,
+            table.userId,
+        ),
+    }),
+);
+
+export const qaQuestionsRelations = relations(qaQuestions, ({ one, many }) => ({
+    post: one(posts, { fields: [qaQuestions.postId], references: [posts.id] }),
+}));
+
+export const qaAnswersRelations = relations(qaAnswers, ({ one, many }) => ({
+    post: one(posts, { fields: [qaAnswers.postId], references: [posts.id] }),
+    author: one(users, {
+        fields: [qaAnswers.authorId],
+        references: [users.id],
+    }),
+}));
+
+export const qaAnswerHelpfulRelations = relations(
+    qaAnswerHelpful,
+    ({ one }) => ({
+        answer: one(qaAnswers, {
+            fields: [qaAnswerHelpful.answerId],
+            references: [qaAnswers.id],
+        }),
+        user: one(users, {
+            fields: [qaAnswerHelpful.userId],
+            references: [users.id],
+        }),
+    }),
+);
+
+export const qaAnswerSavesRelations = relations(qaAnswerSaves, ({ one }) => ({
+    answer: one(qaAnswers, {
+        fields: [qaAnswerSaves.answerId],
+        references: [qaAnswers.id],
+    }),
+    user: one(users, {
+        fields: [qaAnswerSaves.userId],
+        references: [users.id],
+    }),
+}));
+
+// Comments on answers
+export const qaAnswerComments = pgTable('qa_answer_comments', {
+    id: serial('id').primaryKey(),
+    answerId: integer('answer_id')
+        .notNull()
+        .references(() => qaAnswers.id, { onDelete: 'cascade' }),
+    authorId: text('author_id')
+        .notNull()
+        .references(() => users.id, { onDelete: 'cascade' }),
+    parentId: integer('parent_id').references((): any => qaAnswerComments.id, {
+        onDelete: 'set null',
+    }),
+    content: text('content').notNull(),
+    isDeleted: boolean('is_deleted').notNull().default(false),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at').notNull().defaultNow(),
+});
+
+export const qaAnswerCommentsRelations = relations(
+    qaAnswerComments,
+    ({ one }) => ({
+        answer: one(qaAnswers, {
+            fields: [qaAnswerComments.answerId],
+            references: [qaAnswers.id],
+        }),
+        author: one(users, {
+            fields: [qaAnswerComments.authorId],
+            references: [users.id],
+        }),
+    }),
+);

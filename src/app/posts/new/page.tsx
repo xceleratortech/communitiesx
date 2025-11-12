@@ -32,6 +32,9 @@ import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { isHtmlContentEmpty } from '@/lib/utils';
 import { Loader2 } from 'lucide-react';
+import { PollCreator } from '@/components/polls';
+import type { CreatePollData, PollCreationState } from '@/types/poll';
+import { QnACreator, type QnAConfig } from '@/components/qna/QnACreator';
 
 interface Tag {
     id: number;
@@ -50,8 +53,11 @@ function NewPostForm() {
     const { data: session } = useSession();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [hasMedia, setHasMedia] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
+    const [pollData, setPollData] = useState<CreatePollData | null>(null);
+    const [qaData, setQaData] = useState<QnAConfig | null>(null);
 
     // Fetch community to check membership status if communityId is provided
     const { data: community, isLoading: isLoadingCommunity } =
@@ -168,6 +174,25 @@ function NewPostForm() {
         );
     }
 
+    // If no community specified, block org-wide posts
+    if (!communityId) {
+        return (
+            <div className="mx-auto max-w-4xl p-4">
+                <h1 className="mb-4 text-3xl font-bold">Select a Community</h1>
+                <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Community Required</AlertTitle>
+                    <AlertDescription>
+                        You must choose a community to create a post.
+                    </AlertDescription>
+                </Alert>
+                <Button asChild>
+                    <Link href="/communities">Browse Communities</Link>
+                </Button>
+            </div>
+        );
+    }
+
     // Show loading state while checking community membership and permissions
     if (communityId && (isLoadingCommunity || isPermissionLoading)) {
         return <Loading message="Loading community information..." />;
@@ -233,15 +258,29 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || isHtmlContentEmpty(content)) {
+
+        // Allow submission if there's a poll, even without title/content
+        const hasPoll =
+            pollData && pollData.question.trim() && pollData.options.length > 0;
+        const hasTitleOrContent =
+            title.trim() || !isHtmlContentEmpty(content) || hasMedia;
+
+        if (!hasPoll && !hasTitleOrContent) {
             return;
         }
 
         createPost.mutate({
-            title: title.trim(),
+            title: title.trim() || (hasPoll ? pollData.question.trim() : ''),
             content: content,
             communityId: communityId,
             tagIds: selectedTags.map((tag) => tag.id), // Send the selected tag IDs
+            poll: pollData || undefined, // Include poll data if present
+            qa: qaData
+                ? {
+                      answersVisibleAt: qaData.answersVisibleAt ?? undefined,
+                      allowEditsUntil: qaData.allowEditsUntil ?? undefined,
+                  }
+                : undefined,
         });
     };
 
@@ -262,14 +301,24 @@ function NewPostForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <Label htmlFor="title">Title</Label>
+                    <Label htmlFor="title">
+                        Title{' '}
+                        {pollData && (
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
+                        )}
+                    </Label>
                     <Input
                         type="text"
                         id="title"
-                        placeholder="Enter post title"
+                        placeholder={
+                            pollData
+                                ? 'Enter post title (optional)'
+                                : 'Enter post title'
+                        }
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        required
                     />
                 </div>
 
@@ -281,6 +330,7 @@ function NewPostForm() {
                         placeholder="Write your post content here..."
                         communityId={communityId || undefined}
                         communitySlug={communitySlug || undefined}
+                        onMediaChange={(v) => setHasMedia(v)}
                     />
                 </div>
 
@@ -371,12 +421,18 @@ function NewPostForm() {
                     </div>
                 )}
 
+                {/* Poll Creation */}
+                <QnACreator onChange={setQaData} />
+                <PollCreator onPollChange={setPollData} />
+
                 <Button
                     type="submit"
                     disabled={
                         createPost.isPending ||
-                        !title.trim() ||
-                        isHtmlContentEmpty(content)
+                        (!pollData &&
+                            !title.trim() &&
+                            isHtmlContentEmpty(content) &&
+                            !hasMedia)
                     }
                     className="w-full"
                 >

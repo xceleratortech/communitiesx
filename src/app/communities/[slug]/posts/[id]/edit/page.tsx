@@ -30,6 +30,9 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { isHtmlContentEmpty } from '@/lib/utils';
+import { PollDisplay } from '@/components/polls';
+import { PollCreator } from '@/components/polls';
+import type { CreatePollData } from '@/types/poll';
 
 export default function EditCommunityPostPage() {
     const params = useParams();
@@ -42,6 +45,9 @@ export default function EditCommunityPostPage() {
     const [error, setError] = useState('');
     const [selectedTags, setSelectedTags] = useState<any[]>([]);
     const [open, setOpen] = useState(false);
+    const [pollData, setPollData] = useState<CreatePollData | null>(null);
+    const [isEditingPoll, setIsEditingPoll] = useState(false);
+    const [pollCreationState, setPollCreationState] = useState<any>(null);
 
     const { data: post, isLoading } = trpc.community.getPost.useQuery(
         { postId },
@@ -78,6 +84,49 @@ export default function EditCommunityPostPage() {
             setContent(post.content);
             // Pre-select tags
             setSelectedTags(post.tags || []);
+
+            // Initialize poll data if post has a poll
+            if (post.poll) {
+                const pollData = {
+                    question: post.poll.question,
+                    pollType: post.poll.pollType as 'single' | 'multiple',
+                    options: post.poll.options.map((option) => option.text),
+                    expiresAt: post.poll.expiresAt
+                        ? new Date(post.poll.expiresAt)
+                        : undefined,
+                };
+                setPollData(pollData);
+
+                // Calculate expiration values from existing poll
+                let expirationValue = 24;
+                let expirationUnit: 'hours' | 'days' = 'hours';
+
+                if (pollData.expiresAt) {
+                    const now = new Date();
+                    const diffMs = pollData.expiresAt.getTime() - now.getTime();
+                    const diffHours = Math.ceil(diffMs / (1000 * 60 * 60));
+
+                    if (diffHours >= 24) {
+                        expirationValue = Math.ceil(diffHours / 24);
+                        expirationUnit = 'days';
+                    } else {
+                        expirationValue = diffHours;
+                        expirationUnit = 'hours';
+                    }
+                }
+
+                // Convert to PollCreationState format for PollCreator
+                setPollCreationState({
+                    isCreating: true,
+                    question: pollData.question,
+                    pollType: pollData.pollType,
+                    options: pollData.options,
+                    expiresAt: pollData.expiresAt,
+                    hasExpiration: !!pollData.expiresAt,
+                    expirationValue,
+                    expirationUnit,
+                });
+            }
         }
     }, [post]);
 
@@ -100,15 +149,22 @@ export default function EditCommunityPostPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-        if (!title.trim() || isHtmlContentEmpty(content)) {
-            setError('Title and content are required.');
+
+        const hasPoll =
+            pollData && pollData.question.trim() && pollData.options.length > 0;
+        const hasTitleOrContent = title.trim() || !isHtmlContentEmpty(content);
+
+        if (!hasPoll && !hasTitleOrContent) {
+            setError('Either title/content or poll is required.');
             return;
         }
+
         editPost.mutate({
             postId,
-            title: title.trim(),
+            title: title.trim() || (hasPoll ? pollData.question.trim() : ''),
             content: content,
             tagIds: selectedTags.map((tag) => tag.id), // Pass selected tag IDs
+            poll: pollData || undefined, // Include poll data
         });
     };
 
@@ -236,14 +292,23 @@ export default function EditCommunityPostPage() {
                         htmlFor="title"
                         className="mb-1 block text-sm font-medium text-gray-700"
                     >
-                        Title
+                        Title{' '}
+                        {pollData && (
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
+                        )}
                     </label>
                     <Input
                         type="text"
                         id="title"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        required
+                        placeholder={
+                            pollData
+                                ? 'Enter post title (optional)'
+                                : 'Enter post title'
+                        }
                     />
                 </div>
                 <div>
@@ -263,6 +328,79 @@ export default function EditCommunityPostPage() {
                         communitySlug={community?.slug || undefined}
                     />
                 </div>
+
+                {/* Poll Section */}
+                <div>
+                    <div className="mb-2 flex items-center justify-between">
+                        <label className="text-sm font-medium text-gray-700">
+                            Poll
+                        </label>
+                        <div className="flex gap-2">
+                            {post.poll && !isEditingPoll && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsEditingPoll(true)}
+                                >
+                                    Edit Poll
+                                </Button>
+                            )}
+                            {isEditingPoll && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setIsEditingPoll(false)}
+                                >
+                                    Cancel Edit
+                                </Button>
+                            )}
+                        </div>
+                    </div>
+
+                    {post.poll && !isEditingPoll ? (
+                        <div className="rounded-lg border bg-gray-50 p-4">
+                            <PollDisplay
+                                poll={{
+                                    ...post.poll,
+                                    pollType: post.poll.pollType as
+                                        | 'single'
+                                        | 'multiple',
+                                    expiresAt:
+                                        post.poll.expiresAt?.toISOString() ||
+                                        null,
+                                    createdAt:
+                                        post.poll.createdAt.toISOString(),
+                                    updatedAt:
+                                        post.poll.updatedAt.toISOString(),
+                                    options: post.poll.options.map(
+                                        (option) => ({
+                                            ...option,
+                                            createdAt:
+                                                option.createdAt.toISOString(),
+                                        }),
+                                    ),
+                                }}
+                                results={[]}
+                                userVotes={[]}
+                                canVote={false}
+                                hasUserVoted={false}
+                                totalVotes={0}
+                                onVote={() => {}}
+                                isVoting={false}
+                            />
+                        </div>
+                    ) : (
+                        <PollCreator
+                            initialPoll={pollCreationState}
+                            onPollChange={(poll) => {
+                                setPollData(poll);
+                            }}
+                        />
+                    )}
+                </div>
+
                 {/* Tags Selection */}
                 {availableTags.length > 0 && (
                     <div>
@@ -362,8 +500,9 @@ export default function EditCommunityPostPage() {
                     type="submit"
                     disabled={
                         editPost.isPending ||
-                        !title.trim() ||
-                        isHtmlContentEmpty(content)
+                        (!pollData &&
+                            !title.trim() &&
+                            isHtmlContentEmpty(content))
                     }
                 >
                     {editPost.isPending ? 'Saving...' : 'Save Changes'}

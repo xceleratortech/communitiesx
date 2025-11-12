@@ -172,11 +172,12 @@ export function PostsFilter({
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="outline"
-                            className="h-9 border-dashed bg-transparent"
+                            size="sm"
+                            className="w-auto min-w-0 justify-center bg-transparent sm:min-w-[100px] sm:justify-between"
                             disabled={isLoading}
                         >
-                            <Filter className="mr-2 h-4 w-4" />
-                            Filters
+                            <Filter className="mr-2 h-4 w-4 sm:mr-2" />
+                            <span className="hidden sm:inline">Filters</span>
                             {getActiveFiltersCount() > 0 && (
                                 <Badge
                                     variant="secondary"
@@ -185,7 +186,7 @@ export function PostsFilter({
                                     {getActiveFiltersCount()}
                                 </Badge>
                             )}
-                            <ChevronDown className="ml-2 h-4 w-4" />
+                            <ChevronDown className="hidden h-4 w-4 sm:block" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent className="w-64" align="end">

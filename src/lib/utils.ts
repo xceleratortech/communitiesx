@@ -31,6 +31,12 @@ export function isOrgAdminForCommunity(
 export function isHtmlContentEmpty(html: string): boolean {
     if (!html || html.trim() === '') return true;
 
+    // If contains media (images or our video placeholders), treat as non-empty
+    const hasImage = /<img\b[^>]*src=/i.test(html);
+    const hasVideoPlaceholder = /\[VIDEO:[^\]]+\]/i.test(html);
+    const hasYouTubeEmbed = /data-youtube-video/i.test(html);
+    if (hasImage || hasVideoPlaceholder || hasYouTubeEmbed) return false;
+
     // Remove HTML tags and check if the remaining text is empty
     const textContent = html.replace(/<[^>]*>/g, '').trim();
     if (textContent === '') return true;
@@ -86,6 +92,29 @@ export function getRelativeTime(date: Date): string {
 }
 
 /**
+ * Formats a date input into a human-readable relative time string
+ * @param dateInput - The date to format (string, number, or Date)
+ * @returns A string like "Just now", "2 minutes ago", "3 hours ago", etc.
+ */
+export function formatRelativeTime(dateInput: string | number | Date): string {
+    const date = new Date(dateInput);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const seconds = Math.floor(diffMs / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 30) return `${days} day${days === 1 ? '' : 's'} ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+    const years = Math.floor(months / 12);
+    return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
+/**
  * Validates and normalizes community role values to ensure they are safe
  * @param role - The role value to validate
  * @param validRoles - Array of valid role values
@@ -128,4 +157,78 @@ export function validateCommunityType(
     type: string | null | undefined,
 ): 'public' | 'private' {
     return validateRole(type, ['public', 'private'] as const, 'public');
+}
+
+/**
+ * Formats a number into a compact notation (e.g., 1.2K, 3.4M)
+ * @param num - The number to format
+ * @returns A formatted string with compact notation
+ */
+export function formatCount(num: number): string {
+    return new Intl.NumberFormat('en', {
+        notation: 'compact',
+        maximumFractionDigits: 1,
+    }).format(num);
+}
+
+/**
+ * Generates initials from a name (first letter of first and last word)
+ * @param name - The name to generate initials from
+ * @returns The initials in uppercase, or empty string if no name provided
+ */
+export function getInitials(name?: string): string {
+    if (!name) return '';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+    return `${parts[0].charAt(0)}${parts[parts.length - 1].charAt(0)}`.toUpperCase();
+}
+
+/**
+ * Interface for member avatar data
+ */
+export interface MemberAvatar {
+    src?: string;
+    initials?: string;
+}
+
+/**
+ * Encodes an R2 key for use in a public URL by URL-encoding each path segment
+ * This handles characters like @, &, and spaces while preserving path structure
+ * @param key - The R2 key to encode
+ * @returns The URL-encoded key
+ */
+export function encodeR2KeyForUrl(key: string): string {
+    return key.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
+ * Generates member avatar data from community members
+ * @param members - Array of community members
+ * @param limit - Maximum number of avatars to generate (default: 3)
+ * @returns Array of member avatar data
+ */
+export function generateMemberAvatars(
+    members: Array<{ user?: { name?: string; image?: string | null } }>,
+    limit: number = 3,
+): MemberAvatar[] {
+    return members.slice(0, limit).map((member) => {
+        const imageId = member?.user?.image;
+        let imageUrl: string | undefined = undefined;
+        if (imageId) {
+            if (imageId.startsWith('http')) {
+                imageUrl = imageId;
+            } else if (imageId.startsWith('/api/images/')) {
+                imageUrl = imageId;
+            } else if (process.env.NEXT_PUBLIC_R2_PUBLIC_URL) {
+                imageUrl = `${process.env.NEXT_PUBLIC_R2_PUBLIC_URL}/${encodeR2KeyForUrl(imageId)}`;
+            } else {
+                imageUrl = `/api/images/${imageId}`;
+            }
+        }
+
+        return {
+            src: imageUrl,
+            initials: getInitials(member?.user?.name),
+        };
+    });
 }

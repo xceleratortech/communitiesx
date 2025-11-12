@@ -1,3 +1,4 @@
+'use client';
 import React, { useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
 
@@ -329,7 +330,6 @@ export function SafeHtml({
                     controlslist="nodownload"
                     x-webkit-airplay="allow"
                     >
-                    <p>Your browser doesn't support HTML video. <a href="${videoUrl}">Download the video</a> instead.</p>
                 </video>`;
             },
         );

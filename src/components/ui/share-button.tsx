@@ -23,6 +23,8 @@ interface ShareButtonProps {
     children?: React.ReactNode;
     onShareSuccess?: () => void;
     onShareError?: (error: string) => void;
+    showLabel?: boolean;
+    label?: string;
 }
 
 export function ShareButton({
@@ -36,6 +38,8 @@ export function ShareButton({
     children,
     onShareSuccess,
     onShareError,
+    showLabel = true,
+    label = 'Share',
 }: ShareButtonProps) {
     const { isSupported, isSharing, share, error } = useWebShare();
     const [showSuccess, setShowSuccess] = useState(false);
@@ -72,6 +76,7 @@ export function ShareButton({
             className={className}
             onClick={handleShare}
             disabled={isSharing}
+            aria-label={label}
         >
             {isSharing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -80,7 +85,11 @@ export function ShareButton({
             ) : (
                 <Share2 className="h-4 w-4" />
             )}
-            {children && <span className="ml-2">{children}</span>}
+            {showLabel && (
+                <span className="ml-2 hidden md:inline">
+                    {children ?? label}
+                </span>
+            )}
         </Button>
     );
 }
