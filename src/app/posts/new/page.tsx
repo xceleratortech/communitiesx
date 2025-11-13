@@ -27,6 +27,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Loading } from '@/components/ui/loading';
+import { isOrgAdminForCommunity } from '@/lib/utils';
+import { usePermission } from '@/hooks/use-permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { isHtmlContentEmpty } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
+import { PollCreator } from '@/components/polls';
+import type { CreatePollData, PollCreationState } from '@/types/poll';
+import { QnACreator, type QnAConfig } from '@/components/qna/QnACreator';
 
 interface Tag {
     id: number;
@@ -45,8 +53,11 @@ function NewPostForm() {
     const { data: session } = useSession();
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const [hasMedia, setHasMedia] = useState(false);
     const [selectedTags, setSelectedTags] = useState<Tag[]>([]);
     const [open, setOpen] = useState(false);
+    const [pollData, setPollData] = useState<CreatePollData | null>(null);
+    const [qaData, setQaData] = useState<QnAConfig | null>(null);
 
     // Fetch community to check membership status if communityId is provided
     const { data: community, isLoading: isLoadingCommunity } =
@@ -56,15 +67,40 @@ function NewPostForm() {
         );
 
     // Check if user is a member of the community
+    const {
+        checkCommunityPermission,
+        isAppAdmin,
+        isLoading: isPermissionLoading,
+    } = usePermission();
+
     const userMembership = community?.members?.find(
         (m) => m.userId === session?.user.id,
     );
+
+    // Check if user is a member of the community
     const isMember =
         !!userMembership && userMembership.membershipType === 'member';
 
-    // Check if user can create posts based on role hierarchy
+    // Check if user can create posts using proper permission system
     const canCreatePost = React.useMemo(() => {
-        if (!isMember || !userMembership) return false;
+        if (!community?.id) return false;
+
+        // SuperAdmin can create posts anywhere
+        if (isAppAdmin()) return true;
+
+        // Check if user has permission to create posts in this community
+        const hasPermission = checkCommunityPermission(
+            community.id.toString(),
+            PERMISSIONS.CREATE_POST,
+            community.orgId, // Pass community's orgId for org admin validation
+        );
+
+        if (hasPermission) return true;
+
+        // Fallback: check if user is a member with appropriate role
+        if (!userMembership || userMembership.membershipType !== 'member') {
+            return false;
+        }
 
         const roleHierarchy = {
             member: 1,
@@ -81,7 +117,13 @@ function NewPostForm() {
             ] || 1;
 
         return userRoleLevel >= minRoleLevel;
-    }, [isMember, userMembership, community?.postCreationMinRole]);
+    }, [
+        community?.id,
+        userMembership,
+        community?.postCreationMinRole,
+        checkCommunityPermission,
+        isAppAdmin,
+    ]);
 
     // Get available tags for the community
     const availableTags = community?.tags || [];
@@ -99,7 +141,13 @@ function NewPostForm() {
 
     // If community ID is provided but user cannot create posts, redirect back to community page
     useEffect(() => {
-        if (communityId && community && !canCreatePost && !isLoadingCommunity) {
+        if (
+            communityId &&
+            community &&
+            !canCreatePost &&
+            !isLoadingCommunity &&
+            !isPermissionLoading
+        ) {
             router.push(`/communities/${communitySlug}`);
         }
     }, [
@@ -109,6 +157,7 @@ function NewPostForm() {
         communitySlug,
         router,
         isLoadingCommunity,
+        isPermissionLoading,
     ]);
 
     if (!session) {
@@ -125,8 +174,27 @@ function NewPostForm() {
         );
     }
 
-    // Show loading state while checking community membership
-    if (communityId && isLoadingCommunity) {
+    // If no community specified, block org-wide posts
+    if (!communityId) {
+        return (
+            <div className="mx-auto max-w-4xl p-4">
+                <h1 className="mb-4 text-3xl font-bold">Select a Community</h1>
+                <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Community Required</AlertTitle>
+                    <AlertDescription>
+                        You must choose a community to create a post.
+                    </AlertDescription>
+                </Alert>
+                <Button asChild>
+                    <Link href="/communities">Browse Communities</Link>
+                </Button>
+            </div>
+        );
+    }
+
+    // Show loading state while checking community membership and permissions
+    if (communityId && (isLoadingCommunity || isPermissionLoading)) {
         return <Loading message="Loading community information..." />;
     }
 
@@ -190,15 +258,29 @@ function NewPostForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!title.trim() || !content.trim()) {
+
+        // Allow submission if there's a poll, even without title/content
+        const hasPoll =
+            pollData && pollData.question.trim() && pollData.options.length > 0;
+        const hasTitleOrContent =
+            title.trim() || !isHtmlContentEmpty(content) || hasMedia;
+
+        if (!hasPoll && !hasTitleOrContent) {
             return;
         }
 
-        await createPost.mutate({
-            title: title.trim(),
+        createPost.mutate({
+            title: title.trim() || (hasPoll ? pollData.question.trim() : ''),
             content: content,
             communityId: communityId,
             tagIds: selectedTags.map((tag) => tag.id), // Send the selected tag IDs
+            poll: pollData || undefined, // Include poll data if present
+            qa: qaData
+                ? {
+                      answersVisibleAt: qaData.answersVisibleAt ?? undefined,
+                      allowEditsUntil: qaData.allowEditsUntil ?? undefined,
+                  }
+                : undefined,
         });
     };
 
@@ -219,14 +301,24 @@ function NewPostForm() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <Label htmlFor="title">Title</Label>
+                    <Label htmlFor="title">
+                        Title{' '}
+                        {pollData && (
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
+                        )}
+                    </Label>
                     <Input
                         type="text"
                         id="title"
-                        placeholder="Enter post title"
+                        placeholder={
+                            pollData
+                                ? 'Enter post title (optional)'
+                                : 'Enter post title'
+                        }
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        required
                     />
                 </div>
 
@@ -238,6 +330,7 @@ function NewPostForm() {
                         placeholder="Write your post content here..."
                         communityId={communityId || undefined}
                         communitySlug={communitySlug || undefined}
+                        onMediaChange={(v) => setHasMedia(v)}
                     />
                 </div>
 
@@ -293,18 +386,7 @@ function NewPostForm() {
                                                                         : 'opacity-0',
                                                                 )}
                                                             />
-                                                            <div>
-                                                                <div className="font-medium">
-                                                                    {tag.name}
-                                                                </div>
-                                                                {tag.description && (
-                                                                    <div className="text-muted-foreground text-sm">
-                                                                        {
-                                                                            tag.description
-                                                                        }
-                                                                    </div>
-                                                                )}
-                                                            </div>
+                                                            {tag.name}
                                                         </CommandItem>
                                                     ),
                                                 )}
@@ -313,8 +395,6 @@ function NewPostForm() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-
-                            {/* Selected Tags Display */}
                             {selectedTags.length > 0 && (
                                 <div className="flex flex-wrap gap-2">
                                     {selectedTags.map((tag) => (
@@ -324,12 +404,15 @@ function NewPostForm() {
                                             className="flex items-center gap-1"
                                         >
                                             {tag.name}
-                                            <X
-                                                className="h-3 w-3 cursor-pointer"
+                                            <button
+                                                type="button"
                                                 onClick={() =>
                                                     handleTagRemove(tag.id)
                                                 }
-                                            />
+                                                className="ml-1 rounded-full p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
                                         </Badge>
                                     ))}
                                 </div>
@@ -338,22 +421,30 @@ function NewPostForm() {
                     </div>
                 )}
 
-                <div className="flex space-x-4">
-                    {communitySlug && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() =>
-                                router.push(`/communities/${communitySlug}`)
-                            }
-                        >
-                            Cancel
-                        </Button>
+                {/* Poll Creation */}
+                <QnACreator onChange={setQaData} />
+                <PollCreator onPollChange={setPollData} />
+
+                <Button
+                    type="submit"
+                    disabled={
+                        createPost.isPending ||
+                        (!pollData &&
+                            !title.trim() &&
+                            isHtmlContentEmpty(content) &&
+                            !hasMedia)
+                    }
+                    className="w-full"
+                >
+                    {createPost.isPending ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Creating Post...
+                        </>
+                    ) : (
+                        'Create Post'
                     )}
-                    <Button type="submit" disabled={createPost.isPending}>
-                        {createPost.isPending ? 'Creating...' : 'Create Post'}
-                    </Button>
-                </div>
+                </Button>
             </form>
         </div>
     );
@@ -361,9 +452,7 @@ function NewPostForm() {
 
 export default function NewPostPage() {
     return (
-        <Suspense
-            fallback={<div className="mx-auto max-w-4xl p-4">Loading...</div>}
-        >
+        <Suspense fallback={<Loading message="Loading editor..." />}>
             <NewPostForm />
         </Suspense>
     );

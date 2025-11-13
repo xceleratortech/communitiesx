@@ -1,10 +1,20 @@
-import { eq, count, and, like, or } from 'drizzle-orm';
+import {
+    eq,
+    count,
+    and,
+    like,
+    ilike,
+    or,
+    desc,
+    asc,
+    ne,
+    inArray,
+} from 'drizzle-orm';
 import { z } from 'zod';
-import { router, publicProcedure } from '../trpc';
+import { router, publicProcedure, authProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
 import {
-    users,
     orgs,
     posts,
     comments,
@@ -20,12 +30,28 @@ import {
     attachments,
     userBadgeAssignments,
     userBadges,
+    userProfiles,
     pushSubscriptions,
     loginEvents,
     sessions,
-    accounts,
+    orgMembers,
+    notificationPreferences,
+    postTags,
+    tags,
+    verifications,
 } from '@/server/db/schema';
+import { users, accounts } from '@/server/db/auth-schema';
 import type { Org, OrgMember } from '@/types/models';
+import { SQL } from 'drizzle-orm';
+import { sendEmail } from '@/lib/email';
+import {
+    createWelcomeEmail,
+    createInvitationEmail,
+} from '@/lib/email-templates';
+import { ServerPermissions } from '@/server/utils/permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
+import { nanoid } from 'nanoid';
+import crypto from 'crypto';
 
 export const organizationsRouter = router({
     // Get organization details by ID
@@ -186,6 +212,11 @@ export const organizationsRouter = router({
             }
 
             try {
+                // Early return if search term is empty after trimming
+                if (!input.searchTerm.trim()) {
+                    return [];
+                }
+
                 // Get the user and their orgId
                 const user = await db.query.users.findFirst({
                     where: eq(users.id, input.userId),
@@ -201,8 +232,8 @@ export const organizationsRouter = router({
                     where: and(
                         eq(orgs.id, user.orgId),
                         or(
-                            like(orgs.name, `%${input.searchTerm}%`),
-                            like(orgs.slug, `%${input.searchTerm}%`),
+                            ilike(orgs.name, `%${input.searchTerm.trim()}%`),
+                            ilike(orgs.slug, `%${input.searchTerm.trim()}%`),
                         ),
                     ),
                 });
@@ -250,7 +281,13 @@ export const organizationsRouter = router({
                     message: 'Organization not found',
                 });
 
-            const orgCommunities = await db.query.communities.findMany({
+            // Get communities that directly belong to this organization
+            const directCommunities = await db.query.communities.findMany({
+                where: eq(communities.orgId, org.id),
+            });
+
+            // Get communities that are allowed for this organization via communityAllowedOrgs
+            const allowedCommunities = await db.query.communities.findMany({
                 where: (communities, { inArray }) =>
                     inArray(
                         communities.id,
@@ -262,6 +299,17 @@ export const organizationsRouter = router({
                             .where(eq(communityAllowedOrgs.orgId, org.id)),
                     ),
             });
+
+            // Combine and deduplicate communities
+            const allCommunities = [
+                ...directCommunities,
+                ...allowedCommunities.filter(
+                    (allowed) =>
+                        !directCommunities.some(
+                            (direct) => direct.id === allowed.id,
+                        ),
+                ),
+            ];
 
             const members = await db.query.users.findMany({
                 where: eq(users.orgId, org.id),
@@ -275,17 +323,91 @@ export const organizationsRouter = router({
                 orderBy: [users.createdAt],
             });
 
-            return { ...org, communities: orgCommunities, members };
+            return { ...org, communities: allCommunities, members };
         }),
 
-    deleteCommunity: publicProcedure
+    deleteCommunity: authProcedure
         .input(z.object({ communityId: z.number() }))
         .mutation(async ({ input, ctx }) => {
-            // Optionally: check permissions here
-            await db
-                .delete(communities)
-                .where(eq(communities.id, input.communityId));
-            return { success: true };
+            try {
+                // Check if user has permission to delete this community
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Get the community to check ownership and permissions
+                const community = await db.query.communities.findFirst({
+                    where: eq(communities.id, input.communityId),
+                });
+
+                if (!community) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Community not found',
+                    });
+                }
+
+                const permission = await ServerPermissions.fromUserId(
+                    ctx.session.user.id,
+                );
+                const canDelete = await permission.checkCommunityPermission(
+                    input.communityId.toString(),
+                    PERMISSIONS.DELETE_COMMUNITY,
+                );
+
+                if (!canDelete) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to delete this community',
+                    });
+                }
+
+                const result = await db.transaction(async (tx) => {
+                    const postIdsInCommunityQuery = tx
+                        .select({ id: posts.id })
+                        .from(posts)
+                        .where(eq(posts.communityId, input.communityId));
+
+                    await tx
+                        .delete(comments)
+                        .where(
+                            inArray(comments.postId, postIdsInCommunityQuery),
+                        );
+
+                    await tx
+                        .delete(posts)
+                        .where(eq(posts.communityId, input.communityId));
+
+                    await tx
+                        .delete(communities)
+                        .where(eq(communities.id, input.communityId));
+
+                    return {
+                        success: true,
+                        message: 'Community has been permanently deleted',
+                    };
+                });
+
+                return result;
+            } catch (error) {
+                console.error('Error deleting community:', error);
+                if (error instanceof TRPCError) {
+                    throw error;
+                }
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete community. Please try again.',
+                });
+            }
         }),
 
     getOrganizationsForCommunityCreate: publicProcedure
@@ -359,9 +481,113 @@ export const organizationsRouter = router({
             return { success: true, message: 'User has been made an admin' };
         }),
 
+    // Get paginated organization members with search and filtering
+    getOrganizationMembersPaginated: publicProcedure
+        .input(
+            z.object({
+                orgId: z.string(),
+                page: z.number().min(1).default(1),
+                limit: z.number().min(1).max(100).default(10),
+                search: z.string().optional(),
+                role: z.enum(['all', 'admin', 'user']).default('all'),
+                sortBy: z
+                    .enum(['name', 'email', 'createdAt', 'role'])
+                    .default('createdAt'),
+                sortOrder: z.enum(['asc', 'desc']).default('desc'),
+            }),
+        )
+        .query(async ({ input, ctx }) => {
+            if (!ctx.session?.user) {
+                throw new TRPCError({
+                    code: 'UNAUTHORIZED',
+                    message:
+                        'You must be logged in to view organization members',
+                });
+            }
+
+            try {
+                // Build where conditions
+                const whereConditions: SQL<unknown>[] = [
+                    eq(users.orgId, input.orgId),
+                ];
+
+                // Add search condition
+                if (input.search && input.search.trim()) {
+                    const searchCondition = or(
+                        ilike(users.name, `%${input.search.trim()}%`),
+                        ilike(users.email, `%${input.search.trim()}%`),
+                    );
+                    if (searchCondition) {
+                        whereConditions.push(searchCondition);
+                    }
+                }
+
+                // Add role filter
+                if (input.role !== 'all') {
+                    whereConditions.push(eq(users.role, input.role));
+                }
+
+                // Count total members matching criteria
+                const [totalResult] = await db
+                    .select({ count: count() })
+                    .from(users)
+                    .where(and(...whereConditions));
+
+                const total = totalResult?.count || 0;
+                const totalPages = Math.ceil(total / input.limit);
+                const offset = (input.page - 1) * input.limit;
+
+                // Get paginated members
+                const members = await db.query.users.findMany({
+                    where: and(...whereConditions),
+                    columns: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        role: true,
+                        createdAt: true,
+                    },
+                    orderBy: (() => {
+                        const sortableColumns = {
+                            name: users.name,
+                            email: users.email,
+                            createdAt: users.createdAt,
+                            role: users.role,
+                        };
+                        const column = sortableColumns[input.sortBy];
+                        const order = input.sortOrder === 'asc' ? asc : desc;
+                        return [order(column)];
+                    })(),
+                    limit: input.limit,
+                    offset: offset,
+                });
+
+                return {
+                    members,
+                    pagination: {
+                        page: input.page,
+                        limit: input.limit,
+                        total,
+                        totalPages,
+                        hasNextPage: input.page < totalPages,
+                        hasPrevPage: input.page > 1,
+                    },
+                };
+            } catch (error) {
+                console.error('Error fetching organization members:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch organization members',
+                });
+            }
+        }),
+
     removeOrgMember: publicProcedure
         .input(z.object({ orgId: z.string(), userId: z.string() }))
         .mutation(async ({ input, ctx }) => {
+            // This function removes a user from an organization by deleting their content
+            // and transferring ownership of communities to organization admins.
+
             if (!ctx.session?.user) {
                 throw new TRPCError({
                     code: 'UNAUTHORIZED',
@@ -415,110 +641,507 @@ export const organizationsRouter = router({
             // Delete all related data first, then delete the user
             // This handles foreign key constraints by deleting in the correct order
 
-            // Delete user badge assignments
-            await db
-                .delete(userBadgeAssignments)
-                .where(eq(userBadgeAssignments.userId, input.userId));
-
-            // Delete push subscriptions
-            await db
-                .delete(pushSubscriptions)
-                .where(eq(pushSubscriptions.userId, input.userId));
-
-            // Delete login events
-            await db
-                .delete(loginEvents)
-                .where(eq(loginEvents.userId, input.userId));
-
-            // Delete sessions
-            await db.delete(sessions).where(eq(sessions.userId, input.userId));
-
-            // Delete accounts
-            await db.delete(accounts).where(eq(accounts.userId, input.userId));
-
-            // Delete reactions
-            await db
-                .delete(reactions)
-                .where(eq(reactions.userId, input.userId));
-
-            // Delete notifications
-            await db
-                .delete(notifications)
-                .where(eq(notifications.recipientId, input.userId));
-
-            // Delete direct messages
-            await db
-                .delete(directMessages)
-                .where(
-                    or(
-                        eq(directMessages.senderId, input.userId),
-                        eq(directMessages.recipientId, input.userId),
+            try {
+                // Find an organization admin to transfer ownership of user's content
+                const orgAdmin = await db.query.users.findFirst({
+                    where: and(
+                        eq(users.orgId, input.orgId),
+                        eq(users.role, 'admin'),
+                        ne(users.id, input.userId),
                     ),
+                    columns: { id: true },
+                });
+
+                // Use a transaction for critical operations
+                const result = await db.transaction(async (tx) => {
+                    try {
+                        // Delete user's content to resolve foreign key constraints
+                        // IMPORTANT: Delete in correct order to avoid foreign key violations
+
+                        // 1. First delete post tags for posts by this user
+                        await tx
+                            .delete(postTags)
+                            .where(
+                                inArray(
+                                    postTags.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
+
+                        // 2. Delete comments by this user
+                        await tx
+                            .delete(comments)
+                            .where(eq(comments.authorId, input.userId));
+
+                        // 3. Delete ALL comments that reference posts by this user
+                        // This is critical - comments by other users on posts by this user must be deleted first
+                        await tx
+                            .delete(comments)
+                            .where(
+                                inArray(
+                                    comments.postId,
+                                    tx
+                                        .select({ id: posts.id })
+                                        .from(posts)
+                                        .where(
+                                            eq(posts.authorId, input.userId),
+                                        ),
+                                ),
+                            );
+
+                        // 4. Now safe to delete posts
+                        await tx
+                            .delete(posts)
+                            .where(eq(posts.authorId, input.userId));
+
+                        // 3. Delete other user-related data
+                        await tx
+                            .delete(reactions)
+                            .where(eq(reactions.userId, input.userId));
+                        await tx
+                            .delete(notifications)
+                            .where(eq(notifications.recipientId, input.userId));
+
+                        // Delete notification preferences
+                        await tx
+                            .delete(notificationPreferences)
+                            .where(
+                                eq(
+                                    notificationPreferences.userId,
+                                    input.userId,
+                                ),
+                            );
+
+                        await tx
+                            .delete(communityMembers)
+                            .where(eq(communityMembers.userId, input.userId));
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.userId,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityMemberRequests)
+                            .where(
+                                eq(
+                                    communityMemberRequests.reviewedBy,
+                                    input.userId,
+                                ),
+                            );
+                        await tx
+                            .delete(communityInvites)
+                            .where(
+                                or(
+                                    eq(
+                                        communityInvites.createdBy,
+                                        input.userId,
+                                    ),
+                                    eq(communityInvites.usedBy, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(communityAllowedOrgs)
+                            .where(
+                                eq(communityAllowedOrgs.addedBy, input.userId),
+                            );
+                        await tx
+                            .delete(userBadges)
+                            .where(eq(userBadges.createdBy, input.userId));
+                        await tx
+                            .delete(userBadgeAssignments)
+                            .where(
+                                eq(userBadgeAssignments.userId, input.userId),
+                            );
+                        await tx
+                            .delete(userProfiles)
+                            .where(eq(userProfiles.userId, input.userId));
+                        await tx
+                            .delete(attachments)
+                            .where(eq(attachments.uploadedBy, input.userId));
+                        await tx
+                            .delete(directMessages)
+                            .where(
+                                or(
+                                    eq(directMessages.senderId, input.userId),
+                                    eq(
+                                        directMessages.recipientId,
+                                        input.userId,
+                                    ),
+                                ),
+                            );
+                        await tx
+                            .delete(chatThreads)
+                            .where(
+                                or(
+                                    eq(chatThreads.user1Id, input.userId),
+                                    eq(chatThreads.user2Id, input.userId),
+                                ),
+                            );
+                        await tx
+                            .delete(orgMembers)
+                            .where(eq(orgMembers.userId, input.userId));
+                        await tx
+                            .delete(pushSubscriptions)
+                            .where(eq(pushSubscriptions.userId, input.userId));
+                        await tx
+                            .delete(loginEvents)
+                            .where(eq(loginEvents.userId, input.userId));
+
+                        // Transfer community ownership if user created any
+                        if (orgAdmin) {
+                            await tx
+                                .update(communities)
+                                .set({ createdBy: orgAdmin.id })
+                                .where(eq(communities.createdBy, input.userId));
+                        }
+
+                        // Delete the user
+                        await tx
+                            .delete(users)
+                            .where(eq(users.id, input.userId));
+
+                        return {
+                            success: true,
+                            message:
+                                'User has been permanently removed from the organization',
+                        };
+                    } catch (txError) {
+                        throw txError;
+                    }
+                });
+
+                return result;
+            } catch (error) {
+                console.error('Detailed error in removeOrgMember:', error);
+                console.error(
+                    'Error stack:',
+                    error instanceof Error ? error.stack : 'No stack trace',
                 );
 
-            // Delete chat threads
-            await db
-                .delete(chatThreads)
-                .where(
-                    or(
-                        eq(chatThreads.user1Id, input.userId),
-                        eq(chatThreads.user2Id, input.userId),
-                    ),
+                // If it's a database constraint error, provide more specific information
+                if (
+                    error instanceof Error &&
+                    error.message.includes('foreign key constraint')
+                ) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message:
+                            'Cannot remove user due to remaining data dependencies. Please contact support.',
+                    });
+                }
+
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to delete user data. Please try again.',
+                });
+            }
+        }),
+
+    // Create a new user within the organization (for org admins)
+    createUser: authProcedure
+        .input(
+            z.object({
+                name: z.string().min(1),
+                email: z.string().email(),
+                password: z.string().min(8),
+                role: z.enum(['admin', 'user']),
+                orgId: z.string(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Get the current user's details
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, role: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Check if user is super admin or org admin of the target organization
+                const isSuperAdmin = currentUser.appRole === 'admin';
+                const isOrgAdmin =
+                    currentUser.role === 'admin' &&
+                    currentUser.orgId === input.orgId;
+
+                if (!isSuperAdmin && !isOrgAdmin) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to create users in this organization',
+                    });
+                }
+
+                // Verify the organization exists
+                const org = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, input.orgId),
+                });
+
+                if (!org) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Organization not found',
+                    });
+                }
+
+                // Check if user with same email already exists
+                const existingUser = await db.query.users.findFirst({
+                    where: eq(users.email, input.email),
+                });
+
+                if (existingUser) {
+                    // Check if the existing user belongs to a different organization
+                    if (
+                        existingUser.orgId &&
+                        existingUser.orgId !== input.orgId
+                    ) {
+                        throw new TRPCError({
+                            code: 'CONFLICT',
+                            message:
+                                'User already belongs to another organization',
+                        });
+                    } else if (existingUser.orgId === input.orgId) {
+                        throw new TRPCError({
+                            code: 'CONFLICT',
+                            message: 'User already exists in this organization',
+                        });
+                    }
+                }
+
+                // Import nanoid for generating user ID
+                const { nanoid } = await import('nanoid');
+                const { hashPassword } = await import('better-auth/crypto');
+
+                // Create user manually
+                const userId = nanoid();
+                const now = new Date();
+
+                // Hash the password
+                const hashedPassword = await hashPassword(input.password);
+
+                // Create the user
+                const userInsert = {
+                    id: userId,
+                    name: input.name,
+                    email: input.email,
+                    emailVerified: true, // Admin-created users are pre-verified
+                    role: input.role,
+                    appRole: 'user', // Org admins can only create regular users
+                    orgId: input.orgId,
+                    createdAt: now,
+                    updatedAt: now,
+                };
+
+                const [user] = await db
+                    .insert(users)
+                    .values(userInsert)
+                    .returning();
+
+                // Create account with password
+                await db.insert(accounts).values({
+                    id: nanoid(),
+                    userId: userId,
+                    providerId: 'credential',
+                    accountId: userId,
+                    password: hashedPassword,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+
+                // Send welcome email
+                try {
+                    const welcomeEmail = createWelcomeEmail(
+                        `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/login`,
+                    );
+                    await sendEmail({
+                        to: user.email,
+                        subject: welcomeEmail.subject,
+                        html: welcomeEmail.html,
+                    });
+                    console.log(`Welcome email sent to ${user.email}`);
+                } catch (emailError) {
+                    console.error('Failed to send welcome email:', emailError);
+                    // Don't fail the user creation if email fails
+                }
+
+                return user;
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error creating user:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to create user',
+                });
+            }
+        }),
+
+    // Bulk invite users to organization
+    inviteUsersByEmail: authProcedure
+        .input(
+            z.object({
+                orgId: z.string(),
+                emails: z.array(z.string().email()),
+                role: z.enum(['admin', 'user']).default('user'),
+                senderName: z.string().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            try {
+                // Get the current user's details
+                const currentUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                    columns: { orgId: true, role: true, appRole: true },
+                });
+
+                if (!currentUser) {
+                    throw new TRPCError({
+                        code: 'UNAUTHORIZED',
+                        message: 'User not found',
+                    });
+                }
+
+                // Check if user is super admin or org admin of the target organization
+                const isSuperAdmin = currentUser.appRole === 'admin';
+                const isOrgAdmin =
+                    currentUser.role === 'admin' &&
+                    currentUser.orgId === input.orgId;
+
+                if (!isSuperAdmin && !isOrgAdmin) {
+                    throw new TRPCError({
+                        code: 'FORBIDDEN',
+                        message:
+                            'You do not have permission to invite users to this organization',
+                    });
+                }
+
+                // Verify the organization exists
+                const org = await db.query.orgs.findFirst({
+                    where: eq(orgs.id, input.orgId),
+                });
+
+                if (!org) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Organization not found',
+                    });
+                }
+
+                const results = await Promise.all(
+                    input.emails.map(async (email) => {
+                        try {
+                            // Check if user already exists
+                            const existingUser = await db.query.users.findFirst(
+                                {
+                                    where: eq(users.email, email),
+                                },
+                            );
+
+                            if (existingUser) {
+                                if (existingUser.orgId === input.orgId) {
+                                    return {
+                                        email,
+                                        success: false,
+                                        error: 'User already exists in this organization',
+                                    };
+                                } else if (existingUser.orgId) {
+                                    return {
+                                        email,
+                                        success: false,
+                                        error: 'User already belongs to another organization',
+                                    };
+                                }
+                            }
+
+                            // Generate invite token
+                            const inviteToken = crypto
+                                .randomBytes(32)
+                                .toString('hex');
+                            const now = new Date();
+                            const expiresAt = new Date();
+                            expiresAt.setDate(expiresAt.getDate() + 7);
+
+                            // Store invite in verifications table
+                            await db.insert(verifications).values({
+                                id: nanoid(),
+                                identifier: email,
+                                value: JSON.stringify({
+                                    token: inviteToken,
+                                    orgId: input.orgId,
+                                    role: input.role,
+                                    appRole: 'user',
+                                }),
+                                expiresAt,
+                                createdAt: now,
+                                updatedAt: now,
+                            });
+
+                            // Send the invite email
+                            const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${email}`;
+
+                            // Determine the sender name to use
+                            const senderName = input.senderName || org.name;
+
+                            const invitationEmail = createInvitationEmail(
+                                senderName,
+                                inviteUrl,
+                                input.role,
+                                false, // Not a super admin invite
+                            );
+
+                            await sendEmail({
+                                to: email,
+                                subject: invitationEmail.subject,
+                                html: invitationEmail.html,
+                            });
+
+                            return {
+                                email,
+                                success: true,
+                            };
+                        } catch (emailError) {
+                            console.error(
+                                `Error inviting ${email}:`,
+                                emailError,
+                            );
+                            return {
+                                email,
+                                success: false,
+                                error: 'Failed to send invitation email',
+                            };
+                        }
+                    }),
                 );
 
-            // Delete community member requests
-            await db
-                .delete(communityMemberRequests)
-                .where(eq(communityMemberRequests.userId, input.userId));
+                const successCount = results.filter((r) => r.success).length;
+                const failureCount = results.filter((r) => !r.success).length;
 
-            // Delete community members
-            await db
-                .delete(communityMembers)
-                .where(eq(communityMembers.userId, input.userId));
-
-            // Delete comments
-            await db
-                .delete(comments)
-                .where(eq(comments.authorId, input.userId));
-
-            // Delete posts
-            await db.delete(posts).where(eq(posts.authorId, input.userId));
-
-            // Delete attachments
-            await db
-                .delete(attachments)
-                .where(eq(attachments.uploadedBy, input.userId));
-
-            // Delete community invites (where user is the creator or user)
-            await db
-                .delete(communityInvites)
-                .where(
-                    or(
-                        eq(communityInvites.createdBy, input.userId),
-                        eq(communityInvites.usedBy, input.userId),
-                    ),
-                );
-
-            // Delete community allowed orgs (where user is the adder)
-            await db
-                .delete(communityAllowedOrgs)
-                .where(eq(communityAllowedOrgs.addedBy, input.userId));
-
-            // Delete user badges (where user is the creator)
-            await db
-                .delete(userBadges)
-                .where(eq(userBadges.createdBy, input.userId));
-
-            // Finally delete the user
-            const result = await db
-                .delete(users)
-                .where(eq(users.id, input.userId))
-                .returning();
-
-            return {
-                success: true,
-                message:
-                    'User has been permanently removed from the organization',
-            };
+                return {
+                    success: true,
+                    message: `Successfully sent ${successCount} invitation(s). ${failureCount} failed.`,
+                    results,
+                    successCount,
+                    failureCount,
+                };
+            } catch (error) {
+                if (error instanceof TRPCError) throw error;
+                console.error('Error in bulk invite:', error);
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to send invitations',
+                });
+            }
         }),
 });

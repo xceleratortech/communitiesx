@@ -9,6 +9,7 @@ import {
     communityMembers,
     communities,
     userBadgeAssignments,
+    posts,
 } from '@/server/db/schema';
 import { getUserPermission } from '../services/user-service';
 

@@ -25,6 +25,7 @@ import { trpc } from '@/providers/trpc-provider';
 import { Copy } from 'lucide-react';
 import type { inferProcedureOutput } from '@trpc/server';
 import type { AppRouter } from '@/server/trpc/routers';
+import { validatePostCreationMinRole } from '@/lib/utils';
 
 interface InviteLinkDialogProps {
     open: boolean;
@@ -45,7 +46,7 @@ export function InviteLinkDialog({
     isAdmin,
 }: InviteLinkDialogProps) {
     const [form, setForm] = useState({
-        role: 'member' as 'member' | 'moderator',
+        role: validatePostCreationMinRole('member'),
         expiresInDays: '7',
     });
 
@@ -152,7 +153,10 @@ export function InviteLinkDialog({
                                 onValueChange={(role) =>
                                     setForm({
                                         ...form,
-                                        role: role as 'member' | 'moderator',
+                                        role: role as
+                                            | 'member'
+                                            | 'moderator'
+                                            | 'admin',
                                     })
                                 }
                                 disabled={!isAdmin}
@@ -172,11 +176,17 @@ export function InviteLinkDialog({
                                             Moderator
                                         </SelectItem>
                                     )}
+                                    {isAdmin && (
+                                        <SelectItem value="admin">
+                                            Admin
+                                        </SelectItem>
+                                    )}
                                 </SelectContent>
                             </Select>
                             {!isAdmin && (
                                 <p className="text-muted-foreground col-span-4 text-right text-xs">
-                                    Only admins can create moderator invites
+                                    Only admins can create moderator and admin
+                                    invites
                                 </p>
                             )}
                         </div>

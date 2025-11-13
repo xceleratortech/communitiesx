@@ -1,4 +1,5 @@
-import React from 'react';
+'use client';
+import React, { useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
 
 // Configure DOMPurify with safe options for rich text content
@@ -59,6 +60,14 @@ const purifyConfig = {
         'muted',
         'loop',
         'poster',
+        'playsinline',
+        'webkit-playsinline',
+        'preload',
+        'muted',
+        'crossorigin',
+        'disablepictureinpicture',
+        'controlslist',
+        'x-webkit-airplay',
         // iframe attributes for YouTube embeds
         'frameborder',
         'allowfullscreen',
@@ -298,16 +307,66 @@ export function SafeHtml({
     className?: string;
     [key: string]: any;
 }) {
+    // Use the mobile video fix hook
+    useMobileVideoFix();
+
     // Replace video placeholders with actual video HTML
     let processedHtml = html;
     if (html.includes('[VIDEO:')) {
         processedHtml = html.replace(
             /\[VIDEO:([^\]]+)\]/g,
             (match, videoUrl) => {
-                return `<video src="${videoUrl}" controls width="100%" style="max-width: 100%; border-radius: 0.375rem;"></video>`;
+                return `<video 
+                    src="${videoUrl}" 
+                    controls 
+                    playsinline 
+                    webkit-playsinline 
+                    preload="metadata" 
+                    muted 
+                    width="100%" 
+                    style="max-width: 100%; border-radius: 0.375rem; display: block; margin: 1rem 0;"
+                    crossorigin="anonymous"
+                    disablepictureinpicture="false"
+                    controlslist="nodownload"
+                    x-webkit-airplay="allow"
+                    >
+                </video>`;
             },
         );
     }
+
+    // Also handle any existing video elements to ensure they have mobile-friendly attributes
+    processedHtml = processedHtml.replace(
+        /<video([^>]*)>/g,
+        (match, attributes) => {
+            // Add mobile-friendly attributes if they don't already exist
+            let newAttributes = attributes;
+
+            if (!newAttributes.includes('playsinline')) {
+                newAttributes += ' playsinline';
+            }
+            if (!newAttributes.includes('webkit-playsinline')) {
+                newAttributes += ' webkit-playsinline';
+            }
+            if (!newAttributes.includes('preload=')) {
+                newAttributes += ' preload="metadata"';
+            }
+            if (!newAttributes.includes('controls')) {
+                newAttributes += ' controls';
+            }
+            if (!newAttributes.includes('muted')) {
+                newAttributes += ' muted';
+            }
+            if (!newAttributes.includes('crossorigin')) {
+                newAttributes += ' crossorigin="anonymous"';
+            }
+            if (!newAttributes.includes('x-webkit-airplay')) {
+                newAttributes += ' x-webkit-airplay="allow"';
+            }
+
+            return `<video${newAttributes}>`;
+        },
+    );
 
     const sanitizedHtml = sanitizeHtml(processedHtml);
 
@@ -354,4 +413,103 @@ export function getHtmlPreview(html: string, maxLength: number = 100): string {
     }
 
     return textOnly.substring(0, maxLength) + '...';
+}
+
+/**
+ * Custom hook to handle mobile video playback issues
+ */
+export function useMobileVideoFix() {
+    const videoRefs = useRef<HTMLVideoElement[]>([]);
+
+    useEffect(() => {
+        // Function to apply mobile fixes to a video element
+        const applyMobileFixes = (video: HTMLVideoElement) => {
+            // Ensure mobile-friendly attributes are set
+            if (!video.hasAttribute('playsinline')) {
+                video.setAttribute('playsinline', '');
+            }
+            if (!video.hasAttribute('webkit-playsinline')) {
+                video.setAttribute('webkit-playsinline', '');
+            }
+            if (!video.hasAttribute('preload')) {
+                video.setAttribute('preload', 'metadata');
+            }
+            if (!video.hasAttribute('controls')) {
+                video.setAttribute('controls', '');
+            }
+
+            // Add muted attribute for better mobile compatibility
+            if (!video.hasAttribute('muted')) {
+                video.setAttribute('muted', '');
+            }
+
+            // Add touch event handlers for mobile
+            const handleTouchStart = (e: TouchEvent) => {
+                // Prevent default touch behavior that might interfere with video controls
+                e.stopPropagation();
+            };
+
+            const handleLoadedMetadata = () => {
+                // Ensure video is properly loaded for mobile playback
+                video.style.display = 'block';
+            };
+
+            video.addEventListener('touchstart', handleTouchStart, {
+                passive: false,
+            });
+            video.addEventListener('loadedmetadata', handleLoadedMetadata);
+
+            // Return cleanup function
+            return () => {
+                video.removeEventListener('touchstart', handleTouchStart);
+                video.removeEventListener(
+                    'loadedmetadata',
+                    handleLoadedMetadata,
+                );
+            };
+        };
+
+        // Find all video elements and apply mobile fixes
+        const videos = document.querySelectorAll('video');
+        videoRefs.current = Array.from(videos) as HTMLVideoElement[];
+        const cleanupFunctions: (() => void)[] = [];
+
+        videoRefs.current.forEach((video) => {
+            const cleanup = applyMobileFixes(video);
+            if (cleanup) {
+                cleanupFunctions.push(cleanup);
+            }
+        });
+
+        // Set up a mutation observer to handle dynamically added videos
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        const element = node as Element;
+                        const videos = element.querySelectorAll('video');
+                        videos.forEach((video) => {
+                            const cleanup = applyMobileFixes(video);
+                            if (cleanup) {
+                                cleanupFunctions.push(cleanup);
+                            }
+                        });
+                    }
+                });
+            });
+        });
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+        });
+
+        // Cleanup function
+        return () => {
+            observer.disconnect();
+            cleanupFunctions.forEach((cleanup) => cleanup());
+        };
+    }, []);
+
+    return videoRefs.current;
 }

@@ -21,17 +21,17 @@ import {
     FormLabel,
     FormMessage,
 } from '@/components/ui/form';
-import { ArrowLeft, Globe, Lock, ImageIcon } from 'lucide-react';
+import { ArrowLeft, Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Loading } from '@/components/ui/loading';
+import { usePermission } from '@/hooks/use-permission';
+import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    validatePostCreationMinRole,
+    validateCommunityType,
+} from '@/lib/utils';
+import { ImageUpload } from '@/components/ui/image-upload';
 
 const formSchema = z.object({
     name: z.string().min(3).max(50),
@@ -42,9 +42,32 @@ const formSchema = z.object({
         .regex(/^[a-z0-9-]+$/),
     description: z.string().max(500).optional(),
     type: z.enum(['public', 'private']),
+    postCreationMinRole: z.enum(['member', 'moderator', 'admin']),
     rules: z.string().max(2000).optional(),
-    avatar: z.string().url().optional().nullable(),
-    banner: z.string().url().optional().nullable(),
+    avatar: z
+        .string()
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
+        .optional()
+        .nullable(),
+    banner: z
+        .string()
+        .refine(
+            (val) => {
+                if (!val || val === '') return true;
+                // Allow URLs or our internal image paths
+                return val.startsWith('http') || val.startsWith('/api/images/');
+            },
+            { message: 'Please enter a valid URL or upload an image' },
+        )
+        .optional()
+        .nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -61,6 +84,8 @@ export default function EditCommunityPage() {
     useEffect(() => {
         setIsClient(true);
     }, []);
+
+    const { checkCommunityPermission, isAppAdmin } = usePermission();
 
     // Fetch community data
     const { data: community, isLoading } = trpc.communities.getBySlug.useQuery(
@@ -87,10 +112,10 @@ export default function EditCommunityPage() {
             name: community?.name || '',
             slug: community?.slug || '',
             description: community?.description || '',
-            type:
-                community?.type === 'public' || community?.type === 'private'
-                    ? community.type
-                    : 'public',
+            type: validateCommunityType(community?.type),
+            postCreationMinRole: validatePostCreationMinRole(
+                community?.postCreationMinRole,
+            ),
             rules: community?.rules || '',
             avatar: community?.avatar || '',
             banner: community?.banner || '',
@@ -100,11 +125,10 @@ export default function EditCommunityPage() {
                   name: community.name || '',
                   slug: community.slug || '',
                   description: community.description || '',
-                  type:
-                      community.type === 'public' ||
-                      community.type === 'private'
-                          ? community.type
-                          : 'public',
+                  type: validateCommunityType(community.type),
+                  postCreationMinRole: validatePostCreationMinRole(
+                      community.postCreationMinRole,
+                  ),
                   rules: community.rules || '',
                   avatar: community.avatar || '',
                   banner: community.banner || '',
@@ -120,6 +144,8 @@ export default function EditCommunityPage() {
             communityId: community.id,
             name: values.name,
             description: values.description || null,
+            type: values.type,
+            postCreationMinRole: values.postCreationMinRole,
             rules: values.rules || null,
             avatar: values.avatar || null,
             banner: values.banner || null,
@@ -191,6 +217,29 @@ export default function EditCommunityPage() {
         );
     }
 
+    // Check if user has permission to edit this community
+    const canEditCommunity =
+        isAppAdmin() ||
+        (community?.id &&
+            checkCommunityPermission(
+                community.id.toString(),
+                PERMISSIONS.EDIT_COMMUNITY,
+            ));
+
+    if (!canEditCommunity) {
+        return (
+            <div className="container mx-auto px-4 py-16 text-center">
+                <h1 className="mb-4 text-3xl font-bold">Access Denied</h1>
+                <p className="text-muted-foreground mb-8">
+                    You do not have permission to edit this community.
+                </p>
+                <Button asChild>
+                    <Link href={`/communities/${slug}`}>Back to Community</Link>
+                </Button>
+            </div>
+        );
+    }
+
     return (
         <div className="container mx-auto max-w-4xl py-4">
             <div className="mb-8">
@@ -241,9 +290,14 @@ export default function EditCommunityPage() {
                                                 placeholder="community-url"
                                                 {...field}
                                                 disabled
+                                                className="bg-muted"
                                             />
                                         </div>
                                     </FormControl>
+                                    <FormDescription className="text-muted-foreground">
+                                        Community URLs cannot be changed after
+                                        creation to maintain link consistency.
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -332,6 +386,83 @@ export default function EditCommunityPage() {
 
                         <FormField
                             control={form.control}
+                            name="postCreationMinRole"
+                            render={({ field }) => (
+                                <FormItem className="space-y-3">
+                                    <FormLabel>
+                                        Post Creation Permissions
+                                    </FormLabel>
+                                    <FormControl>
+                                        <RadioGroup
+                                            onValueChange={field.onChange}
+                                            defaultValue={field.value}
+                                            className="flex flex-col space-y-3"
+                                        >
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="member"
+                                                    id="member"
+                                                />
+                                                <Label
+                                                    htmlFor="member"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        All members
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Any community member can
+                                                        create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="moderator"
+                                                    id="moderator"
+                                                />
+                                                <Label
+                                                    htmlFor="moderator"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Moderators and admins
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only moderators and
+                                                        admins can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+
+                                            <div className="flex items-center space-x-3 rounded-md border p-4">
+                                                <RadioGroupItem
+                                                    value="admin"
+                                                    id="admin"
+                                                />
+                                                <Label
+                                                    htmlFor="admin"
+                                                    className="flex cursor-pointer flex-col gap-1"
+                                                >
+                                                    <span className="font-medium">
+                                                        Admins only
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        Only community admins
+                                                        can create posts
+                                                    </span>
+                                                </Label>
+                                            </div>
+                                        </RadioGroup>
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
                             name="rules"
                             render={({ field }) => (
                                 <FormItem>
@@ -355,18 +486,19 @@ export default function EditCommunityPage() {
                             name="avatar"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Avatar URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/avatar.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Avatar (Optional)"
+                                            placeholder="https://example.com/avatar.png"
+                                            description="Upload an avatar image for your community or provide a URL"
+                                            maxSize={5}
+                                            enableCropping={true}
+                                            cropAspectRatio={1}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -378,18 +510,19 @@ export default function EditCommunityPage() {
                             name="banner"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>
-                                        Community Banner URL (Optional)
-                                    </FormLabel>
                                     <FormControl>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                placeholder="https://example.com/banner.png"
-                                                {...field}
-                                                value={field.value || ''}
-                                            />
-                                            <ImageIcon className="text-muted-foreground h-5 w-5" />
-                                        </div>
+                                        <ImageUpload
+                                            currentImageUrl={field.value}
+                                            onImageUpdate={(url) => {
+                                                field.onChange(url);
+                                            }}
+                                            label="Community Banner (Optional)"
+                                            placeholder="https://example.com/banner.png"
+                                            description="Upload a banner image for your community or provide a URL"
+                                            maxSize={10}
+                                            enableCropping={true}
+                                            cropAspectRatio={16 / 5}
+                                        />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

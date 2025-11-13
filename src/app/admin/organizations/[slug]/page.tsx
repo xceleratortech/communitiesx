@@ -35,9 +35,11 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { InviteUserDialog } from '@/components/invite-user-dialog';
+import { InviteOrgEmailDialog } from '@/components/invite-org-email-dialog';
 import { usePermission } from '@/hooks/use-permission';
 import { PERMISSIONS } from '@/lib/permissions/permission-const';
 import { BadgeManagement } from '@/components/badge-management';
+import { UserBadgesInTable } from '@/components/ui/user-badges-in-table';
 import {
     Card,
     CardContent,
@@ -46,16 +48,25 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Loading } from '@/components/ui/loading';
 
 export default function AdminOrganizationDetailPage() {
     const params = useParams();
     const router = useRouter();
     const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [isBulkInviteDialogOpen, setIsBulkInviteDialogOpen] = useState(false);
 
     const { data: orgData, isLoading } =
         trpc.organizations.getOrganizationWithCommunities.useQuery({
             slug: params.slug as string,
         });
+
+    // Fetch all users with their badges in a single query
+    const { data: usersWithBadges, isLoading: isLoadingUsers } =
+        trpc.badges.getOrgUsers.useQuery(
+            { orgId: orgData?.id || '' },
+            { enabled: !!orgData?.id },
+        );
 
     const utils = trpc.useUtils();
     const makeOrgAdminMutation = trpc.organizations.makeOrgAdmin.useMutation();
@@ -134,7 +145,7 @@ export default function AdminOrganizationDetailPage() {
         );
     };
 
-    if (isLoading) return <div>Loading...</div>;
+    if (isLoading) return <Loading />;
     if (!orgData) return <div>Organization not found</div>;
 
     return (
@@ -222,18 +233,6 @@ export default function AdminOrganizationDetailPage() {
                             <CardContent>
                                 <div className="text-2xl font-bold">
                                     {orgData.communities?.length || 0}
-                                </div>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">
-                                    Organization ID
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="font-mono text-sm">
-                                    {orgData.id}
                                 </div>
                             </CardContent>
                         </Card>
@@ -372,13 +371,23 @@ export default function AdminOrganizationDetailPage() {
                                         this organization.
                                     </CardDescription>
                                 </div>
-                                <InviteUserDialog
-                                    orgs={[
-                                        { id: orgData.id, name: orgData.name },
-                                    ]}
-                                >
-                                    <Button>Invite Member</Button>
-                                </InviteUserDialog>
+                                <div className="flex gap-2">
+                                    {/* <InviteUserDialog
+                                        orgs={[
+                                            { id: orgData.id, name: orgData.name },
+                                        ]}
+                                    >
+                                        <Button>Invite Member</Button>
+                                    </InviteUserDialog> */}
+                                    <Button
+                                        variant="outline"
+                                        onClick={() =>
+                                            setIsBulkInviteDialogOpen(true)
+                                        }
+                                    >
+                                        Invite Member
+                                    </Button>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -386,11 +395,22 @@ export default function AdminOrganizationDetailPage() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead>Role</TableHead>
-                                            <TableHead>Joined</TableHead>
-                                            <TableHead className="text-right">
+                                            <TableHead className="text-center">
+                                                Name
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Badges
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Email
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Role
+                                            </TableHead>
+                                            <TableHead className="text-center">
+                                                Joined
+                                            </TableHead>
+                                            <TableHead className="text-center">
                                                 Actions
                                             </TableHead>
                                         </TableRow>
@@ -398,13 +418,30 @@ export default function AdminOrganizationDetailPage() {
                                     <TableBody>
                                         {orgData.members.map((member) => (
                                             <TableRow key={member.id}>
-                                                <TableCell className="font-medium">
+                                                <TableCell className="text-center font-medium">
                                                     {member.name}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
+                                                    <UserBadgesInTable
+                                                        userId={member.id}
+                                                        userBadges={
+                                                            usersWithBadges?.find(
+                                                                (u) =>
+                                                                    u.id ===
+                                                                    member.id,
+                                                            )
+                                                                ?.badgeAssignments ||
+                                                            []
+                                                        }
+                                                        isLoading={
+                                                            isLoadingUsers
+                                                        }
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="text-center">
                                                     {member.email}
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
                                                     <Badge
                                                         variant={
                                                             member.role ===
@@ -416,12 +453,12 @@ export default function AdminOrganizationDetailPage() {
                                                         {member.role}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell>
+                                                <TableCell className="text-center">
                                                     {new Date(
                                                         member.createdAt,
                                                     ).toLocaleDateString()}
                                                 </TableCell>
-                                                <TableCell className="text-right">
+                                                <TableCell className="text-center">
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger
                                                             asChild
@@ -480,6 +517,14 @@ export default function AdminOrganizationDetailPage() {
                     <BadgeManagement orgId={orgData.id} />
                 </TabsContent>
             </Tabs>
+
+            <InviteOrgEmailDialog
+                open={isBulkInviteDialogOpen}
+                onOpenChange={setIsBulkInviteDialogOpen}
+                orgId={orgData.id}
+                orgName={orgData.name}
+                isAdmin={true}
+            />
         </div>
     );
 }

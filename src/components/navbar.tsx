@@ -36,6 +36,7 @@ export function Navbar() {
     const [mounted, setMounted] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [popoverOpen, setPopoverOpen] = useState(false);
+    const [mobilePopoverOpen, setMobilePopoverOpen] = useState(false);
     const { closeChat } = useChat();
 
     const { appRole, orgRole, userDetails } = usePermission();
@@ -60,6 +61,7 @@ export function Navbar() {
     const handleSignOut = async () => {
         closeChat();
         setPopoverOpen(false);
+        setMobilePopoverOpen(false);
         await signOut();
         router.push('/auth/login');
     };
@@ -298,7 +300,22 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        {/* <NotificationButton variant="popover" /> */}
+                                                        <NotificationButton variant="popover" />
+
+                                                        <Link
+                                                            href="/profile"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                            onClick={() =>
+                                                                setPopoverOpen(
+                                                                    false,
+                                                                )
+                                                            }
+                                                        >
+                                                            <User className="h-4 w-4" />
+                                                            <span>
+                                                                My Profile
+                                                            </span>
+                                                        </Link>
 
                                                         <Link
                                                             href="/organization"
@@ -369,7 +386,10 @@ export function Navbar() {
                                     </div>
 
                                     <div className="flex items-center sm:hidden">
-                                        <Popover>
+                                        <Popover
+                                            open={mobilePopoverOpen}
+                                            onOpenChange={setMobilePopoverOpen}
+                                        >
                                             <PopoverTrigger asChild>
                                                 <Button
                                                     variant="ghost"
@@ -472,7 +492,7 @@ export function Navbar() {
 
                                                         <ThemeToggle variant="popover" />
 
-                                                        {/* <NotificationButton variant="popover" /> */}
+                                                        <NotificationButton variant="popover" />
 
                                                         <Link
                                                             href="/organization"
@@ -481,6 +501,16 @@ export function Navbar() {
                                                             <Building className="h-4 w-4" />
                                                             <span>
                                                                 My Organization
+                                                            </span>
+                                                        </Link>
+
+                                                        <Link
+                                                            href="/profile"
+                                                            className="flex items-center space-x-2 rounded-md p-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                                                        >
+                                                            <User className="h-4 w-4" />
+                                                            <span>
+                                                                My Profile
                                                             </span>
                                                         </Link>
 

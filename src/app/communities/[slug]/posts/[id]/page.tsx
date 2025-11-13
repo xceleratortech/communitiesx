@@ -1,22 +1,49 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Edit, Trash2, ArrowLeft, Home, Users } from 'lucide-react';
+import {
+    ArrowLeft,
+    Home,
+    Users,
+    Share2,
+    Bookmark,
+    BookmarkCheck,
+} from 'lucide-react';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { isHtmlContentEmpty } from '@/lib/utils';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { LikeButton } from '@/components/ui/like-button';
+import { PollDisplay } from '@/components/polls';
+import { toast } from 'sonner';
+import { QnADisplay } from '@/components/qna/QnADisplay';
+import { qaQuestions } from '@/server/db/schema';
+
+// Utility function to format like count message
+function formatLikeMessage(likeCount: number, isLiked: boolean): string {
+    if (likeCount === 0) return '';
+
+    if (isLiked) {
+        if (likeCount === 1) {
+            return 'You liked this';
+        }
+        return `You & ${likeCount - 1} ${likeCount - 1 === 1 ? 'other' : 'others'} liked this`;
+    }
+
+    return `${likeCount} ${likeCount === 1 ? 'person' : 'people'} liked this`;
+}
 
 type User = {
     id: string;
@@ -40,6 +67,40 @@ type Post = {
         slug: string;
         type: 'public' | 'private';
     };
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
+    poll?: {
+        id: number;
+        postId: number;
+        question: string;
+        pollType: string;
+        expiresAt: Date | null;
+        isClosed: boolean;
+        createdAt: Date;
+        updatedAt: Date;
+        options: Array<{
+            id: number;
+            pollId: number;
+            text: string;
+            orderIndex: number;
+            createdAt: Date;
+        }>;
+    } | null;
+    qa?: typeof qaQuestions.$inferSelect | null;
 };
 
 export default function CommunityPostPage() {
@@ -80,6 +141,136 @@ export default function CommunityPostPage() {
             enabled: !!session,
         },
     );
+    // Like count, reaction and saved status for this single post
+    const likeCountsQuery = trpc.community.getPostLikeCounts.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userReactionsQuery = trpc.community.getUserReactions.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+    const userSavedMapQuery = trpc.community.getUserSavedMap.useQuery(
+        { postIds: [postId] },
+        { enabled: !!session && !!postId },
+    );
+
+    // Poll-related queries
+    const pollResultsQuery = trpc.community.getPollResults.useQuery(
+        { pollId: post?.poll?.id || 0 },
+        { enabled: !!session && !!post?.poll?.id },
+    );
+    const votePollMutation = trpc.community.votePoll.useMutation({
+        onSuccess: () => {
+            pollResultsQuery.refetch();
+            toast.success('Vote recorded!');
+        },
+        onError: (error) => {
+            toast.error(error.message || 'Failed to vote');
+        },
+    });
+
+    // Get comment IDs for helpful vote queries
+    const commentIds = useMemo(() => {
+        if (!post?.comments) return [];
+        const extractCommentIds = (comments: any[]): number[] => {
+            const ids: number[] = [];
+            comments.forEach((comment) => {
+                ids.push(comment.id);
+                if (comment.replies && comment.replies.length > 0) {
+                    ids.push(...extractCommentIds(comment.replies));
+                }
+            });
+            return ids;
+        };
+        return extractCommentIds(post.comments);
+    }, [post?.comments]);
+
+    // Helpful vote queries for comments
+    const commentHelpfulCountsQuery =
+        trpc.community.getCommentHelpfulCounts.useQuery(
+            { commentIds },
+            { enabled: commentIds.length > 0 },
+        );
+    const userHelpfulVotesQuery = trpc.community.getUserHelpfulVotes.useQuery(
+        { commentIds },
+        { enabled: commentIds.length > 0 && !!session },
+    );
+
+    const savePostMutation = trpc.community.savePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Saved');
+        },
+        onError: () => toast.error('Failed to save'),
+    });
+    const unsavePostMutation = trpc.community.unsavePost.useMutation({
+        onSuccess: () => {
+            utils.community.getSavedPosts.invalidate();
+            userSavedMapQuery.refetch();
+            toast.success('Removed from saved');
+        },
+        onError: () => toast.error('Failed to unsave'),
+    });
+
+    const toggleHelpfulMutation =
+        trpc.community.toggleCommentHelpful.useMutation({
+            onSuccess: () => {
+                // Invalidate helpful vote queries
+                utils.community.getCommentHelpfulCounts.invalidate();
+                utils.community.getUserHelpfulVotes.invalidate();
+            },
+            onError: () => toast.error('Failed to toggle helpful vote'),
+        });
+
+    const likeCount = likeCountsQuery.data?.[postId] ?? 0;
+    const isLiked = (userReactionsQuery.data?.[postId] ?? false) as boolean;
+    const isSaved = (userSavedMapQuery.data?.[postId] ?? false) as boolean;
+
+    const handleToggleSave = () => {
+        if (!session) return;
+        if (isSaved) {
+            unsavePostMutation.mutate({ postId });
+        } else {
+            savePostMutation.mutate({ postId });
+        }
+    };
+
+    const handleToggleHelpful = (commentId: number) => {
+        if (!session) return;
+        toggleHelpfulMutation.mutate({ commentId });
+    };
+
+    const handlePollVote = (optionIds: number[]) => {
+        if (!session || !post?.poll?.id) return;
+        votePollMutation.mutate({
+            pollId: post.poll.id,
+            optionIds,
+        });
+    };
+
+    const shareUrl =
+        typeof window !== 'undefined'
+            ? `${window.location.origin}/communities/${communitySlug}/posts/${postId}`
+            : '';
+
+    const handleShare = async () => {
+        try {
+            if (navigator.share) {
+                await navigator.share({
+                    title: post?.title || 'Post',
+                    text: post?.title || 'Check this out',
+                    url: shareUrl,
+                });
+            } else {
+                await navigator.clipboard.writeText(shareUrl);
+                toast.success('Link copied to clipboard');
+            }
+        } catch (e) {
+            // User cancelled or sharing failed
+        }
+    };
 
     // Fetch community data for context
     const { data: community } = trpc.communities.getBySlug.useQuery(
@@ -194,7 +385,7 @@ export default function CommunityPostPage() {
 
     const handleSubmitComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!comment.trim()) return;
+        if (isHtmlContentEmpty(comment)) return;
 
         try {
             await createComment.mutate({
@@ -221,7 +412,7 @@ export default function CommunityPostPage() {
     };
 
     const handleSubmitReply = async (parentId: number) => {
-        if (!replyContent.trim()) return;
+        if (isHtmlContentEmpty(replyContent)) return;
 
         await createComment.mutate({
             postId,
@@ -269,35 +460,33 @@ export default function CommunityPostPage() {
     };
 
     return (
-        <div className="mx-auto max-w-4xl py-4">
+        <div className="mx-auto max-w-4xl px-4 py-4 sm:px-6">
             {/* Breadcrumb Navigation */}
-            <nav className="text-muted-foreground mb-6 flex items-center space-x-2 text-sm">
+            <nav className="text-muted-foreground mb-6 flex flex-wrap items-center gap-2 text-sm">
                 <Link
                     href="/"
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     <Home className="mr-1 h-4 w-4" />
-                    Home
+                    <span className="hidden sm:inline">Home</span>
                 </Link>
-                <span>/</span>
+                <span className="hidden sm:inline">/</span>
                 <Link
                     href="/communities"
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     <Users className="mr-1 h-4 w-4" />
-                    Communities
+                    <span className="hidden sm:inline">Communities</span>
                 </Link>
-                <span>/</span>
+                <span className="hidden sm:inline">/</span>
                 <Link
                     href={`/communities/${communitySlug}`}
                     className="hover:text-foreground flex items-center transition-colors"
                 >
                     {community?.name || 'Community'}
                 </Link>
-                <span>/</span>
-                {/* <span className="text-foreground">Posts</span>
-                <span>/</span> */}
-                <span className="text-foreground font-medium">
+                <span className="hidden sm:inline">/</span>
+                <span className="text-foreground truncate font-medium">
                     {postData.isDeleted ? '[Deleted]' : postData.title}
                 </span>
             </nav>
@@ -306,7 +495,7 @@ export default function CommunityPostPage() {
             {community && (
                 <Card className="mb-6">
                     <CardContent className="p-4">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
                             <div className="flex items-center space-x-3">
                                 <Avatar className="h-10 w-10">
                                     <AvatarImage
@@ -323,7 +512,7 @@ export default function CommunityPostPage() {
                                     <h2 className="text-lg font-semibold">
                                         {community.name}
                                     </h2>
-                                    <div className="text-muted-foreground flex items-center space-x-2 text-sm">
+                                    <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-sm">
                                         <Badge
                                             variant={
                                                 community.type === 'private'
@@ -335,21 +524,23 @@ export default function CommunityPostPage() {
                                                 ? 'Private'
                                                 : 'Public'}
                                         </Badge>
-                                        <span>•</span>
+                                        <span className="hidden sm:inline">
+                                            •
+                                        </span>
                                         <span>Community Post</span>
                                     </div>
                                 </div>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                    router.push(`/communities/${communitySlug}`)
-                                }
-                            >
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Community
-                            </Button>
+                            <Link href={`/communities/${communitySlug}`}>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Back to Community
+                                </Button>
+                            </Link>
                         </div>
                     </CardContent>
                 </Card>
@@ -358,8 +549,8 @@ export default function CommunityPostPage() {
             {/* Post Content */}
             <div className="mb-8">
                 <div className="mb-2 flex items-start justify-between">
-                    <div>
-                        <h1 className="text-3xl font-bold dark:text-white">
+                    <div className="min-w-0 flex-1">
+                        <h1 className="text-2xl font-bold break-words sm:text-3xl dark:text-white">
                             {postData.isDeleted ? '[Deleted]' : postData.title}
                         </h1>
                     </div>
@@ -376,17 +567,132 @@ export default function CommunityPostPage() {
                             </span>
                         </div>
                     ) : (
-                        <SafeHtml
-                            html={postData.content}
-                            className="whitespace-pre-wrap"
-                        />
+                        <div>
+                            {postData.attachments &&
+                            postData.attachments.length > 0 ? (
+                                <SafeHtmlWithoutImages
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            ) : (
+                                <SafeHtml
+                                    html={postData.content}
+                                    className="whitespace-pre-wrap"
+                                />
+                            )}
+                        </div>
                     )}
                 </div>
+
+                {/* Poll Display */}
+                {postData.poll && (
+                    <div className="mt-6">
+                        <PollDisplay
+                            poll={{
+                                ...postData.poll,
+                                pollType: postData.poll.pollType as
+                                    | 'single'
+                                    | 'multiple',
+                                expiresAt:
+                                    postData.poll.expiresAt?.toISOString() ||
+                                    null,
+                                createdAt:
+                                    postData.poll.createdAt.toISOString(),
+                                updatedAt:
+                                    postData.poll.updatedAt.toISOString(),
+                                options: postData.poll.options.map(
+                                    (option) => ({
+                                        ...option,
+                                        createdAt:
+                                            option.createdAt.toISOString(),
+                                    }),
+                                ),
+                            }}
+                            results={pollResultsQuery.data?.results}
+                            userVotes={pollResultsQuery.data?.userVotes}
+                            canVote={!!session && !!community}
+                            hasUserVoted={
+                                !!pollResultsQuery.data?.userVotes?.length
+                            }
+                            totalVotes={pollResultsQuery.data?.totalVotes || 0}
+                            onVote={handlePollVote}
+                            isVoting={votePollMutation.isPending}
+                        />
+                    </div>
+                )}
+
+                {/* Post media */}
+                {postData.attachments && postData.attachments.length > 0 && (
+                    <div className="mt-6">
+                        <MixedMediaCarousel
+                            media={postData.attachments}
+                            className="max-w-2xl"
+                        />
+                    </div>
+                )}
             </div>
+
+            {/* Q&A Section */}
+            {postData.qa && (
+                <QnADisplay
+                    postId={postId}
+                    postTitle={postData.title}
+                    communitySlug={communitySlug}
+                />
+            )}
+
+            {/* Like count and comments summary */}
+            <div className="mt-2 flex items-center justify-between">
+                <span className="text-muted-foreground text-xs">
+                    {formatLikeMessage(likeCount, isLiked)}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                    {Array.isArray(postData.comments)
+                        ? postData.comments.length
+                        : 0}{' '}
+                    Comments
+                </span>
+            </div>
+
+            {/* Actions: Like, Save, Share */}
+            {!postData.isDeleted && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <LikeButton
+                        postId={postId}
+                        initialLikeCount={likeCount}
+                        initialIsLiked={isLiked}
+                        size="sm"
+                        variant="ghost"
+                        showCount={false}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleToggleSave}
+                        disabled={
+                            savePostMutation.isPending ||
+                            unsavePostMutation.isPending
+                        }
+                    >
+                        {isSaved ? (
+                            <span className="flex items-center gap-2">
+                                <BookmarkCheck className="h-4 w-4" /> Saved
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-2">
+                                <Bookmark className="h-4 w-4" /> Save
+                            </span>
+                        )}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={handleShare}>
+                        <Share2 className="mr-2 h-4 w-4" /> Share
+                    </Button>
+                </div>
+            )}
 
             {/* Comments Section */}
             <div className="mb-8">
-                <h2 className="mb-4 text-2xl font-bold dark:text-white">
+                <h2 className="mb-4 text-xl font-bold sm:text-2xl dark:text-white">
                     Comments
                 </h2>
                 {session && !postData.isDeleted && (
@@ -402,7 +708,10 @@ export default function CommunityPostPage() {
                         />
                         <Button
                             type="submit"
-                            disabled={createComment.isPending}
+                            disabled={
+                                createComment.isPending ||
+                                isHtmlContentEmpty(comment)
+                            }
                             className="mt-2"
                         >
                             {createComment.isPending
@@ -449,6 +758,12 @@ export default function CommunityPostPage() {
                             }
                             autoExpandedComments={autoExpandedComments}
                             onExpansionChange={handleCommentExpansionChange}
+                            helpfulCounts={commentHelpfulCountsQuery.data}
+                            isHelpfulMap={userHelpfulVotesQuery.data}
+                            onToggleHelpful={handleToggleHelpful}
+                            helpfulMutationPending={
+                                toggleHelpfulMutation.isPending
+                            }
                         />
                     ))}
                 </div>

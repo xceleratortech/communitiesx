@@ -4,16 +4,17 @@ import { useParams, useRouter } from 'next/navigation';
 import React, { useState, useRef } from 'react';
 import { trpc } from '@/providers/trpc-provider';
 import { useSession } from '@/server/auth/client';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Edit, Trash2 } from 'lucide-react';
+import { ShareDialog } from '@/components/ui/share-dialog';
 import CommentItem from '@/components/CommentItem';
 import type { CommentWithReplies } from '@/components/CommentItem';
 import TipTapEditor from '@/components/TipTapEditor';
-import { UserProfilePopover } from '@/components/ui/user-profile-popover';
 import { SafeHtml } from '@/lib/sanitize';
 import { Loading } from '@/components/ui/loading';
+import { isHtmlContentEmpty } from '@/lib/utils';
+import { MixedMediaCarousel } from '@/components/ui/mixed-media-carousel';
+import { SafeHtmlWithoutImages } from '@/components/ui/safe-html-without-images';
+import { QnADisplay } from '@/components/qna/QnADisplay';
 
 type User = {
     id: string;
@@ -31,6 +32,22 @@ type Post = {
     author: User;
     comments: CommentWithReplies[];
     isDeleted: boolean;
+    attachments?: Array<{
+        id: number;
+        filename: string;
+        mimetype: string;
+        type: string;
+        size: number | null;
+        r2Key: string;
+        r2Url: string | null;
+        publicUrl: string | null;
+        thumbnailUrl: string | null;
+        uploadedBy: string;
+        postId: number | null;
+        communityId: number | null;
+        createdAt: Date;
+        updatedAt: Date;
+    }>;
 };
 
 export default function PostPage() {
@@ -129,7 +146,7 @@ export default function PostPage() {
     });
 
     if (!isClient) {
-        return <div className="p-4">Loading...</div>;
+        return <Loading message="Initializing..." />;
     }
 
     if (!session) {
@@ -178,7 +195,7 @@ export default function PostPage() {
 
     const handleSubmitComment = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!comment.trim()) return;
+        if (isHtmlContentEmpty(comment)) return;
 
         try {
             await createComment.mutate({
@@ -205,7 +222,7 @@ export default function PostPage() {
     };
 
     const handleSubmitReply = async (parentId: number) => {
-        if (!replyContent.trim()) return;
+        if (isHtmlContentEmpty(replyContent)) return;
 
         await createComment.mutate({
             postId,
@@ -257,12 +274,28 @@ export default function PostPage() {
             <div className="mx-auto">
                 <div className="mb-8">
                     <div className="mb-2 flex items-start justify-between">
-                        <div>
+                        <div className="flex-1">
                             <h1 className="text-3xl font-bold dark:text-white">
                                 {postData.isDeleted
                                     ? '[Deleted]'
                                     : postData.title}
                             </h1>
+                        </div>
+                        <div className="ml-4 flex items-center space-x-2">
+                            <ShareDialog
+                                title={postData.title}
+                                text={`Check out this post: ${postData.title}`}
+                                url={
+                                    typeof window !== 'undefined'
+                                        ? window.location.href
+                                        : ''
+                                }
+                                trigger={
+                                    <Button variant="outline" size="sm">
+                                        Share
+                                    </Button>
+                                }
+                            />
                         </div>
                     </div>
                     <div className="prose prose-ul:list-disc prose-ol:list-decimal dark:prose-invert dark:prose-headings:text-white dark:prose-a:text-blue-400 max-w-none">
@@ -279,15 +312,45 @@ export default function PostPage() {
                                 </span>
                             </div>
                         ) : (
-                            <SafeHtml
-                                html={postData.content}
-                                className="whitespace-pre-wrap"
-                            />
+                            <div>
+                                {postData.attachments &&
+                                postData.attachments.length > 0 ? (
+                                    <SafeHtmlWithoutImages
+                                        html={postData.content}
+                                        className="whitespace-pre-wrap"
+                                    />
+                                ) : (
+                                    <SafeHtml
+                                        html={postData.content}
+                                        className="whitespace-pre-wrap"
+                                    />
+                                )}
+                            </div>
                         )}
                     </div>
+
+                    {/* Post media */}
+                    {postData.attachments &&
+                        postData.attachments.length > 0 && (
+                            <div className="mt-6">
+                                <MixedMediaCarousel
+                                    media={postData.attachments}
+                                    className="max-w-2xl"
+                                />
+                            </div>
+                        )}
                 </div>
 
                 <div className="mb-8">
+                    {/* Q&A section (if this post has Q&A config) */}
+                    {post?.qa && (
+                        <QnADisplay
+                            postId={postId}
+                            postTitle={postData.title}
+                            communitySlug={post?.community?.slug || null}
+                        />
+                    )}
+
                     <h2 className="mb-4 text-2xl font-bold dark:text-white">
                         Comments
                     </h2>
@@ -306,7 +369,10 @@ export default function PostPage() {
                             />
                             <Button
                                 type="submit"
-                                disabled={createComment.isPending}
+                                disabled={
+                                    createComment.isPending ||
+                                    isHtmlContentEmpty(comment)
+                                }
                                 className="mt-2"
                             >
                                 {createComment.isPending
