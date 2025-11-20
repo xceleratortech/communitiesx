@@ -97,7 +97,7 @@ jobs:
 
             - name: Deploy to Development
               id: deploy
-              if: success()
+              if: ${{ success() && github.ref == 'refs/heads/dev' }}
               run: |
                   echo "🚀 Triggering deployment..."
 
