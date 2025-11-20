@@ -8,6 +8,7 @@ on:
 jobs:
   build:
     name: Build
+    if: ${{ github.repository == 'Moonshotedx/communitiesx' }}    
     runs-on: ubuntu-latest
 
     env:
