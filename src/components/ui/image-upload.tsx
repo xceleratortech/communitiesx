@@ -154,7 +154,8 @@ export function ImageUpload({
             const result = await confirmResponse.json();
 
             // Update image URL
-            const newImageUrl = `/api/images/${result.attachment.id}`;
+            const newImageUrl =
+                result.attachment.url || `/api/images/${result.attachment.id}`;
             setPreviewUrl(newImageUrl);
             setUrlInput(newImageUrl);
 

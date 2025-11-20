@@ -7,10 +7,11 @@ import {
     posts as postsTable,
     communityMembers,
 } from '@/server/db/schema';
+import { users } from '@/server/db/auth-schema';
 import { and, eq } from 'drizzle-orm';
 import { generatePresignedDownloadUrl } from '@/lib/r2';
 import { ServerPermissions } from '@/server/utils/permission';
-import { isOrgAdminForCommunity } from '@/lib/utils';
+import { isOrgAdminForCommunity, encodeR2KeyForUrl } from '@/lib/utils';
 
 export async function GET(
     request: NextRequest,
@@ -57,6 +58,28 @@ export async function GET(
 
             let isAllowed = isAppAdmin;
 
+            // Allow access to user profile pictures for users in the same organization
+            if (
+                !isAllowed &&
+                attachmentRecord.type === 'image' &&
+                !attachmentRecord.postId &&
+                !attachmentRecord.communityId
+            ) {
+                // Check if this is a user profile picture by checking if the uploader is in the same org
+                const uploaderUser = await db.query.users.findFirst({
+                    where: eq(users.id, attachmentRecord.uploadedBy),
+                    columns: { orgId: true },
+                });
+
+                if (
+                    uploaderUser?.orgId &&
+                    session.user.orgId &&
+                    uploaderUser.orgId === session.user.orgId
+                ) {
+                    isAllowed = true;
+                }
+            }
+
             // If linked to a community directly, allow active members/followers or org admins of that org
             if (!isAllowed && attachmentRecord.communityId) {
                 // Check membership (active)
@@ -74,19 +97,34 @@ export async function GET(
                 if (membership) {
                     isAllowed = true;
                 } else {
-                    // Check org admin override for the community's org
+                    // Check if this is a public community and user is from the same org
                     const community = await db.query.communities.findFirst({
                         where: eq(
                             communitiesTable.id,
                             attachmentRecord.communityId,
                         ),
-                        columns: { orgId: true },
+                        columns: { orgId: true, type: true },
                     });
-                    if (
-                        community &&
-                        isOrgAdminForCommunity(session.user, community.orgId)
-                    ) {
-                        isAllowed = true;
+
+                    if (community) {
+                        // For public communities, allow access if user is from the same org
+                        if (
+                            community.type === 'public' &&
+                            session.user.orgId &&
+                            community.orgId &&
+                            session.user.orgId === community.orgId
+                        ) {
+                            isAllowed = true;
+                        }
+                        // Check org admin override for the community's org
+                        else if (
+                            isOrgAdminForCommunity(
+                                session.user,
+                                community.orgId,
+                            )
+                        ) {
+                            isAllowed = true;
+                        }
                     }
                 }
             }
@@ -117,16 +155,28 @@ export async function GET(
                     } else {
                         const community = await db.query.communities.findFirst({
                             where: eq(communitiesTable.id, post.communityId),
-                            columns: { orgId: true },
+                            columns: { orgId: true, type: true },
                         });
-                        if (
-                            community &&
-                            isOrgAdminForCommunity(
-                                session.user,
-                                community.orgId,
-                            )
-                        ) {
-                            isAllowed = true;
+
+                        if (community) {
+                            // For public communities, allow access if user is from the same org
+                            if (
+                                community.type === 'public' &&
+                                session.user.orgId &&
+                                community.orgId &&
+                                session.user.orgId === community.orgId
+                            ) {
+                                isAllowed = true;
+                            }
+                            // Check org admin override for the community's org
+                            else if (
+                                isOrgAdminForCommunity(
+                                    session.user,
+                                    community.orgId,
+                                )
+                            ) {
+                                isAllowed = true;
+                            }
                         }
                     }
                 } else if (post?.orgId) {
@@ -148,62 +198,19 @@ export async function GET(
             }
         }
 
-        // Generate presigned download URL
-        const downloadUrl = await generatePresignedDownloadUrl(
-            attachmentRecord.r2Key,
-        );
-
-        // Create proxy URL for download
-        const proxyUrl = `https://edx-storage-proxy.xcelerator.co.in?proxyUrl=${encodeURIComponent(downloadUrl)}`;
-
-        // Forward Range header (critical for mobile playback/seek)
-        const rangeHeader = request.headers.get('range') ?? undefined;
-
-        // Fetch the file from R2 via proxy and serve it directly
-        const fileResponse = await fetch(proxyUrl, {
-            method: 'GET',
-            headers: rangeHeader ? { Range: rangeHeader } : undefined,
-        });
-
-        if (!fileResponse.ok) {
-            throw new Error('Failed to fetch file from storage');
+        // Redirect to public R2 URL (no egress through Vercel)
+        if (!process.env.R2_PUBLIC_URL) {
+            console.error('R2_PUBLIC_URL environment variable is not set');
+            return NextResponse.json(
+                { error: 'Server configuration error' },
+                { status: 500 },
+            );
         }
 
-        // Preserve streaming-related headers
-        const responseHeaders = new Headers();
-
-        const contentType =
-            fileResponse.headers.get('content-type') ||
-            attachmentRecord.mimetype ||
-            'application/octet-stream';
-        responseHeaders.set('Content-Type', contentType);
-
-        for (const headerName of [
-            'content-length',
-            'content-range',
-            'accept-ranges',
-            'etag',
-            'last-modified',
-            'cache-control',
-        ]) {
-            const headerValue = fileResponse.headers.get(headerName);
-            if (headerValue) {
-                responseHeaders.set(headerName, headerValue);
-            }
-        }
-
-        // Ensure defaults if not provided by origin
-        if (!responseHeaders.has('accept-ranges')) {
-            responseHeaders.set('accept-ranges', 'bytes');
-        }
-        if (!responseHeaders.has('cache-control')) {
-            responseHeaders.set('cache-control', 'public, max-age=3600');
-        }
-
-        return new NextResponse(fileResponse.body, {
-            status: fileResponse.status, // 200 or 206
-            headers: responseHeaders,
-        });
+        const directUrl = `${process.env.R2_PUBLIC_URL}/${encodeR2KeyForUrl(attachmentRecord.r2Key)}`;
+        const res = NextResponse.redirect(directUrl, 302);
+        res.headers.set('cache-control', 'public, max-age=3600');
+        return res;
     } catch (error) {
         console.error('Error serving image:', error);
         return NextResponse.json(
