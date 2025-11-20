@@ -12,6 +12,7 @@ import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import { PWAInstaller } from '@/components/pwa-installer';
 import Script from 'next/script';
 import { SentryUserProvider } from '@/providers/sentry-user-provider';
+import { Navbar } from '@/components/navbar';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -89,23 +90,16 @@ export default function RootLayout({
                     <TRPCProvider>
                         <SentryUserProvider>
                             {/* <ChatProvider> */}
-                            <div className="flex h-screen">
-                                <div className="hidden md:block">
-                                    <LeftSidebar />
+                            <Navbar />
+                            <ProfileCompletionGuard>
+                                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                                    <NextTopLoader />
+                                    <main>{children}</main>
+                                    <Toaster />
                                 </div>
-                                <div className="flex-1 overflow-auto">
-                                    <ProfileCompletionGuard>
-                                        <Topbar />
-                                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                                            {/* <NextTopLoader /> */}
-                                            <main>{children}</main>
-                                            <Toaster />
-                                        </div>
-                                    </ProfileCompletionGuard>
-                                </div>
-                            </div>
+                            </ProfileCompletionGuard>
                             {/* <ChatContainer />
-                        </ChatProvider> */}
+                            </ChatProvider> */}
                         </SentryUserProvider>
                     </TRPCProvider>
                 </ThemeProvider>
