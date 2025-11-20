@@ -12,7 +12,7 @@ import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import { PWAInstaller } from '@/components/pwa-installer';
 import Script from 'next/script';
 import { SentryUserProvider } from '@/providers/sentry-user-provider';
-
+import { Navbar } from '@/components/navbar';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
