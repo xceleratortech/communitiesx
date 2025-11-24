@@ -308,7 +308,7 @@ function CommunityCard({
     const memberAvatars = generateMemberAvatars(members, 3);
 
     return (
-        <Card className="group relative flex h-[420px] flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md">
+        <Card className="group relative flex h-auto flex-col gap-2 overflow-hidden pt-0 transition-all hover:shadow-md">
             <div className="relative h-28 w-full">
                 {community.banner ? (
                     <img
