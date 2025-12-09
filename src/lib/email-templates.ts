@@ -18,10 +18,10 @@ export function createVerificationEmail(url: string) {
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
@@ -94,10 +94,10 @@ export function createResetPasswordEmail(url: string) {
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
@@ -146,9 +146,74 @@ export function createChangeEmailVerification(url: string) {
     return {
         subject: 'Verify your new email address',
         html: `
-      <h1>Verify your new email address</h1>
-      <p>Click the link below to verify your new email address:</p>
-      <a href="${url}">${url}</a>
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Verify Your New Email Address</title>
+        </head>
+        <body style="margin: 0; padding: 0; background-color: #f2f2f2; font-family: Arial, sans-serif;">
+            <table width="100%" border="0" cellspacing="0" cellpadding="0" bgcolor="#f2f2f2">
+                <tr>
+                    <td align="center" style="padding: 30px 15px;">
+                        <!-- Main Container -->
+                        <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border: 8px solid #d9d9d9;">
+                            
+                            <!-- Header with Xcelerator Logo -->
+                            <tr>
+                                <td style="padding: 30px; text-align: center;">
+                                    <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
+                                            alt="Xcelerator Logo" 
+                                            style="display:block; max-width:240px; margin: 0 auto;">
+                                </td>
+                            </tr>
+                            
+                            <!-- Header Section -->
+                            <tr>
+                                <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
+                                    <h1 style="margin: 0; font-size: 30px; font-weight: bold;">Verify your email address</h1>
+                                </td>
+                            </tr>
+                            
+                            <!-- Content Section -->
+                            <tr>
+                                <td style="padding: 40px 50px; color: #333333; font-size: 16px; line-height: 28px;">
+                                    <h1 style="color: #333333; margin: 0 0 20px 0; font-size: 24px;">Hello,</h1>
+                                    
+                                    <p style="margin-bottom: 20px;">
+                                        You recently requested to update your CommunityX account with new email address.
+                                    </p>
+                                    
+                                    <p style="margin-bottom: 20px;">
+                                        To complete this, please verify your new email address by clicking the link below:
+                                    </p>
+                                    
+                                    <div style="text-align: left; margin: 30px 0;">
+                                        <a href="${url}" 
+                                           style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
+                                            Verify New Email Address
+                                        </a>
+                                    </div>
+                                    
+                                    <p style="margin-bottom: 20px;">
+                                        If you did not request this change, please disregard this message. Your account will remain unchanged and secure.
+                                    </p>
+                                    
+                                    <p style="margin-bottom: 20px;">
+                                        For any assistance, contact us at <a href="mailto:support@xcelerator.co.in" style="color: #625A96;">support@xcelerator.co.in</a>.
+                                    </p>
+                                    
+                                    <p style="font-weight: bold; margin-top: 30px;">Regards,<br>Xcelerator Team</p>
+                                </td>
+                            </tr>
+                            
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </body>
+        </html>
     `,
     };
 }
@@ -173,10 +238,10 @@ export function createDeleteAccountEmail(url: string) {
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
@@ -267,10 +332,10 @@ export function createOTPEmail(
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
@@ -342,7 +407,7 @@ export function createWelcomeEmail(url: string, orgLogo?: string) {
                                     <td style="padding: 0;">
                                         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse: collapse;">
                                             <tr>
-                                                <td align="left" style="padding: 10px 0 10px 20px;">
+                                                <td align="center" style="padding: 10px 0 10px 20px;">
                                                     <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" alt="Xcelerator Logo" style="display:block; max-width:120px;">    
                                                 </td>
                                                 <td align="right" style="padding: 10px 20px 10px 0;">
@@ -424,16 +489,16 @@ export function createInvitationEmail(
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
                                 <!-- Invitation Section -->
                                 <tr>
-                                    <td style="background-color: #625A96; color: #ffffff; text-align: center; padding: 40px;">
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
                                         <h1 style="margin: 0; font-size: 28px; font-weight: bold;">You're Invited!</h1>
                                         <p style="margin: 15px 0 0; font-size: 18px;">Join our community platform as a ${roleDisplay}</p>
                                     </td>
@@ -451,7 +516,7 @@ export function createInvitationEmail(
                                             <strong>Organization:</strong> ${isSuperAdmin ? 'Platform Super Administrator' : organizationName}
                                         </p>
                                         
-                                        <div style="text-align: center; margin: 30px 0;">
+                                        <div style="text-align: left; margin: 30px 0;">
                                             <a href="${inviteUrl}" 
                                                style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                                                 Accept Invitation
@@ -518,16 +583,16 @@ export function createCommunityInvitationEmail(
                                 
                                 <!-- Header with Xcelerator Logo -->
                                 <tr>
-                                    <td style="padding: 20px; text-align: center;">
+                                    <td style="padding: 30px; text-align: center;">
                                         <img src="https://bucket.xcelerator.co.in/xcelerator-dark.png" 
                                              alt="Xcelerator Logo" 
-                                             style="display:block; max-width:150px; margin: 0 auto;">
+                                             style="display:block; max-width:240px; margin: 0 auto;">
                                     </td>
                                 </tr>
                                 
                                 <!-- Invitation Section -->
                                 <tr>
-                                    <td style="background-color: #625A96; color: #ffffff; text-align: center; padding: 40px;">
+                                    <td style="background-color: #625A96; color: #ffffff; text-align: left; padding: 40px;">
                                         <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Community Invitation!</h1>
                                         <p style="margin: 15px 0 0; font-size: 18px;">Join ${communityName} as a ${roleDisplay}</p>
                                     </td>
@@ -545,7 +610,7 @@ export function createCommunityInvitationEmail(
                                             <strong>Role:</strong> ${roleDisplay}<br>
                                         </p>
                                         
-                                        <div style="text-align: center; margin: 30px 0;">
+                                        <div style="text-align: left; margin: 30px 0;">
                                             <a href="${inviteUrl}" 
                                                style="display: inline-block; padding: 15px 30px; background-color: #625A96; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">
                                                 Accept Invitation
