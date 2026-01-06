@@ -2,8 +2,12 @@ import { z } from 'zod';
 import { authProcedure, publicProcedure } from '../trpc';
 import { db } from '@/server/db';
 import { TRPCError } from '@trpc/server';
-import { communities, communityInvites } from '@/server/db/schema';
-import { eq } from 'drizzle-orm';
+import {
+    communities,
+    communityInvites,
+    communityMembers,
+} from '@/server/db/schema';
+import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
 
 export const inviteProcedures = {
@@ -83,35 +87,100 @@ export const inviteProcedures = {
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const invite = await db.query.communityInvites.findFirst({
-                where: eq(communityInvites.code, input.inviteCode),
-                with: { community: true },
+            return await db.transaction(async (tx) => {
+                const invite = await tx.query.communityInvites.findFirst({
+                    where: eq(communityInvites.code, input.inviteCode),
+                    with: { community: true },
+                });
+                if (!invite) {
+                    throw new TRPCError({
+                        code: 'NOT_FOUND',
+                        message: 'Invalid invite code',
+                    });
+                }
+                if (invite.expiresAt < new Date()) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has expired',
+                    });
+                }
+                if (invite.usedAt) {
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: 'This invite has already been used',
+                    });
+                }
+
+                // Check if user is already a member
+                const existingMembership =
+                    await tx.query.communityMembers.findFirst({
+                        where: and(
+                            eq(communityMembers.userId, ctx.session.user.id),
+                            eq(
+                                communityMembers.communityId,
+                                invite.communityId,
+                            ),
+                        ),
+                    });
+
+                // If not already a member, add them to the community
+                if (!existingMembership) {
+                    await tx.insert(communityMembers).values({
+                        userId: ctx.session.user.id,
+                        communityId: invite.communityId,
+                        role: invite.role as 'member' | 'moderator' | 'admin',
+                        membershipType: 'member', // Invites are for joining, not following
+                        status: 'active', // Invites bypass approval process
+                        joinedAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+                } else {
+                    // If user is already a member but with a different role, update the role if invite role is higher
+                    // Or if they're a follower, upgrade them to member
+                    if (
+                        existingMembership.membershipType === 'follower' ||
+                        (existingMembership.role === 'member' &&
+                            (invite.role === 'moderator' ||
+                                invite.role === 'admin')) ||
+                        (existingMembership.role === 'moderator' &&
+                            invite.role === 'admin')
+                    ) {
+                        await tx
+                            .update(communityMembers)
+                            .set({
+                                role: invite.role as
+                                    | 'member'
+                                    | 'moderator'
+                                    | 'admin',
+                                membershipType: 'member',
+                                status: 'active',
+                                updatedAt: new Date(),
+                            })
+                            .where(
+                                and(
+                                    eq(
+                                        communityMembers.userId,
+                                        ctx.session.user.id,
+                                    ),
+                                    eq(
+                                        communityMembers.communityId,
+                                        invite.communityId,
+                                    ),
+                                ),
+                            );
+                    }
+                }
+
+                // Mark the invite as used
+                await tx
+                    .update(communityInvites)
+                    .set({ usedAt: new Date(), usedBy: ctx.session.user.id })
+                    .where(eq(communityInvites.id, invite.id));
+
+                return {
+                    inviteUsed: true,
+                    community: invite.community,
+                } as const;
             });
-            if (!invite) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Invalid invite code',
-                });
-            }
-            if (invite.expiresAt < new Date()) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'This invite has expired',
-                });
-            }
-            if (invite.usedAt) {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'This invite has already been used',
-                });
-            }
-
-            // Membership handling is done in communities router; keep minimal here
-            await db
-                .update(communityInvites)
-                .set({ usedAt: new Date(), usedBy: ctx.session.user.id })
-                .where(eq(communityInvites.id, invite.id));
-
-            return { inviteUsed: true, community: invite.community } as const;
         }),
 };
