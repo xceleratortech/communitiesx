@@ -528,7 +528,25 @@ export const statsProcedures = {
 
                     // Generate the invite link
                     const inviteLink = `/communities/join/${code}`;
-                    const fullInviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}${inviteLink}`;
+
+                    // build the request origin/host, fall back to env or localhost
+                    const originHeader =
+                        ctx.headers.get('origin') ||
+                        (() => {
+                            const proto =
+                                ctx.headers.get('x-forwarded-proto') || 'https';
+                            const host =
+                                ctx.headers.get('x-forwarded-host') ||
+                                ctx.headers.get('host');
+                            return host ? `${proto}://${host}` : null;
+                        })();
+
+                    const baseUrl =
+                        (originHeader && originHeader.replace(/\/$/, '')) ||
+                        process.env.NEXT_PUBLIC_APP_URL ||
+                        'http://localhost:3000';
+
+                    const fullInviteLink = `${baseUrl}${inviteLink}`;
 
                     // Determine the sender name to use
                     const senderName = input.senderName || community.name;

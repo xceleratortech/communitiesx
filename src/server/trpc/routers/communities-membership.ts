@@ -29,6 +29,33 @@ export const membershipProcedures = {
                     });
                 }
 
+                // restrict users from joining a community tied to a different organization
+                const dbUser = await db.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                });
+                const userOrgId = dbUser?.orgId ?? null;
+                const communityOrgId = community.orgId || null;
+
+                if (
+                    userOrgId &&
+                    communityOrgId &&
+                    userOrgId !== communityOrgId
+                ) {
+                    const userOrg = userOrgId
+                        ? await db.query.orgs.findFirst({
+                              where: (orgs, { eq }) => eq(orgs.id, userOrgId),
+                              columns: { name: true },
+                          })
+                        : null;
+                    const userOrgName =
+                        userOrg?.name || 'your current organization';
+
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: `You are already a member of ${userOrgName}. You cannot join communities belonging to a different organization.`,
+                    });
+                }
+
                 // Check if the user is already a member
                 const existingMembership =
                     await db.query.communityMembers.findFirst({
