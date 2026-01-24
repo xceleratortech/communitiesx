@@ -1088,8 +1088,26 @@ export const organizationsRouter = router({
                                 updatedAt: now,
                             });
 
+                            const originHeader =
+                                ctx.headers.get('origin') ||
+                                (() => {
+                                    const proto =
+                                        ctx.headers.get('x-forwarded-proto') ||
+                                        'https';
+                                    const host =
+                                        ctx.headers.get('x-forwarded-host') ||
+                                        ctx.headers.get('host');
+                                    return host ? `${proto}://${host}` : null;
+                                })();
+
+                            const baseUrl =
+                                (originHeader &&
+                                    originHeader.replace(/\/$/, '')) ||
+                                process.env.NEXT_PUBLIC_APP_URL ||
+                                'http://localhost:3000';
+
                             // Send the invite email
-                            const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${email}`;
+                            const inviteUrl = `${baseUrl}/auth/register?token=${inviteToken}&email=${email}`;
 
                             // Determine the sender name to use
                             const senderName = input.senderName || org.name;

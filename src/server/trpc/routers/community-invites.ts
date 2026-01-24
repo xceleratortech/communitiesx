@@ -6,6 +6,8 @@ import {
     communities,
     communityInvites,
     communityMembers,
+    users,
+    orgs,
 } from '@/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -26,12 +28,25 @@ export const inviteProcedures = {
             const expiresAt = new Date();
             expiresAt.setDate(expiresAt.getDate() + input.expiresInDays);
 
+            const community = await db.query.communities.findFirst({
+                where: eq(communities.id, input.communityId),
+                columns: { orgId: true },
+            });
+
+            if (!community) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Community not found',
+                });
+            }
+
             const [invite] = await db
                 .insert(communityInvites)
                 .values({
                     communityId: input.communityId,
                     code,
                     role: input.role,
+                    orgId: community.orgId,
                     createdBy: ctx.session.user.id,
                     createdAt: new Date(),
                     expiresAt,
@@ -108,6 +123,28 @@ export const inviteProcedures = {
                     throw new TRPCError({
                         code: 'BAD_REQUEST',
                         message: 'This invite has already been used',
+                    });
+                }
+
+                const dbUser = await tx.query.users.findFirst({
+                    where: eq(users.id, ctx.session.user.id),
+                });
+                const userOrgId = dbUser?.orgId ?? null;
+                const targetOrgId = invite.community.orgId || null;
+
+                if (userOrgId && targetOrgId && userOrgId !== targetOrgId) {
+                    const userOrg = userOrgId
+                        ? await tx.query.orgs.findFirst({
+                              where: eq(orgs.id, userOrgId),
+                              columns: { name: true },
+                          })
+                        : null;
+                    const userOrgName =
+                        userOrg?.name || 'your current organization';
+
+                    throw new TRPCError({
+                        code: 'BAD_REQUEST',
+                        message: `You are already a member of ${userOrgName}. You cannot accept invitations from communities belonging to a different organization.`,
                     });
                 }
 

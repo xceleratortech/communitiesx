@@ -473,8 +473,25 @@ export const adminRouter = router({
                     createdAt: now,
                     updatedAt: now,
                 });
+                // build base URL from request origin/host, with env fallback
+                const originHeader =
+                    ctx.headers.get('origin') ||
+                    (() => {
+                        const proto =
+                            ctx.headers.get('x-forwarded-proto') || 'https';
+                        const host =
+                            ctx.headers.get('x-forwarded-host') ||
+                            ctx.headers.get('host');
+                        return host ? `${proto}://${host}` : null;
+                    })();
+
+                const baseUrl =
+                    (originHeader && originHeader.replace(/\/$/, '')) ||
+                    process.env.NEXT_PUBLIC_APP_URL ||
+                    'http://localhost:3000';
+
                 // Send the invite email
-                const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${input.email}`;
+                const inviteUrl = `${baseUrl}/auth/register?token=${inviteToken}&email=${input.email}`;
 
                 // Get organization name for the email template
                 let organizationName = 'Platform';
