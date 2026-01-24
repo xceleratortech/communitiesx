@@ -127,8 +127,25 @@ export async function POST(request: Request) {
             })
             .returning();
 
+        // build base URL from request origin/host, with env fallback
+        const originHeader =
+            request.headers.get('origin') ||
+            (() => {
+                const proto =
+                    request.headers.get('x-forwarded-proto') || 'https';
+                const host =
+                    request.headers.get('x-forwarded-host') ||
+                    request.headers.get('host');
+                return host ? `${proto}://${host}` : null;
+            })();
+
+        const baseUrl =
+            (originHeader && originHeader.replace(/\/$/, '')) ||
+            process.env.NEXT_PUBLIC_APP_URL ||
+            'http://localhost:3000';
+
         // Create the invitation URL
-        const inviteUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/register?token=${inviteToken}&email=${encodeURIComponent(email)}`;
+        const inviteUrl = `${baseUrl}/auth/register?token=${inviteToken}&email=${encodeURIComponent(email)}`;
 
         // Try to send the invite email with retries
         try {
