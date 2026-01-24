@@ -12,6 +12,7 @@ import { ProfileCompletionGuard } from '@/components/profile-completion-guard';
 import { PWAInstaller } from '@/components/pwa-installer';
 import Script from 'next/script';
 import { SentryUserProvider } from '@/providers/sentry-user-provider';
+import { OrganizationWarning } from '@/components/organization-warning';
 
 const geistSans = Geist({
     variable: '--font-geist-sans',
@@ -88,6 +89,7 @@ export default function RootLayout({
                 >
                     <TRPCProvider>
                         <SentryUserProvider>
+                            <OrganizationWarning />
                             <div className="flex h-screen">
                                 <div className="hidden md:block">
                                     <LeftSidebar />
